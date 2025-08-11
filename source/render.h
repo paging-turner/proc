@@ -1,0 +1,160 @@
+// TODO: add "render commands" that the render functions use to push on commands, then render those commands later.
+
+typedef enum
+{
+  render_command_ClearBackground,
+  render_command_DrawRectangleRec,
+  render_command_DrawText,
+  render_command_DrawRectangleLinesEx,
+  render_command_DrawRectangle,
+  render_command_DrawLine,
+} render_command_kind;
+
+
+typedef struct render_command
+{
+  render_command_kind Kind;
+
+  Rectangle Rectangle;
+  const char *Text;
+  F32 X;
+  F32 Y;
+  F32 X2;
+  F32 Y2;
+  S32 FontSize;
+  F32 Thickness;
+  Color Color;
+  F32 Width;
+  F32 Height;
+} render_command;
+
+
+
+function void render_ClearBackground(arena *Arena, Color C)
+{
+  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+  if (Command)
+  {
+    Command->Color = C;
+  }
+}
+
+function void render_DrawRectangleRec(arena *Arena, Rectangle R, Color C)
+{
+  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+
+  if (Command)
+  {
+    Command->Kind = render_command_DrawRectangleRec;
+    Command->Rectangle = R;
+    Command->Color = C;
+  }
+}
+
+function char *render_PushTempString(arena *Arena, const char *CString)
+{
+  char *Result = (char *)GetArenaWriteLocation(Arena);
+  const char *C = CString;
+
+  for (;; ++C)
+  {
+    if (PushChar(Arena, *C) == 0) {
+      *Result = 0; // Null out the result in case somebody prints the result.
+      Assert(0);
+      break;
+    }
+
+    if ((*C) == 0) {
+      break;
+    }
+  }
+
+  return Result;
+}
+
+function void render_DrawText(arena *Arena, const char *Text, F32 X, F32 Y, S32 FontSize, Color C)
+{
+  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+  char *RenderString = render_PushTempString(Arena, Text);
+
+
+  if (Command)
+  {
+    Command->Kind = render_command_DrawText;
+    Command->Text = RenderString;
+    Command->X = X;
+    Command->Y = Y;
+    Command->FontSize = FontSize;
+    Command->Color = C;
+  }
+}
+
+function void render_DrawRectangleLinesEx(arena *Arena, Rectangle R, F32 Thickness, Color C)
+{
+  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+
+  if (Command)
+  {
+    Command->Kind = render_command_DrawRectangleLinesEx;
+    Command->Rectangle = R;
+    Command->Thickness = Thickness;
+    Command->Color = C;
+  }
+}
+
+function void render_DrawRectangle(arena *Arena, F32 X, F32 Y, F32 W, F32 H, Color C)
+{
+  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+
+  if (Command)
+  {
+    Command->Kind = render_command_DrawRectangle;
+    Command->X = X;
+    Command->Y = Y;
+    Command->Width = W;
+    Command->Height = H;
+    Command->Color = C;
+  }
+}
+
+function void render_DrawLine(arena *Arena, int startPosX, int startPosY, int endPosX, int endPosY, F32 thickness, Color color)
+{
+  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+
+  if (Command)
+  {
+    Command->Kind = render_command_DrawLine;
+    Command->X = startPosX;
+    Command->Y = startPosY;
+    Command->X2 = endPosX;
+    Command->Y2 = endPosY;
+    Command->Thickness = thickness;
+    Command->Color = color;
+  }
+}
+
+
+
+function void render_Commands(arena *Arena)
+{
+  // NOTE: Assume that the render commands get cleared every frame, so start from the start.
+  U32 CommandCount = Arena->Offset / sizeof(render_command);
+  render_command *Commands = (render_command *)Arena->Data;
+
+  for (U32 i = 0; i < CommandCount; ++i)
+  {
+    render_command *C = Commands + i;
+
+    switch(C->Kind)
+    {
+    case render_command_ClearBackground: { ClearBackground(C->Color); } break;
+    case render_command_DrawRectangleRec: { DrawRectangleRec(C->Rectangle, C->Color); } break;
+    case render_command_DrawText: { DrawText(C->Text, C->X, C->Y, C->FontSize, C->Color); } break;
+    case render_command_DrawRectangleLinesEx: { DrawRectangleLinesEx(C->Rectangle, C->Thickness, C->Color); } break;
+    case render_command_DrawRectangle: { DrawRectangle(C->X, C->Y, C->Width, C->Height, C->Color); } break;
+    case render_command_DrawLine: { DrawLineEx((Vector2){C->X, C->Y}, (Vector2){C->X2, C->Y2}, C->Thickness, C->Color); } break;
+
+    default: Assert(0); break;
+    }
+  }
+}
