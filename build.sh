@@ -24,7 +24,7 @@ Source_File="../source/$Source_File_Name.c"
 mkdir -p build
 cd build
 
-Settings="-std=c11 -Wall -Wextra -Wstrict-prototypes -Wold-style-definition -Wno-comment"
+Settings="-std=c99 -Wall -Wextra -Wstrict-prototypes -Wold-style-definition -Wno-comment"
 Settings="$Settings -Wno-unused-function"
 Settings="$Settings -Wno-unused-parameter"
 # Settings="$Settings -Wmissing-prototypes -Wmissing-declarations"
