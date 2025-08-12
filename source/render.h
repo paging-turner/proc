@@ -8,6 +8,7 @@ typedef enum
   render_command_DrawRectangleLinesEx,
   render_command_DrawRectangle,
   render_command_DrawLine,
+  render_command_DrawLineBezierCubic,
 } render_command_kind;
 
 
@@ -21,6 +22,10 @@ typedef struct render_command
   F32 Y;
   F32 X2;
   F32 Y2;
+  F32 ControlX;
+  F32 ControlY;
+  F32 ControlX2;
+  F32 ControlY2;
   S32 FontSize;
   F32 Thickness;
   Color Color;
@@ -134,6 +139,25 @@ function void render_DrawLine(arena *Arena, int startPosX, int startPosY, int en
 }
 
 
+function void render_DrawLineBezierCubic(arena *Arena, Vector2 startPos, Vector2 endPos, Vector2 startControlPos, Vector2 endControlPos, float thick, Color color)
+{
+  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+
+  if (Command)
+  {
+    Command->Kind = render_command_DrawLineBezierCubic;
+    Command->X = startPos.x;
+    Command->Y = startPos.y;
+    Command->X2 = endPos.x;
+    Command->Y2 = endPos.y;
+    Command->ControlX = startControlPos.x;
+    Command->ControlY = startControlPos.y;
+    Command->ControlX2 = endControlPos.x;
+    Command->ControlY2 = endControlPos.y;
+    Command->Thickness = thick;
+    Command->Color = color;
+  }
+}
 
 function void render_Commands(arena *Arena)
 {
@@ -153,6 +177,7 @@ function void render_Commands(arena *Arena)
     case render_command_DrawRectangleLinesEx: { DrawRectangleLinesEx(C->Rectangle, C->Thickness, C->Color); } break;
     case render_command_DrawRectangle: { DrawRectangle(C->X, C->Y, C->Width, C->Height, C->Color); } break;
     case render_command_DrawLine: { DrawLineEx((Vector2){C->X, C->Y}, (Vector2){C->X2, C->Y2}, C->Thickness, C->Color); } break;
+    case render_command_DrawLineBezierCubic: { DrawLineBezierCubic((Vector2){C->X, C->Y}, (Vector2){C->X2, C->Y2}, (Vector2){C->ControlX, C->ControlY}, (Vector2){C->ControlX2, C->ControlY2}, C->Thickness, C->Color); } break;
 
     default: Assert(0); break;
     }

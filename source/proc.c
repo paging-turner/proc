@@ -27,15 +27,23 @@ typedef enum {
 
 typedef struct {
   Vector2 position;
-  Vector2 size;
 
   B32 flags;
 
+  S32 from_count;
+  S32 to_count;
+
   Process_Id next_id;
+
   Process_Id from_id;
   Process_Id to_id;
+
+  U32 which_from;
+  U32 which_to;
 } Process;
 
+global_variable F32 global_process_wire_padding = 6.0f;
+global_variable F32 global_process_wire_spacing = 12.0f;
 global_variable Process global_zero_process;
 #define Zero_Process()\
   ((global_zero_process=(Process){}),\
@@ -93,6 +101,28 @@ function Process *create_process(Context *context) {
 
 
 
+function void connect_processes(Context *context, Process *from, Process *to) {
+  arena *pa = &context->process_arena;
+  Process *new_wire = create_process(context);
+
+  if (new_wire) {
+    U32 from_id = Get_Process_Id(pa, from);
+    U32 to_id = Get_Process_Id(pa, to);
+
+    Set_Flag(new_wire->flags, Process_Flag_Wire);
+    new_wire->from_id = from_id;
+    new_wire->to_id = to_id;
+
+    new_wire->which_from = from->to_count;
+    new_wire->which_to = to->from_count;
+
+    from->to_count += 1;
+    to->from_count += 1;
+  }
+}
+
+
+
 function Vector2 get_process_position(Context *context, Process *process) {
   arena *pa = &context->process_arena;
 
@@ -111,6 +141,18 @@ function Vector2 get_process_position(Context *context, Process *process) {
 
 
 
+function Vector2 get_process_size(Context *context, Process *process) {
+  F32 padding = global_process_wire_padding;
+  F32 spacing = global_process_wire_spacing;
+  S32 max_connection_count = Max(process->from_count, process->to_count);
+  Vector2 size = (Vector2){(F32)max_connection_count*spacing + padding*2.0f,
+                           50.0f};
+  return size;
+}
+
+
+
+
 function void handle_user_input(Context *context) {
   arena *pa = &context->process_arena;
   S32 pc = Get_Process_Count(pa);
@@ -125,8 +167,8 @@ function void handle_user_input(Context *context) {
   // process click selection
   for (S32 i = 1; i <= pc; ++i) {
     Process *p = Get_Process_By_Id(pa, i);
-    Rectangle r = (Rectangle){p->position.x, p->position.y,
-                              p->size.x, p->size.y};
+    Vector2 size = get_process_size(context, p);
+    Rectangle r = (Rectangle){p->position.x, p->position.y, size.x, size.y};
     B32 contains = rectangle_contains_point(r, context->mouse_position);
     if (contains) {
       context->hot_id = i;
@@ -168,28 +210,54 @@ function void draw_processes(Context *context) {
   Color bg_color = (Color){255, 255, 255, 255};
   Color stroke_color = (Color){0, 0, 0, 255};
 
+  // draw processes
   for (S32 i = 1; i <= pc; ++i) {
     Process *p = Get_Process_By_Id(pa, i);
     B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
 
-    if (is_wire) {
-      Process *from = Get_Process_By_Id(pa, p->from_id);
-      Process *to = Get_Process_By_Id(pa, p->to_id);
-
-      Vector2 from_position = get_process_position(context, from);
-      Vector2 to_position = get_process_position(context, to);
-
-      render_DrawLine(ra, from_position.x, from_position.y, to_position.x, to_position.y, 2.0f, stroke_color);
-    } else {
+    if (!is_wire) {
       B32 is_hot = context->hot_id == i;
       B32 is_active = context->active_id == i;
       F32 thickness = (is_hot||is_active) ? 3.0f : 2.0f;
 
       Vector2 position = get_process_position(context, p);
-      Rectangle rect = (Rectangle){position.x, position.y, p->size.x, p->size.y};
+      Vector2 size = get_process_size(context, p);
+      Rectangle rect = (Rectangle){position.x, position.y, size.x, size.y};
 
-      render_DrawRectangle(ra, position.x, position.y, p->size.x, p->size.y, bg_color);
+      render_DrawRectangle(ra, position.x, position.y, size.x, size.y, bg_color);
       render_DrawRectangleLinesEx(ra, rect, thickness, stroke_color);
+    }
+  }
+
+  // draw wires
+  for (S32 i = 1; i <= pc; ++i) {
+    Process *p = Get_Process_By_Id(pa, i);
+    B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
+
+    F32 padding = global_process_wire_padding;
+    F32 spacing = global_process_wire_spacing;
+
+    if (is_wire) {
+      Process *from = Get_Process_By_Id(pa, p->from_id);
+      Process *to = Get_Process_By_Id(pa, p->to_id);
+
+      Vector2 from_size = get_process_size(context, from);
+      Vector2 to_size = get_process_size(context, to);
+
+      Vector2 from_position = get_process_position(context, from);
+      from_position.x += padding + 0.5f*spacing + spacing*p->which_from;
+
+      Vector2 to_position = get_process_position(context, to);
+      to_position.x += padding + 0.5f*spacing + spacing*p->which_to;
+      to_position.y += to_size.y;
+
+      Vector2 from_control = from_position;
+      from_control.y -= 30.0f;
+
+      Vector2 to_control = to_position;
+      to_control.y += 30.0f;
+
+      render_DrawLineBezierCubic(ra, from_position, to_position, from_control, to_control, 2.0f, stroke_color);
     }
   }
 }
@@ -211,25 +279,26 @@ function void debug_setup_processes(Context *context) {
   arena *pa = &context->process_arena;
   Process *p1 = create_process(context);
   Process *p2 = create_process(context);
-  Process *w1 = create_process(context);
+  Process *p3 = create_process(context);
+  Process *p4 = create_process(context);
 
-  U32 p1_id = Get_Process_Id(pa, p1);
-  U32 p2_id = Get_Process_Id(pa, p2);
-
-  if (p1 && p2 && w1) {
+  if (p1 && p2) {
     p1->position.x = 50;
     p1->position.y = 70;
-    p1->size.x = 20;
-    p1->size.y = 50;
 
     p2->position.x = 250;
     p2->position.y = 170;
-    p2->size.x = 80;
-    p2->size.y = 80;
 
-    Set_Flag(w1->flags, Process_Flag_Wire);
-    w1->from_id = p1_id;
-    w1->to_id = p2_id;
+    p3->position.x = 350;
+    p3->position.y = 170;
+
+    p4->position.x = 150;
+    p4->position.y = 70;
+
+    connect_processes(context, p1, p2);
+    connect_processes(context, p3, p2);
+
+    connect_processes(context, p2, p4);
   }
 }
 
