@@ -77,10 +77,15 @@ function char *render_PushTempString(arena *Arena, const char *CString)
   return Result;
 }
 
-function void render_DrawText(arena *Arena, const char *Text, F32 X, F32 Y, S32 FontSize, Color C)
+function void render_DrawText(arena *Arena, const char *Text, F32 X, F32 Y, S32 FontSize, Color C, B32 copy_string)
 {
   render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
-  char *RenderString = render_PushTempString(Arena, Text);
+  const char *RenderString;
+  if (copy_string) {
+    RenderString = render_PushTempString(Arena, Text);
+  } else {
+    RenderString = Text;
+  }
 
 
   if (Command)

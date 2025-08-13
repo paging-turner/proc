@@ -9,6 +9,8 @@
 #define Unset_Flag(flags, flag) ((flags) &= ~(flag))
 #define   Get_Flag(flags, flag) ((flags) &   (flag))
 
+#include "../source/core.h"
+
 #define ryn_memory_(identifier) identifier
 #include "../libraries/ryn_memory.h"
 
@@ -40,6 +42,11 @@ typedef struct {
 
   U32 which_from;
   U32 which_to;
+
+  // TODO: Use a growable structure for strings, like string-list!
+#define Process_Label_Size 64
+  U8 label[Process_Label_Size];
+  U32 label_cursor;
 } Process;
 
 global_variable F32 global_process_wire_padding = 6.0f;
@@ -47,6 +54,8 @@ global_variable F32 global_process_wire_spacing = 12.0f;
 #define Default_Box_Size 10.0f
 global_variable F32 global_box_size = Default_Box_Size;
 global_variable F32 global_box_half_size = 0.5f*Default_Box_Size;
+global_variable F32 global_font_size = 14.0f;
+
 
 global_variable Process global_zero_process;
 #define Zero_Process()\
@@ -72,7 +81,8 @@ global_variable Process global_zero_process;
 // TODO: maybe this should be a mode and not flags??
 typedef enum {
   Context_Flag_Dragging  = 1 << 0,
-  Context_Flag_New_Wire  = 1 << 1,
+  Context_Flag_NewWire   = 1 << 1,
+  Context_Flag_EditText  = 1 << 2,
 } Context_Flag;
 
 typedef struct {
@@ -146,15 +156,23 @@ function Vector2 get_process_position(Context *context, Process *process) {
 }
 
 
-
 function Vector2 get_process_size(Context *context, Process *process) {
   F32 padding = global_process_wire_padding;
   F32 spacing = global_process_wire_spacing;
   S32 max_connection_count = Max(process->from_count, process->to_count);
   Vector2 size = (Vector2){(F32)max_connection_count*spacing + padding*2.0f,
                            50.0f};
+  if (process->label[0]) {
+    const char *text = (char *)process->label;
+    F32 text_width = (F32)MeasureText(text, global_font_size);
+    if (text_width > (size.x-2.0f*padding)) {
+      size.x = text_width+2.0f*padding;
+    }
+  }
+
   return size;
 }
+
 
 
 function Rectangle get_wire_box(Context *context, Vector2 position) {
@@ -174,6 +192,8 @@ function Rectangle get_new_wire_box(Context *context, Process *p) {
                 global_box_size, global_box_size};
   return new_wire_box;
 }
+
+
 
 
 function void handle_user_input(Context *context) {
@@ -198,10 +218,10 @@ function void handle_user_input(Context *context) {
     if (mouse_pressed) {
       if (context->active_id == i && contains_box) {
         // begin new-wire
-        Set_Flag(context->flags, Context_Flag_New_Wire);
+        Set_Flag(context->flags, Context_Flag_NewWire);
         process_clicked = 1;
       } else if (contains) {
-        if (Get_Flag(context->flags, Context_Flag_New_Wire)) {
+        if (Get_Flag(context->flags, Context_Flag_NewWire)) {
           // connect processes
           Process *active_p = Get_Process_By_Id(pa, context->active_id);
           connect_processes(context, active_p, p);
@@ -226,6 +246,26 @@ function void handle_user_input(Context *context) {
       Vector2 new_position = get_process_position(context, p);
       p->position = new_position;
       Unset_Flag(context->flags, Context_Flag_Dragging);
+    } else if (Get_Flag(context->flags, Context_Flag_EditText)) {
+      // process label editing
+      U32 c = 0;
+      B32 shift_down = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+      while ((c = GetKeyPressed())) {
+        if (Is_Editable_Char(c) && p->label_cursor < Process_Label_Size-1) {
+          B32 is_alpha = c >= 'A' && c <= 'Z';
+          if (is_alpha && !shift_down) {
+            c += 32;
+          }
+          p->label[p->label_cursor] = c&0xff;
+          p->label_cursor += 1;
+        } else if (c == KEY_BACKSPACE && p->label_cursor > 0) {
+          p->label_cursor -= 1;
+          p->label[p->label_cursor] = 0;
+        }
+      }
+    } else if (IsKeyDown(KEY_I)) {
+      // begin process label editing
+      Set_Flag(context->flags, Context_Flag_EditText);
     }
   }
 
@@ -234,7 +274,9 @@ function void handle_user_input(Context *context) {
     if (context->active_id) {
       // un-select process
       context->active_id = 0;
-      Unset_Flag(context->flags, Context_Flag_New_Wire);
+      U32 flags_to_unset = (Context_Flag_NewWire|
+                            Context_Flag_EditText);
+      Unset_Flag(context->flags, flags_to_unset);
     } else if (IsKeyDown(KEY_LEFT_CONTROL)) {
       // new process
       Process *new_p = create_process(context);
@@ -247,7 +289,6 @@ function void handle_user_input(Context *context) {
 
 
 
-
 function void draw_processes(Context *context) {
   arena *pa = &context->process_arena;
   arena *ra = &context->render_arena;
@@ -255,8 +296,12 @@ function void draw_processes(Context *context) {
 
   Color bg_color = (Color){255, 255, 255, 255};
   Color stroke_color = (Color){0, 0, 0, 255};
+  Color text_color = (Color){0, 0, 0, 255};
   Color box_color = (Color){10, 190, 40, 255};
   Color new_wire_color = (Color){100, 190, 40, 255};
+
+  F32 padding = global_process_wire_padding;
+  F32 spacing = global_process_wire_spacing;
 
   // draw processes
   for (S32 i = 1; i <= pc; ++i) {
@@ -278,9 +323,17 @@ function void draw_processes(Context *context) {
       render_DrawRectangle(ra, position.x, position.y, size.x, size.y, bg_color);
       render_DrawRectangleLinesEx(ra, line_rect, thickness, stroke_color);
 
+      if (p->label[0]) {
+        const char *text = (char *)p->label;
+        F32 text_width = (F32)MeasureText(text, global_font_size);
+        F32 text_x = position.x+0.5f*(size.x-text_width);
+        F32 text_y = position.y+0.5f*(size.y-global_font_size);
+        render_DrawText(ra, text, text_x, text_y, global_font_size, text_color, 0);
+      }
+
       if (is_active) {
         Rectangle new_wire_box = get_new_wire_box(context, p);
-        Color color = Get_Flag(context->flags, Context_Flag_New_Wire) ? new_wire_color : box_color;
+        Color color = Get_Flag(context->flags, Context_Flag_NewWire) ? new_wire_color : box_color;
         render_DrawRectangleRec(ra, new_wire_box, color);
       }
     }
@@ -290,9 +343,6 @@ function void draw_processes(Context *context) {
   for (S32 i = 1; i <= pc; ++i) {
     Process *p = Get_Process_By_Id(pa, i);
     B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
-
-    F32 padding = global_process_wire_padding;
-    F32 spacing = global_process_wire_spacing;
 
     if (is_wire) {
       Process *from = Get_Process_By_Id(pa, p->from_id);
@@ -319,17 +369,18 @@ function void draw_processes(Context *context) {
         Rectangle box = {0};
         if (p->from_id == context->active_id) {
           box = get_wire_box(context, from_position);
-        } else if (p->to_id == context->active_id) {
-          box = get_wire_box(context, to_position);
+          render_DrawRectangleRec(ra, box, box_color);
         }
-        if (box.width) {
+        if (p->to_id == context->active_id) {
+          box = get_wire_box(context, to_position);
           render_DrawRectangleRec(ra, box, box_color);
         }
       }
     }
   }
+
   // draw new wire
-  if (Get_Flag(context->flags, Context_Flag_New_Wire) && context->active_id) {
+  if (Get_Flag(context->flags, Context_Flag_NewWire) && context->active_id) {
     Process *p = Get_Process_By_Id(pa, context->active_id);
     Vector2 position = get_process_position(context, p);
     Vector2 size = get_process_size(context, p);
@@ -346,59 +397,22 @@ function void draw_processes(Context *context) {
 
 
 
-function void draw_active_process(Context *context) {
-  arena *pa = &context->process_arena;
-
-  if (context->active_id) {
-    Process *p = Get_Process_By_Id(pa, context->active_id);
-  }
-}
 
 
 
-
-function void debug_setup_processes(Context *context) {
-  arena *pa = &context->process_arena;
-  Process *p1 = create_process(context);
-  Process *p2 = create_process(context);
-  Process *p3 = create_process(context);
-  Process *p4 = create_process(context);
-
-  if (p1 && p2) {
-    p1->position.x = 50;
-    p1->position.y = 70;
-
-    p2->position.x = 250;
-    p2->position.y = 170;
-
-    p3->position.x = 350;
-    p3->position.y = 170;
-
-    p4->position.x = 150;
-    p4->position.y = 70;
-
-    connect_processes(context, p1, p2);
-    connect_processes(context, p3, p2);
-
-    connect_processes(context, p2, p4);
-  }
-}
 
 
 
 int main(void) {
   Context context = (Context){};
-
   context.render_arena = CreateArena(Megabytes(1));
   context.process_arena = CreateArena(Megabytes(1));
-  arena *ra = &context.render_arena;
-  arena *pa = &context.process_arena;
   create_process(&context); // NOTE: unused first process
+
+  arena *ra = &context.render_arena;
 
   InitWindow(600, 400, "proc");
   SetTargetFPS(60);
-
-  debug_setup_processes(&context);
 
   while (!WindowShouldClose()) {
     Color background_color = (Color){220, 220, 200, 255};
@@ -408,7 +422,6 @@ int main(void) {
 
     render_ClearBackground(ra, background_color);
     draw_processes(&context);
-    draw_active_process(&context);
 
     BeginDrawing();
     render_Commands(ra);
