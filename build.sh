@@ -62,7 +62,7 @@ Settings="$Settings -Wno-unused-variable"
 Settings="$Settings -Wno-char-subscripts"
 Settings="$Settings -Wno-sign-compare"
 Settings="$Settings -fno-inline-functions"
-Settings="$Settings -fno-pie"
+# Settings="$Settings -fno-pie"
 # Settings="$Settings -E"
 
 

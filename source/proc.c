@@ -187,7 +187,7 @@ function void handle_user_input(Context *context) {
 
   context->hot_id = 0;
 
-  // process click selection
+  // process interaction
   for (S32 i = 1; i <= pc; ++i) {
     Process *p = Get_Process_By_Id(pa, i);
     Vector2 size = get_process_size(context, p);
@@ -197,15 +197,22 @@ function void handle_user_input(Context *context) {
     B32 contains_box = rectangle_contains_point(new_wire_box, context->mouse_position);
     if (mouse_pressed) {
       if (context->active_id == i && contains_box) {
-        // handle new-wire interaction
+        // begin new-wire
         Set_Flag(context->flags, Context_Flag_New_Wire);
-        printf("new wire %f\n", GetTime());
-      } else if (contains) {
-        context->hot_id = i;
-        context->active_id = i;
-        Set_Flag(context->flags, Context_Flag_Dragging);
-        context->active_position = context->mouse_position;
         process_clicked = 1;
+      } else if (contains) {
+        if (Get_Flag(context->flags, Context_Flag_New_Wire)) {
+          // connect processes
+          Process *active_p = Get_Process_By_Id(pa, context->active_id);
+          connect_processes(context, active_p, p);
+        } else {
+          // select process
+          context->hot_id = i;
+          context->active_id = i;
+          Set_Flag(context->flags, Context_Flag_Dragging);
+          context->active_position = context->mouse_position;
+          process_clicked = 1;
+        }
       }
     }
   }
@@ -215,17 +222,26 @@ function void handle_user_input(Context *context) {
     Process *p = Get_Process_By_Id(pa, context->active_id);
     B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging);
     if (is_dragging && !mouse_down) {
-      // update dragged position
+      // stop dragging
       Vector2 new_position = get_process_position(context, p);
       p->position = new_position;
-      // we are no longer dragging
       Unset_Flag(context->flags, Context_Flag_Dragging);
     }
   }
 
-  // unselect active-id
+  // non-process clicks
   if (mouse_pressed && !process_clicked) {
-    context->active_id = 0;
+    if (context->active_id) {
+      // un-select process
+      context->active_id = 0;
+      Unset_Flag(context->flags, Context_Flag_New_Wire);
+    } else if (IsKeyDown(KEY_LEFT_CONTROL)) {
+      // new process
+      Process *new_p = create_process(context);
+      if (new_p) {
+        new_p->position = context->mouse_position;
+      }
+    }
   }
 }
 
@@ -294,7 +310,6 @@ function void draw_processes(Context *context) {
 
       Vector2 from_control = from_position;
       from_control.y -= 30.0f;
-
       Vector2 to_control = to_position;
       to_control.y += 30.0f;
 
@@ -312,6 +327,20 @@ function void draw_processes(Context *context) {
         }
       }
     }
+  }
+  // draw new wire
+  if (Get_Flag(context->flags, Context_Flag_New_Wire) && context->active_id) {
+    Process *p = Get_Process_By_Id(pa, context->active_id);
+    Vector2 position = get_process_position(context, p);
+    Vector2 size = get_process_size(context, p);
+    position.x += size.x;
+
+    Vector2 from_control = position;
+    from_control.y -= 30.f;
+    Vector2 to_control = context->mouse_position;
+    to_control.y += 30.0f;
+
+    render_DrawLineBezierCubic(ra, position, context->mouse_position, from_control, to_control, 2.0f, stroke_color);
   }
 }
 
