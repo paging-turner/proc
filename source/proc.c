@@ -44,6 +44,10 @@ typedef struct {
 
 global_variable F32 global_process_wire_padding = 6.0f;
 global_variable F32 global_process_wire_spacing = 12.0f;
+#define Default_Box_Size 10.0f
+global_variable F32 global_box_size = Default_Box_Size;
+global_variable F32 global_box_half_size = 0.5f*Default_Box_Size;
+
 global_variable Process global_zero_process;
 #define Zero_Process()\
   ((global_zero_process=(Process){}),\
@@ -65,8 +69,10 @@ global_variable Process global_zero_process;
    : 0)
 
 
+// TODO: maybe this should be a mode and not flags??
 typedef enum {
   Context_Flag_Dragging  = 1 << 0,
+  Context_Flag_New_Wire  = 1 << 1,
 } Context_Flag;
 
 typedef struct {
@@ -151,6 +157,23 @@ function Vector2 get_process_size(Context *context, Process *process) {
 }
 
 
+function Rectangle get_wire_box(Context *context, Vector2 position) {
+  Rectangle box = (Rectangle){position.x-global_box_half_size,
+                              position.y-global_box_half_size,
+                              global_box_size, global_box_size};
+  return box;
+}
+
+
+function Rectangle get_new_wire_box(Context *context, Process *p) {
+  Vector2 position = get_process_position(context, p);
+  Vector2 size = get_process_size(context, p);
+  Rectangle new_wire_box =
+    (Rectangle){position.x+size.x-global_box_half_size,
+                position.y-global_box_half_size,
+                global_box_size, global_box_size};
+  return new_wire_box;
+}
 
 
 function void handle_user_input(Context *context) {
@@ -170,9 +193,15 @@ function void handle_user_input(Context *context) {
     Vector2 size = get_process_size(context, p);
     Rectangle r = (Rectangle){p->position.x, p->position.y, size.x, size.y};
     B32 contains = rectangle_contains_point(r, context->mouse_position);
-    if (contains) {
-      context->hot_id = i;
-      if (mouse_pressed) {
+    Rectangle new_wire_box = get_new_wire_box(context, p);
+    B32 contains_box = rectangle_contains_point(new_wire_box, context->mouse_position);
+    if (mouse_pressed) {
+      if (context->active_id == i && contains_box) {
+        // handle new-wire interaction
+        Set_Flag(context->flags, Context_Flag_New_Wire);
+        printf("new wire %f\n", GetTime());
+      } else if (contains) {
+        context->hot_id = i;
         context->active_id = i;
         Set_Flag(context->flags, Context_Flag_Dragging);
         context->active_position = context->mouse_position;
@@ -183,9 +212,10 @@ function void handle_user_input(Context *context) {
 
   // handle active-id
   if (context->active_id) {
-    if (!mouse_down) {
+    Process *p = Get_Process_By_Id(pa, context->active_id);
+    B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging);
+    if (is_dragging && !mouse_down) {
       // update dragged position
-      Process *p = Get_Process_By_Id(pa, context->active_id);
       Vector2 new_position = get_process_position(context, p);
       p->position = new_position;
       // we are no longer dragging
@@ -209,6 +239,8 @@ function void draw_processes(Context *context) {
 
   Color bg_color = (Color){255, 255, 255, 255};
   Color stroke_color = (Color){0, 0, 0, 255};
+  Color box_color = (Color){10, 190, 40, 255};
+  Color new_wire_color = (Color){100, 190, 40, 255};
 
   // draw processes
   for (S32 i = 1; i <= pc; ++i) {
@@ -223,9 +255,18 @@ function void draw_processes(Context *context) {
       Vector2 position = get_process_position(context, p);
       Vector2 size = get_process_size(context, p);
       Rectangle rect = (Rectangle){position.x, position.y, size.x, size.y};
+      F32 line_offset = 1.0f;
+      Rectangle line_rect = (Rectangle){position.x-line_offset, position.y-line_offset,
+                                        size.x+2.0f*line_offset, size.y+2.0f*line_offset};
 
       render_DrawRectangle(ra, position.x, position.y, size.x, size.y, bg_color);
-      render_DrawRectangleLinesEx(ra, rect, thickness, stroke_color);
+      render_DrawRectangleLinesEx(ra, line_rect, thickness, stroke_color);
+
+      if (is_active) {
+        Rectangle new_wire_box = get_new_wire_box(context, p);
+        Color color = Get_Flag(context->flags, Context_Flag_New_Wire) ? new_wire_color : box_color;
+        render_DrawRectangleRec(ra, new_wire_box, color);
+      }
     }
   }
 
@@ -258,6 +299,18 @@ function void draw_processes(Context *context) {
       to_control.y += 30.0f;
 
       render_DrawLineBezierCubic(ra, from_position, to_position, from_control, to_control, 2.0f, stroke_color);
+
+      if (context->active_id) {
+        Rectangle box = {0};
+        if (p->from_id == context->active_id) {
+          box = get_wire_box(context, from_position);
+        } else if (p->to_id == context->active_id) {
+          box = get_wire_box(context, to_position);
+        }
+        if (box.width) {
+          render_DrawRectangleRec(ra, box, box_color);
+        }
+      }
     }
   }
 }
