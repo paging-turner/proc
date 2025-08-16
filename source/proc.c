@@ -27,21 +27,34 @@ typedef enum {
   Process_Flag_Wire   = 1 << 0,
 } Process_Flag;
 
+typedef enum {
+  Process_Wire_Type__Null,
+  Process_Wire_Type_In,
+  Process_Wire_Type_Out,
+} Process_Wire_Type;
+
+typedef struct {
+  Process_Id process_id;
+  Process_Wire_Type type;
+  S32 index;
+} Process_Wire_Selection;
+
+// TODO: rename from/to to something like in/out !! It makes some function names confusing by using from/to within the process struct.
 typedef struct {
   Vector2 position;
 
   B32 flags;
 
-  S32 from_count;
-  S32 to_count;
+  S32 in_count;
+  S32 out_count;
 
   Process_Id next_id;
 
-  Process_Id from_id;
-  Process_Id to_id;
+  Process_Id in_id;
+  Process_Id out_id;
 
-  U32 which_from;
-  U32 which_to;
+  U32 which_in;
+  U32 which_out;
 
   // TODO: Use a growable structure for strings, like string-list!
 #define Process_Label_Size 64
@@ -54,7 +67,8 @@ global_variable F32 global_process_wire_spacing = 12.0f;
 #define Default_Box_Size 10.0f
 global_variable F32 global_box_size = Default_Box_Size;
 global_variable F32 global_box_half_size = 0.5f*Default_Box_Size;
-global_variable F32 global_font_size = 14.0f;
+global_variable F32 global_process_font_size = 14.0f;
+global_variable F32 global_panel_font_size = 14.0f;
 
 
 global_variable Process global_zero_process;
@@ -88,6 +102,7 @@ typedef enum {
 typedef struct {
   arena render_arena;
   arena process_arena;
+  arena temp_arena;
   U32 flags;
 
   Process_Id first_free_process_id;
@@ -97,45 +112,6 @@ typedef struct {
   Vector2 mouse_position;
   Vector2 active_position;
 } Context;
-
-
-
-function B32 rectangle_contains_point(Rectangle r, Vector2 p) {
-  F32 x2 = r.x + r.width;
-  F32 y2 = r.y + r.height;
-  B32 contains = (p.x >= r.x) && (p.y >= r.y) && (p.x <= x2) && (p.y <= y2);
-  return contains;
-}
-
-
-
-function Process *create_process(Context *context) {
-  arena *pa = &context->process_arena;
-  Process *p = ryn_memory_PushZeroStruct(pa, Process);
-  return p;
-}
-
-
-
-function void connect_processes(Context *context, Process *from, Process *to) {
-  arena *pa = &context->process_arena;
-  Process *new_wire = create_process(context);
-
-  if (new_wire) {
-    U32 from_id = Get_Process_Id(pa, from);
-    U32 to_id = Get_Process_Id(pa, to);
-
-    Set_Flag(new_wire->flags, Process_Flag_Wire);
-    new_wire->from_id = from_id;
-    new_wire->to_id = to_id;
-
-    new_wire->which_from = from->to_count;
-    new_wire->which_to = to->from_count;
-
-    from->to_count += 1;
-    to->from_count += 1;
-  }
-}
 
 
 
@@ -159,18 +135,43 @@ function Vector2 get_process_position(Context *context, Process *process) {
 function Vector2 get_process_size(Context *context, Process *process) {
   F32 padding = global_process_wire_padding;
   F32 spacing = global_process_wire_spacing;
-  S32 max_connection_count = Max(process->from_count, process->to_count);
+  S32 max_connection_count = Max(process->in_count, process->out_count);
   Vector2 size = (Vector2){(F32)max_connection_count*spacing + padding*2.0f,
                            50.0f};
   if (process->label[0]) {
     const char *text = (char *)process->label;
-    F32 text_width = (F32)MeasureText(text, global_font_size);
+    F32 text_width = (F32)MeasureText(text, global_process_font_size);
     if (text_width > (size.x-2.0f*padding)) {
       size.x = text_width+2.0f*padding;
     }
   }
 
   return size;
+}
+
+
+
+function Vector2 get_process_wire_out_position(Context *context, Process *p, U32 wire_index) {
+  F32 padding = global_process_wire_padding;
+  F32 spacing = global_process_wire_spacing;
+
+  Vector2 out_position = get_process_position(context, p);
+  out_position.x += padding + 0.5f*spacing + spacing*wire_index;
+
+  return out_position;
+}
+
+
+function Vector2 get_process_wire_in_position(Context *context, Process *p, U32 wire_index) {
+  F32 padding = global_process_wire_padding;
+  F32 spacing = global_process_wire_spacing;
+  Vector2 in_size = get_process_size(context, p);
+
+  Vector2 in_position = get_process_position(context, p);
+  in_position.x += padding + 0.5f*spacing + spacing*wire_index;
+  in_position.y += in_size.y;
+
+  return in_position;
 }
 
 
@@ -196,6 +197,107 @@ function Rectangle get_new_wire_box(Context *context, Process *p) {
 
 
 
+function B32 rectangle_contains_point(Rectangle r, Vector2 p) {
+  F32 x2 = r.x + r.width;
+  F32 y2 = r.y + r.height;
+  B32 contains = (p.x >= r.x) && (p.y >= r.y) && (p.x <= x2) && (p.y <= y2);
+  return contains;
+}
+
+
+Process_Wire_Selection process_wire_contains_point(Context *context, Process *p, Vector2 point) {
+  arena *pa = &context->process_arena;
+
+  Process_Wire_Selection wire;
+  wire.type = 0;
+  wire.index = -1; // NOTE: Use -1 to indicate to wire-boxes contain the point.
+  wire.process_id = Get_Process_Id(pa, p);
+
+  // check in wire-boxes
+  for (U32 i = 0; i < p->in_count; ++i) {
+    Vector2 in_position = get_process_wire_in_position(context, p, i);
+    Rectangle r = get_wire_box(context, in_position);
+    if (rectangle_contains_point(r, point)) {
+      wire.type = Process_Wire_Type_In;
+      wire.index = i;
+      break;
+    }
+  }
+
+  if (wire.index < 0 && wire.type == 0) {
+    // check out wire-boxes
+    for (U32 i = 0; i < p->out_count; ++i) {
+      Vector2 out_position = get_process_wire_out_position(context, p, i);
+      Rectangle r = get_wire_box(context, out_position);
+      if (rectangle_contains_point(r, point)) {
+        wire.type = Process_Wire_Type_Out;
+        wire.index = i;
+        break;
+      }
+    }
+  }
+
+  return wire;
+}
+
+function Process *create_process(Context *context) {
+  arena *pa = &context->process_arena;
+  Process *p = ryn_memory_PushZeroStruct(pa, Process);
+  return p;
+}
+
+
+function Process *get_process_wire_by_selection(Context *context, Process_Wire_Selection wire_selection) {
+  arena *pa = &context->process_arena;
+  Process *wire = 0;
+  S32 pc = Get_Process_Count(pa);
+  U32 match_count = 0;
+  Assert(0);
+
+#if 0
+  for (S32 i = 1; i <= pc; ++i) {
+    Process *p = Get_Process_By_Id(pa, i);
+    if (Get_Flag(p->flags, Process_Flag_Wire)) {
+      if (wire_selection.type == Process_Wire_Type_From &&
+          p->from_id == wire_selection.process_id) {
+        if (match_count == wire_selection.index) {
+          wire = p;
+        } else {
+          match_count += 1;
+        }
+      }
+    }
+  }
+#endif
+
+  return wire;
+}
+
+
+
+
+function void connect_processes(Context *context, Process *out, Process *in) {
+  arena *pa = &context->process_arena;
+  Process *new_wire = create_process(context);
+
+  if (new_wire) {
+    U32 out_id = Get_Process_Id(pa, out);
+    U32 in_id = Get_Process_Id(pa, in);
+
+    Set_Flag(new_wire->flags, Process_Flag_Wire);
+    new_wire->out_id = out_id;
+    new_wire->in_id = in_id;
+
+    new_wire->which_out = out->out_count;
+    new_wire->which_in = in->in_count;
+
+    out->out_count += 1;
+    in->in_count += 1;
+  }
+}
+
+
+
 function void handle_user_input(Context *context) {
   arena *pa = &context->process_arena;
   S32 pc = Get_Process_Count(pa);
@@ -212,15 +314,27 @@ function void handle_user_input(Context *context) {
     Process *p = Get_Process_By_Id(pa, i);
     Vector2 size = get_process_size(context, p);
     Rectangle r = (Rectangle){p->position.x, p->position.y, size.x, size.y};
-    B32 contains = rectangle_contains_point(r, context->mouse_position);
+    B32 process_contains = rectangle_contains_point(r, context->mouse_position);
     Rectangle new_wire_box = get_new_wire_box(context, p);
-    B32 contains_box = rectangle_contains_point(new_wire_box, context->mouse_position);
+    B32 new_wire_contains = rectangle_contains_point(new_wire_box, context->mouse_position);
     if (mouse_pressed) {
-      if (context->active_id == i && contains_box) {
+      if (IsKeyDown(KEY_M)) {
+        B32 foo = 1;
+      }
+      Process_Wire_Selection clicked_wire = process_wire_contains_point(context, p, context->mouse_position);
+      if (clicked_wire.type > 0 && clicked_wire.index > -1) {
+        // TODO: this codepath never runs, so it seems. Get it to fire and then test it so we can begin interacting with wire-connections.
+        Process *wire = get_process_wire_by_selection(context, clicked_wire);
+        Assert(!"TODO: finish implementing this!");
+        if (wire) {
+          context->active_id = Get_Process_Id(pa, p);
+          Assert(!"TODO: test this out... still a work-in-progress");
+        }
+      } else if (context->active_id == i && new_wire_contains) {
         // begin new-wire
         Set_Flag(context->flags, Context_Flag_NewWire);
         process_clicked = 1;
-      } else if (contains) {
+      } else if (process_contains) {
         if (Get_Flag(context->flags, Context_Flag_NewWire)) {
           // connect processes
           Process *active_p = Get_Process_By_Id(pa, context->active_id);
@@ -229,6 +343,9 @@ function void handle_user_input(Context *context) {
           // select process
           context->hot_id = i;
           context->active_id = i;
+          U32 unset_flags = (Context_Flag_NewWire |
+                             Context_Flag_EditText);
+          Unset_Flag(context->flags, unset_flags);
           Set_Flag(context->flags, Context_Flag_Dragging);
           context->active_position = context->mouse_position;
           process_clicked = 1;
@@ -325,10 +442,10 @@ function void draw_processes(Context *context) {
 
       if (p->label[0]) {
         const char *text = (char *)p->label;
-        F32 text_width = (F32)MeasureText(text, global_font_size);
+        F32 text_width = (F32)MeasureText(text, global_process_font_size);
         F32 text_x = position.x+0.5f*(size.x-text_width);
-        F32 text_y = position.y+0.5f*(size.y-global_font_size);
-        render_DrawText(ra, text, text_x, text_y, global_font_size, text_color, 0);
+        F32 text_y = position.y+0.5f*(size.y-global_process_font_size);
+        render_DrawText(ra, text, text_x, text_y, global_process_font_size, text_color, 0);
       }
 
       if (is_active) {
@@ -345,34 +462,27 @@ function void draw_processes(Context *context) {
     B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
 
     if (is_wire) {
-      Process *from = Get_Process_By_Id(pa, p->from_id);
-      Process *to = Get_Process_By_Id(pa, p->to_id);
+      Process *out = Get_Process_By_Id(pa, p->out_id);
+      Process *in = Get_Process_By_Id(pa, p->in_id);
 
-      Vector2 from_size = get_process_size(context, from);
-      Vector2 to_size = get_process_size(context, to);
+      Vector2 out_position = get_process_wire_out_position(context, out, p->which_out);
+      Vector2 in_position = get_process_wire_in_position(context, in, p->which_in);
 
-      Vector2 from_position = get_process_position(context, from);
-      from_position.x += padding + 0.5f*spacing + spacing*p->which_from;
+      Vector2 out_control = out_position;
+      out_control.y -= 30.0f;
+      Vector2 in_control = in_position;
+      in_control.y += 30.0f;
 
-      Vector2 to_position = get_process_position(context, to);
-      to_position.x += padding + 0.5f*spacing + spacing*p->which_to;
-      to_position.y += to_size.y;
-
-      Vector2 from_control = from_position;
-      from_control.y -= 30.0f;
-      Vector2 to_control = to_position;
-      to_control.y += 30.0f;
-
-      render_DrawLineBezierCubic(ra, from_position, to_position, from_control, to_control, 2.0f, stroke_color);
+      render_DrawLineBezierCubic(ra, out_position, in_position, out_control, in_control, 2.0f, stroke_color);
 
       if (context->active_id) {
         Rectangle box = {0};
-        if (p->from_id == context->active_id) {
-          box = get_wire_box(context, from_position);
+        if (p->out_id == context->active_id) {
+          box = get_wire_box(context, out_position);
           render_DrawRectangleRec(ra, box, box_color);
         }
-        if (p->to_id == context->active_id) {
-          box = get_wire_box(context, to_position);
+        if (p->in_id == context->active_id) {
+          box = get_wire_box(context, in_position);
           render_DrawRectangleRec(ra, box, box_color);
         }
       }
@@ -399,6 +509,17 @@ function void draw_processes(Context *context) {
 
 
 
+function void draw_info_panel(Context *context) {
+  arena *ra = &context->render_arena;
+  Color text_color = (Color){0, 0, 0, 255};
+
+  if (context->active_id) {
+    const char *text = TextFormat("active-id = %d", context->active_id);
+    render_DrawText(ra, text, 5.0f, 5.0f, global_panel_font_size, text_color, 1);
+  }
+}
+
+
 
 
 
@@ -407,9 +528,12 @@ int main(void) {
   Context context = (Context){};
   context.render_arena = CreateArena(Megabytes(1));
   context.process_arena = CreateArena(Megabytes(1));
+  context.temp_arena = CreateArena(Megabytes(1));
   create_process(&context); // NOTE: unused first process
 
   arena *ra = &context.render_arena;
+  arena *ta = &context.temp_arena;
+  render_Initialize(ta);
 
   InitWindow(600, 400, "proc");
   SetTargetFPS(60);
@@ -422,6 +546,7 @@ int main(void) {
 
     render_ClearBackground(ra, background_color);
     draw_processes(&context);
+    draw_info_panel(&context);
 
     BeginDrawing();
     render_Commands(ra);

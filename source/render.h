@@ -34,6 +34,13 @@ typedef struct render_command
 } render_command;
 
 
+global_variable arena *GlobalTempArena;
+
+
+function void render_Initialize(arena *TempArena) {
+  GlobalTempArena = TempArena;
+}
+
 
 function void render_ClearBackground(arena *Arena, Color C)
 {
@@ -56,14 +63,15 @@ function void render_DrawRectangleRec(arena *Arena, Rectangle R, Color C)
   }
 }
 
-function char *render_PushTempString(arena *Arena, const char *CString)
+function char *render_PushTempString(const char *CString)
 {
-  char *Result = (char *)GetArenaWriteLocation(Arena);
+  Assert(GlobalTempArena);
+  char *Result = (char *)GetArenaWriteLocation(GlobalTempArena);
   const char *C = CString;
 
   for (;; ++C)
   {
-    if (PushChar(Arena, *C) == 0) {
+    if (PushChar(GlobalTempArena, *C) == 0) {
       *Result = 0; // Null out the result in case somebody prints the result.
       Assert(0);
       break;
@@ -82,11 +90,10 @@ function void render_DrawText(arena *Arena, const char *Text, F32 X, F32 Y, S32 
   render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
   const char *RenderString;
   if (copy_string) {
-    RenderString = render_PushTempString(Arena, Text);
+    RenderString = render_PushTempString(Text);
   } else {
     RenderString = Text;
   }
-
 
   if (Command)
   {
