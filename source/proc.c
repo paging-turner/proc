@@ -1,3 +1,6 @@
+#if !No_Assert
+# define MR4TH_ASSERTS 1
+#endif
 #include "../libraries/mr4th/src/mr4th_base.h"
 #define function static
 #define global_variable static
@@ -28,9 +31,9 @@ typedef enum {
 } Process_Flag;
 
 typedef enum {
-  Process_Wire_Type__Null,
-  Process_Wire_Type_In,
-  Process_Wire_Type_Out,
+  Process_Wire_Selection__Null,
+  Process_Wire_Selection_In,
+  Process_Wire_Selection_Out,
 } Process_Wire_Type;
 
 typedef struct {
@@ -218,7 +221,7 @@ Process_Wire_Selection process_wire_contains_point(Context *context, Process *p,
     Vector2 in_position = get_process_wire_in_position(context, p, i);
     Rectangle r = get_wire_box(context, in_position);
     if (rectangle_contains_point(r, point)) {
-      wire.type = Process_Wire_Type_In;
+      wire.type = Process_Wire_Selection_In;
       wire.index = i;
       break;
     }
@@ -230,7 +233,7 @@ Process_Wire_Selection process_wire_contains_point(Context *context, Process *p,
       Vector2 out_position = get_process_wire_out_position(context, p, i);
       Rectangle r = get_wire_box(context, out_position);
       if (rectangle_contains_point(r, point)) {
-        wire.type = Process_Wire_Type_Out;
+        wire.type = Process_Wire_Selection_Out;
         wire.index = i;
         break;
       }
@@ -240,27 +243,27 @@ Process_Wire_Selection process_wire_contains_point(Context *context, Process *p,
   return wire;
 }
 
-function Process *create_process(Context *context) {
-  arena *pa = &context->process_arena;
-  Process *p = ryn_memory_PushZeroStruct(pa, Process);
-  return p;
-}
 
 
-function Process *get_process_wire_by_selection(Context *context, Process_Wire_Selection wire_selection) {
+function Process *get_process_wire_by_selection(Context *context, Process_Wire_Selection selection) {
   arena *pa = &context->process_arena;
   Process *wire = 0;
   S32 pc = Get_Process_Count(pa);
-  U32 match_count = 0;
-  Assert(0);
+  S32 match_count = 0;
 
-#if 0
   for (S32 i = 1; i <= pc; ++i) {
     Process *p = Get_Process_By_Id(pa, i);
     if (Get_Flag(p->flags, Process_Flag_Wire)) {
-      if (wire_selection.type == Process_Wire_Type_From &&
-          p->from_id == wire_selection.process_id) {
-        if (match_count == wire_selection.index) {
+      if (selection.type == Process_Wire_Selection_In && p->in_id == selection.process_id) {
+        // matching in-wire
+        if (match_count == selection.index) {
+          wire = p;
+        } else {
+          match_count += 1;
+        }
+      } else if (selection.type == Process_Wire_Selection_Out && p->out_id == selection.process_id) {
+        // matching out-wire
+        if (match_count == selection.index) {
           wire = p;
         } else {
           match_count += 1;
@@ -268,10 +271,20 @@ function Process *get_process_wire_by_selection(Context *context, Process_Wire_S
       }
     }
   }
-#endif
 
   return wire;
 }
+
+
+
+
+function Process *create_process(Context *context) {
+  arena *pa = &context->process_arena;
+  Process *p = ryn_memory_PushZeroStruct(pa, Process);
+  return p;
+}
+
+
 
 
 
@@ -325,10 +338,10 @@ function void handle_user_input(Context *context) {
       if (clicked_wire.type > 0 && clicked_wire.index > -1) {
         // TODO: this codepath never runs, so it seems. Get it to fire and then test it so we can begin interacting with wire-connections.
         Process *wire = get_process_wire_by_selection(context, clicked_wire);
-        Assert(!"TODO: finish implementing this!");
         if (wire) {
-          context->active_id = Get_Process_Id(pa, p);
-          Assert(!"TODO: test this out... still a work-in-progress");
+          Process_Id wire_id = Get_Process_Id(pa, wire);
+          context->active_id = wire_id;
+          process_clicked = 1;
         }
       } else if (context->active_id == i && new_wire_contains) {
         // begin new-wire
