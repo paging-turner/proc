@@ -258,6 +258,7 @@ function Process *get_process_wire_by_selection(Context *context, Process_Wire_S
         // matching in-wire
         if (match_count == selection.index) {
           wire = p;
+          break;
         } else {
           match_count += 1;
         }
@@ -265,6 +266,7 @@ function Process *get_process_wire_by_selection(Context *context, Process_Wire_S
         // matching out-wire
         if (match_count == selection.index) {
           wire = p;
+          break;
         } else {
           match_count += 1;
         }
@@ -319,14 +321,15 @@ function void handle_user_input(Context *context) {
   B32 mouse_pressed = IsMouseButtonPressed(0);
   B32 mouse_down = IsMouseButtonDown(0);
   B32 process_clicked = 0;
-
-  context->hot_id = 0;
+  B32 hot_id_assigned = 0;
 
   // process interaction
   for (S32 i = 1; i <= pc; ++i) {
     Process *p = Get_Process_By_Id(pa, i);
     Vector2 size = get_process_size(context, p);
-    Rectangle r = (Rectangle){p->position.x, p->position.y, size.x, size.y};
+    Rectangle r = (Rectangle){p->position.x-global_box_half_size,
+                              p->position.y-global_box_half_size,
+                              size.x+global_box_size, size.y+global_box_size};
     B32 process_contains = rectangle_contains_point(r, context->mouse_position);
     Rectangle new_wire_box = get_new_wire_box(context, p);
     B32 new_wire_contains = rectangle_contains_point(new_wire_box, context->mouse_position);
@@ -343,9 +346,11 @@ function void handle_user_input(Context *context) {
           context->active_id = wire_id;
           process_clicked = 1;
         }
-      } else if (context->active_id == i && new_wire_contains) {
+      } else if ((context->active_id == i || context->hot_id == i) &&
+                 new_wire_contains) {
         // begin new-wire
         Set_Flag(context->flags, Context_Flag_NewWire);
+        context->active_id = i;
         process_clicked = 1;
       } else if (process_contains) {
         if (Get_Flag(context->flags, Context_Flag_NewWire)) {
@@ -355,6 +360,7 @@ function void handle_user_input(Context *context) {
         } else {
           // select process
           context->hot_id = i;
+          hot_id_assigned = 1;
           context->active_id = i;
           U32 unset_flags = (Context_Flag_NewWire |
                              Context_Flag_EditText);
@@ -364,7 +370,14 @@ function void handle_user_input(Context *context) {
           process_clicked = 1;
         }
       }
+    } else if (process_contains) {
+      context->hot_id = i;
+      hot_id_assigned = 1;
     }
+  }
+
+  if (!hot_id_assigned) {
+    context->hot_id = 0;
   }
 
   // handle active-id
@@ -428,7 +441,7 @@ function void draw_processes(Context *context) {
   Color stroke_color = (Color){0, 0, 0, 255};
   Color text_color = (Color){0, 0, 0, 255};
   Color box_color = (Color){10, 190, 40, 255};
-  Color new_wire_color = (Color){100, 190, 40, 255};
+  Color box_hover_color = (Color){5, 250, 20, 255};
 
   F32 padding = global_process_wire_padding;
   F32 spacing = global_process_wire_spacing;
@@ -461,9 +474,11 @@ function void draw_processes(Context *context) {
         render_DrawText(ra, text, text_x, text_y, global_process_font_size, text_color, 0);
       }
 
-      if (is_active) {
+      if (is_active || is_hot) {
         Rectangle new_wire_box = get_new_wire_box(context, p);
-        Color color = Get_Flag(context->flags, Context_Flag_NewWire) ? new_wire_color : box_color;
+        B32 new_wire_box_is_active = (Get_Flag(context->flags, Context_Flag_NewWire) ||
+                                      rectangle_contains_point(new_wire_box, context->mouse_position));
+        Color color = new_wire_box_is_active ? box_hover_color : box_color;
         render_DrawRectangleRec(ra, new_wire_box, color);
       }
     }
@@ -486,17 +501,26 @@ function void draw_processes(Context *context) {
       Vector2 in_control = in_position;
       in_control.y += 30.0f;
 
-      render_DrawLineBezierCubic(ra, out_position, in_position, out_control, in_control, 2.0f, stroke_color);
+      B32 is_active = context->active_id == i;
+      F32 thickness = is_active ? 4.0f : 2.0f;
 
-      if (context->active_id) {
+      render_DrawLineBezierCubic(ra, out_position, in_position, out_control, in_control, thickness, stroke_color);
+
+      if (context->active_id || context->hot_id) {
         Rectangle box = {0};
-        if (p->out_id == context->active_id) {
+        if (is_active ||
+            p->out_id == context->active_id ||
+            p->out_id == context->hot_id) {
           box = get_wire_box(context, out_position);
-          render_DrawRectangleRec(ra, box, box_color);
+          Color c = rectangle_contains_point(box, context->mouse_position) ? box_hover_color : box_color;
+          render_DrawRectangleRec(ra, box, c);
         }
-        if (p->in_id == context->active_id) {
+        if (is_active ||
+            p->in_id == context->active_id ||
+            p->in_id == context->hot_id) {
           box = get_wire_box(context, in_position);
-          render_DrawRectangleRec(ra, box, box_color);
+          Color c = rectangle_contains_point(box, context->mouse_position) ? box_hover_color : box_color;
+          render_DrawRectangleRec(ra, box, c);
         }
       }
     }
