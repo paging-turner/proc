@@ -344,6 +344,13 @@ function void handle_user_input(Context *context) {
         if (wire) {
           Process_Id wire_id = Get_Process_Id(pa, wire);
           context->active_id = wire_id;
+          if (clicked_wire.type == Process_Wire_Selection_In) {
+            context->hot_id = wire->in_id;
+            hot_id_assigned = 1;
+          } else if (clicked_wire.type == Process_Wire_Selection_Out) {
+            context->hot_id = wire->out_id;
+            hot_id_assigned = 1;
+          }
           process_clicked = 1;
         }
       } else if ((context->active_id == i || context->hot_id == i) &&
