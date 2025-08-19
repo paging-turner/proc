@@ -11,6 +11,7 @@ typedef enum
   render_command_DrawLineBezierCubic,
   render_command_DrawPoly,
   render_command_DrawPolyLinesEx,
+  render_command_DrawTriangleStrip,
 } render_command_kind;
 
 
@@ -36,6 +37,8 @@ typedef struct render_command
   Color Color;
   F32 Width;
   F32 Height;
+  Vector2 Points[4];
+  S32 PointCount;
 } render_command;
 
 
@@ -208,6 +211,20 @@ function void render_DrawPolyLinesEx(arena *Arena, Vector2 center, int sides, fl
   }
 }
 
+function void render_DrawTriangleStrip(arena *Arena, Vector2 *Points, S32 PointCount, Color Color) {
+  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+
+  if (Command)
+  {
+    Command->Kind = render_command_DrawTriangleStrip;
+    for (S32 i = 0; i < PointCount; ++i) {
+      Command->Points[i] = Points[i];
+    }
+    Command->PointCount = PointCount;
+    Command->Color = Color;
+  }
+}
+
 function void render_Commands(arena *Arena)
 {
   // NOTE: Assume that the render commands get cleared every frame, so start from the start.
@@ -229,6 +246,7 @@ function void render_Commands(arena *Arena)
     case render_command_DrawLineBezierCubic: { DrawLineBezierCubic((Vector2){C->X, C->Y}, (Vector2){C->X2, C->Y2}, (Vector2){C->ControlX, C->ControlY}, (Vector2){C->ControlX2, C->ControlY2}, C->Thickness, C->Color); } break;
     case render_command_DrawPoly: { DrawPoly((Vector2){C->X, C->Y}, C->Sides, C->Radius, C->Rotation, C->Color); } break;
     case render_command_DrawPolyLinesEx: { DrawPolyLinesEx((Vector2){C->X, C->Y}, C->Sides, C->Radius, C->Rotation, C->Thickness, C->Color); } break;
+    case render_command_DrawTriangleStrip: { DrawTriangleStrip(C->Points, C->PointCount, C->Color); } break;
 
     default: Assert(0); break;
     }

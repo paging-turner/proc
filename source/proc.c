@@ -45,7 +45,6 @@ typedef struct {
   B32 hot_id_assigned;
 } Process_Selection;
 
-// TODO: rename from/to to something like in/out !! It makes some function names confusing by using from/to within the process struct.
 typedef struct {
   Vector2 position;
 
@@ -62,11 +61,17 @@ typedef struct {
   U32 which_in;
   U32 which_out;
 
-  // TODO: Use a growable structure for strings, like string-list!
+  // TODO: Use a growable structure for strings.
 #define Process_Label_Size 64
   U8 label[Process_Label_Size];
   U32 label_cursor;
 } Process;
+
+typedef struct {
+  Vector2 outer_points[4];
+  Vector2 inner_points[4];
+  S32 point_count;
+} Process_Shape;
 
 global_variable F32 global_process_wire_padding = 6.0f;
 global_variable F32 global_process_wire_spacing = 12.0f;
@@ -277,8 +282,78 @@ function void connect_processes(Context *context, Process *out, Process *in) {
 
 
 
+function Process_Shape
+get_process_shape(Context *context, Process *p) {
+  Process_Shape shape = {0};
 
-function Process_Selection handle_process_selection(Context *context, Process *p) {
+  S32 has_in = p->in_count > 0;
+  S32 has_out = p->out_count > 0;
+
+  F32 temp_size = 40.0f;
+  F32 temp_half_size = 40.0f;
+
+  if (has_in && has_out) {
+    // rectangular
+    shape.point_count = 4;
+    // outer
+    shape.outer_points[0].x = p->position.x + temp_half_size;
+    shape.outer_points[0].y = p->position.y - temp_half_size;
+    shape.outer_points[1].x = p->position.x - temp_half_size;
+    shape.outer_points[1].y = p->position.y - temp_half_size;
+    shape.outer_points[2].x = p->position.x + temp_half_size;
+    shape.outer_points[2].y = p->position.y + temp_half_size;
+    shape.outer_points[3].x = p->position.x - temp_half_size;
+    shape.outer_points[3].y = p->position.y + temp_half_size;
+  } else if (has_in) {
+    // upward triangle
+    shape.point_count = 3;
+    // outer
+    shape.outer_points[0].x = p->position.x - temp_half_size;
+    shape.outer_points[0].y = p->position.y + temp_half_size;
+    shape.outer_points[1].x = p->position.x + temp_half_size;
+    shape.outer_points[1].y = p->position.y + temp_half_size;
+    shape.outer_points[2].x = p->position.x;
+    shape.outer_points[2].y = p->position.y - temp_half_size;
+  } else if (has_out) {
+    // downward triangle
+    shape.point_count = 3;
+    // outer
+    shape.outer_points[0].x = p->position.x + temp_half_size;
+    shape.outer_points[0].y = p->position.y - temp_half_size;
+    shape.outer_points[1].x = p->position.x - temp_half_size;
+    shape.outer_points[1].y = p->position.y - temp_half_size;
+    shape.outer_points[2].x = p->position.x;
+    shape.outer_points[2].y = p->position.y + temp_half_size;
+  } else {
+    // diamond
+    shape.point_count = 4;
+    // outer
+    shape.outer_points[0].x = p->position.x;
+    shape.outer_points[0].y = p->position.y - temp_half_size;
+    shape.outer_points[1].x = p->position.x - temp_half_size;
+    shape.outer_points[1].y = p->position.y;
+    shape.outer_points[2].x = p->position.x + temp_half_size;
+    shape.outer_points[2].y = p->position.y;
+    shape.outer_points[3].x = p->position.x;
+    shape.outer_points[3].y = p->position.y + temp_half_size;
+  }
+
+  return shape;
+}
+
+
+
+function B32
+process_shape_contains_point(Context *context, Process_Shape shape, Vector2 point) {
+  B32 contains = 0;
+
+  return contains;
+}
+
+
+
+function Process_Selection
+handle_process_selection(Context *context, Process *p) {
   arena *pa = &context->process_arena;
   Process_Selection selection = {0};
   selection.index = -1;
@@ -359,10 +434,6 @@ function void handle_user_input(Context *context) {
     hot_id_assigned = selection.hot_id_assigned || hot_id_assigned;
 
     if (mouse_pressed) {
-      if (IsKeyDown(KEY_M)) {
-        B32 foo = 1;
-      }
-
       if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
         Process *wire = get_process_wire_by_selection(context, selection);
         if (wire) {
@@ -399,7 +470,13 @@ function void handle_user_input(Context *context) {
         }
       }
     } else if (selection.type == Process_Selection_Process) {
+      // process hover
       context->hot_id = i;
+    }
+
+    // break if there has been an interaction
+    if (selection.type > -1) {
+      break;
     }
   }
 
@@ -483,38 +560,16 @@ function void draw_processes(Context *context) {
       B32 is_active = context->active_id == i;
       F32 thickness = (is_hot||is_active) ? 3.0f : 2.0f;
 
-      Vector2 position = get_process_position(context, p);
-      Vector2 size = get_process_size(context, p);
-      Rectangle rect = (Rectangle){position.x, position.y, size.x, size.y};
-      F32 line_offset = 1.0f;
-      Rectangle line_rect = (Rectangle){position.x-line_offset, position.y-line_offset,
-                                        size.x+2.0f*line_offset, size.y+2.0f*line_offset};
+      Process_Shape shape = get_process_shape(context, p);
+      render_DrawTriangleStrip(ra, shape.outer_points, shape.point_count, bg_color);
 
-      if (p->in_count == 0 && p->out_count == 0) {
-        F32 diamond_size = 20.0f;
-        Vector2 center_position = (Vector2){position.x+diamond_size,
-                                            position.y+diamond_size};
-        thickness += 2.0f;
-        render_DrawPoly(ra, position, 4, diamond_size, PI/4.0f, bg_color);
-        render_DrawPolyLinesEx(ra, position, 4, diamond_size, PI/4.0f, thickness, stroke_color);
-      } else if (p->in_count == 0) {
-        thickness = (is_hot||is_active) ? 10.0f : 7.0f;
-        render_DrawPoly(ra, position, 3, 40.0f, 0.0f, bg_color);
-        render_DrawPolyLinesEx(ra, position, 3, 40.0f, 0.0f, thickness, stroke_color);
-      } else if (p->out_count == 0) {
-        thickness = (is_hot||is_active) ? 10.0f : 7.0f;
-        render_DrawPoly(ra, position, 3, 40.0f, 180.0f, bg_color);
-        render_DrawPolyLinesEx(ra, position, 3, 40.0f, 180.0f, thickness, stroke_color);
-      } else {
-        render_DrawRectangle(ra, position.x, position.y, size.x, size.y, bg_color);
-        render_DrawRectangleLinesEx(ra, line_rect, thickness, stroke_color);
-      }
+      Vector2 size = (Vector2){40.0f, 40.0f}; // TODO: This is just a temp size, it should be replaced with a shape-aware sizing. 
 
       if (p->label[0]) {
         const char *text = (char *)p->label;
         F32 text_width = (F32)MeasureText(text, global_process_font_size);
-        F32 text_x = position.x+0.5f*(size.x-text_width);
-        F32 text_y = position.y+0.5f*(size.y-global_process_font_size);
+        F32 text_x = p->position.x+0.5f*(size.x-text_width);
+        F32 text_y = p->position.y+0.5f*(size.y-global_process_font_size);
         render_DrawText(ra, text, text_x, text_y, global_process_font_size, text_color, 0);
       }
 
