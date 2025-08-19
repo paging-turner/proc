@@ -9,6 +9,8 @@ typedef enum
   render_command_DrawRectangle,
   render_command_DrawLine,
   render_command_DrawLineBezierCubic,
+  render_command_DrawPoly,
+  render_command_DrawPolyLinesEx,
 } render_command_kind;
 
 
@@ -28,6 +30,9 @@ typedef struct render_command
   F32 ControlY2;
   S32 FontSize;
   F32 Thickness;
+  F32 Rotation;
+  F32 Radius;
+  S32 Sides;
   Color Color;
   F32 Width;
   F32 Height;
@@ -171,6 +176,38 @@ function void render_DrawLineBezierCubic(arena *Arena, Vector2 startPos, Vector2
   }
 }
 
+
+function void render_DrawPoly(arena *Arena, Vector2 center, int sides, float radius, float rotation, Color color) {
+  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+
+  if (Command)
+  {
+    Command->Kind = render_command_DrawPoly;
+    Command->X = center.x;
+    Command->Y = center.y;
+    Command->Sides = sides;
+    Command->Radius = radius;
+    Command->Rotation = rotation;
+    Command->Color = color;
+  }
+}
+
+function void render_DrawPolyLinesEx(arena *Arena, Vector2 center, int sides, float radius, float rotation, float lineThick, Color color) {
+  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+
+  if (Command)
+  {
+    Command->Kind = render_command_DrawPolyLinesEx;
+    Command->X = center.x;
+    Command->Y = center.y;
+    Command->Sides = sides;
+    Command->Radius = radius;
+    Command->Rotation = rotation;
+    Command->Thickness = lineThick;
+    Command->Color = color;
+  }
+}
+
 function void render_Commands(arena *Arena)
 {
   // NOTE: Assume that the render commands get cleared every frame, so start from the start.
@@ -190,6 +227,8 @@ function void render_Commands(arena *Arena)
     case render_command_DrawRectangle: { DrawRectangle(C->X, C->Y, C->Width, C->Height, C->Color); } break;
     case render_command_DrawLine: { DrawLineEx((Vector2){C->X, C->Y}, (Vector2){C->X2, C->Y2}, C->Thickness, C->Color); } break;
     case render_command_DrawLineBezierCubic: { DrawLineBezierCubic((Vector2){C->X, C->Y}, (Vector2){C->X2, C->Y2}, (Vector2){C->ControlX, C->ControlY}, (Vector2){C->ControlX2, C->ControlY2}, C->Thickness, C->Color); } break;
+    case render_command_DrawPoly: { DrawPoly((Vector2){C->X, C->Y}, C->Sides, C->Radius, C->Rotation, C->Color); } break;
+    case render_command_DrawPolyLinesEx: { DrawPolyLinesEx((Vector2){C->X, C->Y}, C->Sides, C->Radius, C->Rotation, C->Thickness, C->Color); } break;
 
     default: Assert(0); break;
     }
