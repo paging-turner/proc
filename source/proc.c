@@ -42,6 +42,7 @@ typedef struct {
   Process_Id process_id;
   Process_Selection_Type type;
   S32 index;
+  B32 hot_id_assigned;
 } Process_Selection;
 
 // TODO: rename from/to to something like in/out !! It makes some function names confusing by using from/to within the process struct.
@@ -278,8 +279,10 @@ function void connect_processes(Context *context, Process *out, Process *in) {
 
 
 function Process_Selection handle_process_selection(Context *context, Process *p) {
+  arena *pa = &context->process_arena;
   Process_Selection selection = {0};
   selection.index = -1;
+  selection.process_id = Get_Process_Id(pa, p);
 
   Vector2 size = get_process_size(context, p);
   Rectangle r = (Rectangle){p->position.x-global_box_half_size,
@@ -290,6 +293,8 @@ function Process_Selection handle_process_selection(Context *context, Process *p
 
   if (rectangle_contains_point(new_wire_box, context->mouse_position)) {
     selection.type = Process_Selection_NewWire;
+    context->hot_id = selection.process_id;
+    selection.hot_id_assigned = 1;
   } else {
     // check in wire-boxes
     for (U32 i = 0; i < p->in_count; ++i) {
@@ -298,6 +303,10 @@ function Process_Selection handle_process_selection(Context *context, Process *p
       if (rectangle_contains_point(r, mouse_p)) {
         selection.type = Process_Selection_In;
         selection.index = i;
+        Process *wire = get_process_wire_by_selection(context, selection);
+        Process_Id wire_id = Get_Process_Id(pa, wire);
+        context->hot_id = wire_id;
+        selection.hot_id_assigned = 1;
         break;
       }
     }
@@ -310,6 +319,10 @@ function Process_Selection handle_process_selection(Context *context, Process *p
         if (rectangle_contains_point(r, mouse_p)) {
           selection.type = Process_Selection_Out;
           selection.index = i;
+          Process *wire = get_process_wire_by_selection(context, selection);
+          Process_Id wire_id = Get_Process_Id(pa, wire);
+          context->hot_id = wire_id;
+          selection.hot_id_assigned = 1;
           break;
         }
       }
@@ -318,6 +331,8 @@ function Process_Selection handle_process_selection(Context *context, Process *p
     if (selection.type == 0 && rectangle_contains_point(r, context->mouse_position)) {
       // process selection
       selection.type = Process_Selection_Process;
+      context->hot_id = selection.process_id;
+      selection.hot_id_assigned = 1;
     }
   }
 
@@ -341,6 +356,7 @@ function void handle_user_input(Context *context) {
   for (S32 i = 1; i <= pc; ++i) {
     Process *p = Get_Process_By_Id(pa, i);
     Process_Selection selection = handle_process_selection(context, p);
+    hot_id_assigned = selection.hot_id_assigned || hot_id_assigned;
 
     if (mouse_pressed) {
       if (IsKeyDown(KEY_M)) {
@@ -354,10 +370,8 @@ function void handle_user_input(Context *context) {
           context->active_id = wire_id;
           if (selection.type == Process_Selection_In) {
             context->hot_id = wire->in_id;
-            hot_id_assigned = 1;
           } else if (selection.type == Process_Selection_Out) {
             context->hot_id = wire->out_id;
-            hot_id_assigned = 1;
           }
           process_clicked = 1;
         }
@@ -375,7 +389,6 @@ function void handle_user_input(Context *context) {
         } else {
           // select process
           context->hot_id = i;
-          hot_id_assigned = 1;
           context->active_id = i;
           U32 unset_flags = (Context_Flag_NewWire |
                              Context_Flag_EditText);
@@ -387,7 +400,6 @@ function void handle_user_input(Context *context) {
       }
     } else if (selection.type == Process_Selection_Process) {
       context->hot_id = i;
-      hot_id_assigned = 1;
     }
   }
 
@@ -533,27 +545,23 @@ function void draw_processes(Context *context) {
       Vector2 in_control = in_position;
       in_control.y += 30.0f;
 
-      B32 is_active = context->active_id == i;
+      B32 is_active = context->active_id == i || context->hot_id == i;
+      B32 connected_process_active = (context->active_id == p->in_id ||
+                                      context->hot_id == p->in_id ||
+                                      context->active_id == p->out_id ||
+                                      context->hot_id == p->out_id);
       F32 thickness = is_active ? 4.0f : 2.0f;
 
       render_DrawLineBezierCubic(ra, out_position, in_position, out_control, in_control, thickness, stroke_color);
 
-      if (context->active_id || context->hot_id) {
-        Rectangle box = {0};
-        if (is_active ||
-            p->out_id == context->active_id ||
-            p->out_id == context->hot_id) {
-          box = get_wire_box(context, out_position);
-          Color c = rectangle_contains_point(box, context->mouse_position) ? box_hover_color : box_color;
-          render_DrawRectangleRec(ra, box, c);
-        }
-        if (is_active ||
-            p->in_id == context->active_id ||
-            p->in_id == context->hot_id) {
-          box = get_wire_box(context, in_position);
-          Color c = rectangle_contains_point(box, context->mouse_position) ? box_hover_color : box_color;
-          render_DrawRectangleRec(ra, box, c);
-        }
+      if (connected_process_active || is_active) {
+        Rectangle box = get_wire_box(context, out_position);
+        Color c = is_active ? box_hover_color : box_color;
+        render_DrawRectangleRec(ra, box, c);
+
+        box = get_wire_box(context, in_position);
+        c = is_active ? box_hover_color : box_color;
+        render_DrawRectangleRec(ra, box, c);
       }
     }
   }
