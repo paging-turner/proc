@@ -67,8 +67,14 @@ typedef struct {
 global_variable F32 global_process_wire_padding = 6.0f;
 global_variable F32 global_process_wire_spacing = 12.0f;
 #define Default_Box_Size 10.0f
+
 global_variable F32 global_box_size = Default_Box_Size;
 global_variable F32 global_box_half_size = 0.5f*Default_Box_Size;
+
+global_variable F32 global_shape_size = 40.0f;
+global_variable F32 global_shape_half_size = 40.0f;
+
+
 global_variable F32 global_process_font_size = 14.0f;
 global_variable F32 global_panel_font_size = 14.0f;
 
@@ -153,7 +159,8 @@ function Vector2 get_process_size(Context *context, Process *process) {
 
 
 
-function Vector2 get_process_wire_out_position(Context *context, Process *p, U32 wire_index) {
+function Vector2
+get_process_wire_out_position(Context *context, Process *p, Process_Shape shape, U32 wire_index) {
   F32 padding = global_process_wire_padding;
   F32 spacing = global_process_wire_spacing;
 
@@ -164,7 +171,8 @@ function Vector2 get_process_wire_out_position(Context *context, Process *p, U32
 }
 
 
-function Vector2 get_process_wire_in_position(Context *context, Process *p, U32 wire_index) {
+function Vector2
+get_process_wire_in_position(Context *context, Process *p, Process_Shape shape, U32 wire_index) {
   F32 padding = global_process_wire_padding;
   F32 spacing = global_process_wire_spacing;
   Vector2 in_size = get_process_size(context, p);
@@ -186,13 +194,14 @@ function Rectangle get_wire_box(Context *context, Vector2 position) {
 }
 
 
-function Rectangle get_new_wire_box(Context *context, Process *p) {
-  Vector2 position = get_process_position(context, p);
-  Vector2 size = get_process_size(context, p);
-  Rectangle new_wire_box =
-    (Rectangle){position.x+size.x-global_box_half_size,
-                position.y-global_box_half_size,
-                global_box_size, global_box_size};
+function Rectangle get_new_wire_box(Context *context, Process *p, Process_Shape shape) {
+  // NOTE: Currently, the first point of any process-shape is always the corner where the new-wire-box wants to be.
+  Rectangle new_wire_box = (Rectangle){
+    shape.outer_points[0].x - global_box_half_size,
+    shape.outer_points[0].y - global_box_half_size,
+    global_box_size, global_box_size
+  };
+
   return new_wire_box;
 }
 
@@ -283,53 +292,50 @@ get_process_shape(Context *context, Process *p) {
   S32 has_in = p->in_count > 0;
   S32 has_out = p->out_count > 0;
 
-  F32 temp_size = 40.0f;
-  F32 temp_half_size = 40.0f;
-
   if (has_in && has_out) {
     // rectangular
     shape.point_count = 4;
     // outer
-    shape.outer_points[0].x = position.x + temp_half_size;
-    shape.outer_points[0].y = position.y - temp_half_size;
-    shape.outer_points[1].x = position.x - temp_half_size;
-    shape.outer_points[1].y = position.y - temp_half_size;
-    shape.outer_points[2].x = position.x + temp_half_size;
-    shape.outer_points[2].y = position.y + temp_half_size;
-    shape.outer_points[3].x = position.x - temp_half_size;
-    shape.outer_points[3].y = position.y + temp_half_size;
+    shape.outer_points[0].x = position.x + global_shape_half_size;
+    shape.outer_points[0].y = position.y - global_shape_half_size;
+    shape.outer_points[1].x = position.x - global_shape_half_size;
+    shape.outer_points[1].y = position.y - global_shape_half_size;
+    shape.outer_points[2].x = position.x + global_shape_half_size;
+    shape.outer_points[2].y = position.y + global_shape_half_size;
+    shape.outer_points[3].x = position.x - global_shape_half_size;
+    shape.outer_points[3].y = position.y + global_shape_half_size;
   } else if (has_in) {
     // upward triangle
     shape.point_count = 3;
     // outer
-    shape.outer_points[0].x = position.x - temp_half_size;
-    shape.outer_points[0].y = position.y + temp_half_size;
-    shape.outer_points[1].x = position.x + temp_half_size;
-    shape.outer_points[1].y = position.y + temp_half_size;
-    shape.outer_points[2].x = position.x;
-    shape.outer_points[2].y = position.y - temp_half_size;
+    shape.outer_points[0].x = position.x;
+    shape.outer_points[0].y = position.y - global_shape_half_size;
+    shape.outer_points[1].x = position.x - global_shape_half_size;
+    shape.outer_points[1].y = position.y + global_shape_half_size;
+    shape.outer_points[2].x = position.x + global_shape_half_size;
+    shape.outer_points[2].y = position.y + global_shape_half_size;
   } else if (has_out) {
     // downward triangle
     shape.point_count = 3;
     // outer
-    shape.outer_points[0].x = position.x + temp_half_size;
-    shape.outer_points[0].y = position.y - temp_half_size;
-    shape.outer_points[1].x = position.x - temp_half_size;
-    shape.outer_points[1].y = position.y - temp_half_size;
+    shape.outer_points[0].x = position.x + global_shape_half_size;
+    shape.outer_points[0].y = position.y - global_shape_half_size;
+    shape.outer_points[1].x = position.x - global_shape_half_size;
+    shape.outer_points[1].y = position.y - global_shape_half_size;
     shape.outer_points[2].x = position.x;
-    shape.outer_points[2].y = position.y + temp_half_size;
+    shape.outer_points[2].y = position.y + global_shape_half_size;
   } else {
     // diamond
     shape.point_count = 4;
     // outer
     shape.outer_points[0].x = position.x;
-    shape.outer_points[0].y = position.y - temp_half_size;
-    shape.outer_points[1].x = position.x - temp_half_size;
+    shape.outer_points[0].y = position.y - global_shape_half_size;
+    shape.outer_points[1].x = position.x - global_shape_half_size;
     shape.outer_points[1].y = position.y;
-    shape.outer_points[2].x = position.x + temp_half_size;
+    shape.outer_points[2].x = position.x + global_shape_half_size;
     shape.outer_points[2].y = position.y;
     shape.outer_points[3].x = position.x;
-    shape.outer_points[3].y = position.y + temp_half_size;
+    shape.outer_points[3].y = position.y + global_shape_half_size;
   }
 
   return shape;
@@ -370,11 +376,13 @@ handle_process_selection(Context *context, Process *p) {
   selection.index = -1;
   selection.process_id = Get_Process_Id(pa, p);
 
+  Process_Shape shape = get_process_shape(context, p);
+
   Vector2 size = get_process_size(context, p);
   Rectangle r = (Rectangle){p->position.x-global_box_half_size,
                             p->position.y-global_box_half_size,
                             size.x+global_box_size, size.y+global_box_size};
-  Rectangle new_wire_box = get_new_wire_box(context, p);
+  Rectangle new_wire_box = get_new_wire_box(context, p, shape);
   Vector2 mouse_p = context->mouse_position;
 
   if (rectangle_contains_point(new_wire_box, context->mouse_position)) {
@@ -384,7 +392,7 @@ handle_process_selection(Context *context, Process *p) {
   } else {
     // check in wire-boxes
     for (U32 i = 0; i < p->in_count; ++i) {
-      Vector2 in_position = get_process_wire_in_position(context, p, i);
+      Vector2 in_position = get_process_wire_in_position(context, p, shape, i);
       Rectangle r = get_wire_box(context, in_position);
       if (rectangle_contains_point(r, mouse_p)) {
         selection.type = Process_Selection_In;
@@ -400,7 +408,7 @@ handle_process_selection(Context *context, Process *p) {
     if (selection.type == 0) {
       // check out wire-boxes
       for (U32 i = 0; i < p->out_count; ++i) {
-        Vector2 out_position = get_process_wire_out_position(context, p, i);
+        Vector2 out_position = get_process_wire_out_position(context, p, shape, i);
         Rectangle r = get_wire_box(context, out_position);
         if (rectangle_contains_point(r, mouse_p)) {
           selection.type = Process_Selection_Out;
@@ -415,7 +423,6 @@ handle_process_selection(Context *context, Process *p) {
     }
 
     if (selection.type == 0) {
-      Process_Shape shape = get_process_shape(context, p);
       B32 contains = process_shape_contains_point(context, shape, context->mouse_position);
 
       if (contains) {
@@ -569,6 +576,7 @@ function void draw_processes(Context *context) {
   // draw processes
   for (S32 i = 1; i <= pc; ++i) {
     Process *p = Get_Process_By_Id(pa, i);
+    Process_Shape shape = get_process_shape(context, p);
     B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
 
     if (!is_wire) {
@@ -576,7 +584,6 @@ function void draw_processes(Context *context) {
       B32 is_active = context->active_id == i;
       F32 thickness = (is_hot||is_active) ? 3.0f : 2.0f;
 
-      Process_Shape shape = get_process_shape(context, p);
       render_DrawTriangleStrip(ra, shape.outer_points, shape.point_count, bg_color);
 
       Vector2 size = (Vector2){40.0f, 40.0f}; // TODO: This is just a temp size, it should be replaced with a shape-aware sizing. 
@@ -590,7 +597,7 @@ function void draw_processes(Context *context) {
       }
 
       if (is_active || is_hot) {
-        Rectangle new_wire_box = get_new_wire_box(context, p);
+        Rectangle new_wire_box = get_new_wire_box(context, p, shape);
         B32 new_wire_box_is_active = (Get_Flag(context->flags, Context_Flag_NewWire) ||
                                       rectangle_contains_point(new_wire_box, context->mouse_position));
         Color color = new_wire_box_is_active ? box_hover_color : box_color;
@@ -608,8 +615,11 @@ function void draw_processes(Context *context) {
       Process *out = Get_Process_By_Id(pa, p->out_id);
       Process *in = Get_Process_By_Id(pa, p->in_id);
 
-      Vector2 out_position = get_process_wire_out_position(context, out, p->which_out);
-      Vector2 in_position = get_process_wire_in_position(context, in, p->which_in);
+      Process_Shape out_shape = get_process_shape(context, out);
+      Process_Shape in_shape = get_process_shape(context, in);
+
+      Vector2 out_position = get_process_wire_out_position(context, out, out_shape, p->which_out);
+      Vector2 in_position = get_process_wire_in_position(context, in, in_shape, p->which_in);
 
       Vector2 out_control = out_position;
       out_control.y -= 30.0f;
