@@ -164,16 +164,22 @@ function Vector2 get_process_size(Context *context, Process *process) {
 
 function Vector2
 get_process_wire_out_position(Context *context, Process *p, Process_Shape shape, U32 wire_index) {
-  F32 padding = global_process_wire_padding;
-  F32 spacing = global_process_wire_spacing;
+  Vector2 p0 = shape.outer_points[0];
+  Vector2 p1 = shape.outer_points[1];
 
-  Vector2 out_position = get_process_position(context, p);
-  out_position.x += padding + 0.5f*spacing + spacing*wire_index;
+  Vector2 delta = Vector2Subtract(p0, p1);
+  Vector2 delta_norm = Vector2Normalize(delta);
+  F32 inner_distance = fmax(0.0f, Vector2Distance(p0, p1) - 2.0f*global_process_wire_padding);
+  F32 chunk_size = inner_distance / (F32)(p->out_count+1);
+  F32 distance_from_point = global_process_wire_padding + chunk_size*(F32)(wire_index+1);
+
+  Vector2 out_position = Vector2Add(p1, Vector2Scale(delta_norm, distance_from_point));
 
   return out_position;
 }
 
 
+#if 0
 function Vector2
 get_process_wire_in_position(Context *context, Process *p, Process_Shape shape, U32 wire_index) {
   F32 padding = global_process_wire_padding;
@@ -186,6 +192,27 @@ get_process_wire_in_position(Context *context, Process *p, Process_Shape shape, 
 
   return in_position;
 }
+#else
+function Vector2
+get_process_wire_in_position(Context *context, Process *p, Process_Shape shape, U32 wire_index) {
+  Vector2 p0 = shape.outer_points[2];
+  Vector2 p1 = shape.outer_points[1];
+  if (shape.point_count == 4) {
+    p0 = shape.outer_points[2];
+    p1 = shape.outer_points[3];
+  }
+
+  Vector2 delta = Vector2Subtract(p0, p1);
+  Vector2 delta_norm = Vector2Normalize(delta);
+  F32 inner_distance = fmax(0.0f, Vector2Distance(p0, p1) - 2.0f*global_process_wire_padding);
+  F32 chunk_size = inner_distance / (F32)(p->in_count+1);
+  F32 distance_from_point = global_process_wire_padding + chunk_size*(F32)(wire_index+1);
+
+  Vector2 in_position = Vector2Add(p1, Vector2Scale(delta_norm, distance_from_point));
+
+  return in_position;
+}
+#endif
 
 
 
@@ -652,9 +679,8 @@ function void draw_processes(Context *context) {
   // draw new wire
   if (Get_Flag(context->flags, Context_Flag_NewWire) && context->active_id) {
     Process *p = Get_Process_By_Id(pa, context->active_id);
-    Vector2 position = get_process_position(context, p);
-    Vector2 size = get_process_size(context, p);
-    position.x += size.x;
+    Process_Shape shape = get_process_shape(context, p);
+    Vector2 position = shape.outer_points[0];
 
     Vector2 from_control = position;
     from_control.y -= 30.f;
