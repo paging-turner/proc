@@ -78,6 +78,9 @@ global_variable F32 global_shape_half_size = 40.0f;
 global_variable F32 global_process_font_size = 14.0f;
 global_variable F32 global_panel_font_size = 14.0f;
 
+global_variable Color global_background_color = (Color){220, 220, 200, 255};
+
+
 
 global_variable Process global_zero_process;
 #define Zero_Process()\
@@ -377,15 +380,10 @@ handle_process_selection(Context *context, Process *p) {
   selection.process_id = Get_Process_Id(pa, p);
 
   Process_Shape shape = get_process_shape(context, p);
-
-  Vector2 size = get_process_size(context, p);
-  Rectangle r = (Rectangle){p->position.x-global_box_half_size,
-                            p->position.y-global_box_half_size,
-                            size.x+global_box_size, size.y+global_box_size};
   Rectangle new_wire_box = get_new_wire_box(context, p, shape);
-  Vector2 mouse_p = context->mouse_position;
 
   if (rectangle_contains_point(new_wire_box, context->mouse_position)) {
+    // check new-wire-box
     selection.type = Process_Selection_NewWire;
     context->hot_id = selection.process_id;
     selection.hot_id_assigned = 1;
@@ -394,7 +392,7 @@ handle_process_selection(Context *context, Process *p) {
     for (U32 i = 0; i < p->in_count; ++i) {
       Vector2 in_position = get_process_wire_in_position(context, p, shape, i);
       Rectangle r = get_wire_box(context, in_position);
-      if (rectangle_contains_point(r, mouse_p)) {
+      if (rectangle_contains_point(r, context->mouse_position)) {
         selection.type = Process_Selection_In;
         selection.index = i;
         Process *wire = get_process_wire_by_selection(context, selection);
@@ -410,7 +408,7 @@ handle_process_selection(Context *context, Process *p) {
       for (U32 i = 0; i < p->out_count; ++i) {
         Vector2 out_position = get_process_wire_out_position(context, p, shape, i);
         Rectangle r = get_wire_box(context, out_position);
-        if (rectangle_contains_point(r, mouse_p)) {
+        if (rectangle_contains_point(r, context->mouse_position)) {
           selection.type = Process_Selection_Out;
           selection.index = i;
           Process *wire = get_process_wire_by_selection(context, selection);
@@ -423,9 +421,7 @@ handle_process_selection(Context *context, Process *p) {
     }
 
     if (selection.type == 0) {
-      B32 contains = process_shape_contains_point(context, shape, context->mouse_position);
-
-      if (contains) {
+      if (process_shape_contains_point(context, shape, context->mouse_position)) {
         // process selection
         selection.type = Process_Selection_Process;
         context->hot_id = selection.process_id;
@@ -503,6 +499,7 @@ function void handle_user_input(Context *context) {
     }
   }
 
+  // zero the old hot-id
   if (!hot_id_assigned) {
     context->hot_id = 0;
   }
@@ -576,19 +573,20 @@ function void draw_processes(Context *context) {
   // draw processes
   for (S32 i = 1; i <= pc; ++i) {
     Process *p = Get_Process_By_Id(pa, i);
-    Process_Shape shape = get_process_shape(context, p);
     B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
 
     if (!is_wire) {
+      Process_Shape shape = get_process_shape(context, p);
+
       B32 is_hot = context->hot_id == i;
       B32 is_active = context->active_id == i;
       F32 thickness = (is_hot||is_active) ? 3.0f : 2.0f;
 
       render_DrawTriangleStrip(ra, shape.outer_points, shape.point_count, bg_color);
 
-      Vector2 size = (Vector2){40.0f, 40.0f}; // TODO: This is just a temp size, it should be replaced with a shape-aware sizing. 
-
+      // draw label
       if (p->label[0]) {
+        Vector2 size = (Vector2){40.0f, 40.0f}; // TODO: This is just a temp size, it should be replaced with a shape-aware sizing.
         const char *text = (char *)p->label;
         F32 text_width = (F32)MeasureText(text, global_process_font_size);
         F32 text_x = p->position.x+0.5f*(size.x-text_width);
@@ -596,10 +594,12 @@ function void draw_processes(Context *context) {
         render_DrawText(ra, text, text_x, text_y, global_process_font_size, text_color, 0);
       }
 
+      // draw new-wire-box
       if (is_active || is_hot) {
         Rectangle new_wire_box = get_new_wire_box(context, p, shape);
-        B32 new_wire_box_is_active = (Get_Flag(context->flags, Context_Flag_NewWire) ||
-                                      rectangle_contains_point(new_wire_box, context->mouse_position));
+        B32 new_wire_box_is_active = (
+          (is_active && Get_Flag(context->flags, Context_Flag_NewWire)) ||
+          rectangle_contains_point(new_wire_box, context->mouse_position));
         Color color = new_wire_box_is_active ? box_hover_color : box_color;
         render_DrawRectangleRec(ra, new_wire_box, color);
       }
@@ -633,8 +633,10 @@ function void draw_processes(Context *context) {
                                       context->hot_id == p->out_id);
       F32 thickness = is_active ? 4.0f : 2.0f;
 
+      // draw wire
       render_DrawLineBezierCubic(ra, out_position, in_position, out_control, in_control, thickness, stroke_color);
 
+      // draw wire-boxes
       if (connected_process_active || is_active) {
         Rectangle box = get_wire_box(context, out_position);
         Color c = is_active ? box_hover_color : box_color;
@@ -681,28 +683,34 @@ function void draw_info_panel(Context *context) {
 
 
 
-
-int main(void) {
+function Context initialize_context(void) {
   Context context = (Context){};
+
   context.render_arena = CreateArena(Megabytes(1));
   context.process_arena = CreateArena(Megabytes(1));
   context.temp_arena = CreateArena(Megabytes(1));
   create_process(&context); // NOTE: unused first process
 
+  return context;
+}
+
+
+
+
+int main(void) {
+  Context context = initialize_context();
+
   arena *ra = &context.render_arena;
   arena *ta = &context.temp_arena;
   render_Initialize(ta);
 
-  InitWindow(600, 400, "proc");
+  InitWindow(800, 500, "proc");
   SetTargetFPS(60);
 
   while (!WindowShouldClose()) {
-    Color background_color = (Color){220, 220, 200, 255};
-    Color stroke_color = (Color){10, 10, 16, 255};
-
     handle_user_input(&context);
 
-    render_ClearBackground(ra, background_color);
+    render_ClearBackground(ra, global_background_color);
     draw_processes(&context);
     draw_info_panel(&context);
 
