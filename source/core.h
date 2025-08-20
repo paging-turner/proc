@@ -2,6 +2,18 @@
 
 
 
+#define function static
+#define global_variable static
+#define Kilobytes(n) (1024 * (n))
+#define Megabytes(n) (1024 * Kilobytes(n))
+#define Gigabytes(n) (1024 * Megabytes(n))
+
+#define   Set_Flag(flags, flag) ((flags) |=  (flag))
+#define Unset_Flag(flags, flag) ((flags) &= ~(flag))
+#define   Get_Flag(flags, flag) ((flags) &   (flag))
+
+
+
 
 ////////////////
 //  NOT REAL UTF-8
@@ -28,3 +40,25 @@ U8 is_editable_char_lookup[256] = {
 
 #define Is_Ascii_Range(c) ((c) >= 0&&(c)<=255)
 #define Is_Editable_Char(c)  (Is_Ascii_Range(c)?is_editable_char_lookup[c&0xff]:0)
+
+
+/*
+  Figure out which "side" of the line "p" is at. This is useful for collision/bounds checking.
+
+  "a" and "b" define the line and "p" is the point in question.
+
+  Uses the 3d determinant to figure this out, setting z values to 1
+
+     | ax ay az |
+ det(| bx by bz |) = ax*by*pz + ay*bz*px + az*bx*py - az*by*px - ay*bx*pz - ax*bz*py
+     | px py pz |
+
+  Setting the z's to 1 we get:
+      ax*by + ay*px + bx*py - by*px - ay*bx - ax*py
+
+*/
+function F32 which_side_of_line(Vector2 a, Vector2 b, Vector2 p) {
+  // TODO: Subtracting certain values could cause problems here...
+  F32 side = a.x*b.y + a.y*p.x + b.x*p.y - b.y*p.x - a.y*b.x - a.x*p.y;
+  return side;
+}

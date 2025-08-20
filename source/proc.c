@@ -2,23 +2,13 @@
 # define MR4TH_ASSERTS 1
 #endif
 #include "../libraries/mr4th/src/mr4th_base.h"
-#define function static
-#define global_variable static
-#define Kilobytes(n) (1024 * (n))
-#define Megabytes(n) (1024 * Kilobytes(n))
-#define Gigabytes(n) (1024 * Megabytes(n))
 
-#define   Set_Flag(flags, flag) ((flags) |=  (flag))
-#define Unset_Flag(flags, flag) ((flags) &= ~(flag))
-#define   Get_Flag(flags, flag) ((flags) &   (flag))
-
+#include "../libraries/raylib.h"
+#include "../libraries/raymath.h"
 #include "../source/core.h"
 
 #define ryn_memory_(identifier) identifier
 #include "../libraries/ryn_memory.h"
-
-#include "../libraries/raylib.h"
-#include "../libraries/raymath.h"
 
 #include "../source/render.h"
 
@@ -73,6 +63,7 @@ typedef struct {
   S32 point_count;
 } Process_Shape;
 
+
 global_variable F32 global_process_wire_padding = 6.0f;
 global_variable F32 global_process_wire_spacing = 12.0f;
 #define Default_Box_Size 10.0f
@@ -103,7 +94,7 @@ global_variable Process global_zero_process;
    : 0)
 
 
-// TODO: maybe this should be a mode and not flags??
+// TODO: maybe this should be a mode and not flags?
 typedef enum {
   Context_Flag_Dragging  = 1 << 0,
   Context_Flag_NewWire   = 1 << 1,
@@ -286,6 +277,9 @@ function Process_Shape
 get_process_shape(Context *context, Process *p) {
   Process_Shape shape = {0};
 
+  Vector2 position = get_process_position(context, p);
+
+
   S32 has_in = p->in_count > 0;
   S32 has_out = p->out_count > 0;
 
@@ -296,46 +290,46 @@ get_process_shape(Context *context, Process *p) {
     // rectangular
     shape.point_count = 4;
     // outer
-    shape.outer_points[0].x = p->position.x + temp_half_size;
-    shape.outer_points[0].y = p->position.y - temp_half_size;
-    shape.outer_points[1].x = p->position.x - temp_half_size;
-    shape.outer_points[1].y = p->position.y - temp_half_size;
-    shape.outer_points[2].x = p->position.x + temp_half_size;
-    shape.outer_points[2].y = p->position.y + temp_half_size;
-    shape.outer_points[3].x = p->position.x - temp_half_size;
-    shape.outer_points[3].y = p->position.y + temp_half_size;
+    shape.outer_points[0].x = position.x + temp_half_size;
+    shape.outer_points[0].y = position.y - temp_half_size;
+    shape.outer_points[1].x = position.x - temp_half_size;
+    shape.outer_points[1].y = position.y - temp_half_size;
+    shape.outer_points[2].x = position.x + temp_half_size;
+    shape.outer_points[2].y = position.y + temp_half_size;
+    shape.outer_points[3].x = position.x - temp_half_size;
+    shape.outer_points[3].y = position.y + temp_half_size;
   } else if (has_in) {
     // upward triangle
     shape.point_count = 3;
     // outer
-    shape.outer_points[0].x = p->position.x - temp_half_size;
-    shape.outer_points[0].y = p->position.y + temp_half_size;
-    shape.outer_points[1].x = p->position.x + temp_half_size;
-    shape.outer_points[1].y = p->position.y + temp_half_size;
-    shape.outer_points[2].x = p->position.x;
-    shape.outer_points[2].y = p->position.y - temp_half_size;
+    shape.outer_points[0].x = position.x - temp_half_size;
+    shape.outer_points[0].y = position.y + temp_half_size;
+    shape.outer_points[1].x = position.x + temp_half_size;
+    shape.outer_points[1].y = position.y + temp_half_size;
+    shape.outer_points[2].x = position.x;
+    shape.outer_points[2].y = position.y - temp_half_size;
   } else if (has_out) {
     // downward triangle
     shape.point_count = 3;
     // outer
-    shape.outer_points[0].x = p->position.x + temp_half_size;
-    shape.outer_points[0].y = p->position.y - temp_half_size;
-    shape.outer_points[1].x = p->position.x - temp_half_size;
-    shape.outer_points[1].y = p->position.y - temp_half_size;
-    shape.outer_points[2].x = p->position.x;
-    shape.outer_points[2].y = p->position.y + temp_half_size;
+    shape.outer_points[0].x = position.x + temp_half_size;
+    shape.outer_points[0].y = position.y - temp_half_size;
+    shape.outer_points[1].x = position.x - temp_half_size;
+    shape.outer_points[1].y = position.y - temp_half_size;
+    shape.outer_points[2].x = position.x;
+    shape.outer_points[2].y = position.y + temp_half_size;
   } else {
     // diamond
     shape.point_count = 4;
     // outer
-    shape.outer_points[0].x = p->position.x;
-    shape.outer_points[0].y = p->position.y - temp_half_size;
-    shape.outer_points[1].x = p->position.x - temp_half_size;
-    shape.outer_points[1].y = p->position.y;
-    shape.outer_points[2].x = p->position.x + temp_half_size;
-    shape.outer_points[2].y = p->position.y;
-    shape.outer_points[3].x = p->position.x;
-    shape.outer_points[3].y = p->position.y + temp_half_size;
+    shape.outer_points[0].x = position.x;
+    shape.outer_points[0].y = position.y - temp_half_size;
+    shape.outer_points[1].x = position.x - temp_half_size;
+    shape.outer_points[1].y = position.y;
+    shape.outer_points[2].x = position.x + temp_half_size;
+    shape.outer_points[2].y = position.y;
+    shape.outer_points[3].x = position.x;
+    shape.outer_points[3].y = position.y + temp_half_size;
   }
 
   return shape;
@@ -346,6 +340,23 @@ get_process_shape(Context *context, Process *p) {
 function B32
 process_shape_contains_point(Context *context, Process_Shape shape, Vector2 point) {
   B32 contains = 0;
+
+  if (shape.point_count == 3 || shape.point_count == 4) {
+    F32 side1 = which_side_of_line(shape.outer_points[0], shape.outer_points[1], point);
+    F32 side2 = which_side_of_line(shape.outer_points[1], shape.outer_points[2], point);
+    F32 side3 = which_side_of_line(shape.outer_points[2], shape.outer_points[0], point);
+
+    if (side1 < 0.0f && side2 < 0.0f && side3 < 0.0f) {
+      contains = 1;
+    } else if (shape.point_count == 4) {
+      F32 side4 = which_side_of_line(shape.outer_points[2], shape.outer_points[3], point);
+      F32 side5 = which_side_of_line(shape.outer_points[3], shape.outer_points[1], point);
+
+      if (side2 > 0.0f && side4 > 0.0f && side5 > 0.0f) {
+        contains = 1;
+      }
+    }
+  }
 
   return contains;
 }
@@ -403,11 +414,16 @@ handle_process_selection(Context *context, Process *p) {
       }
     }
 
-    if (selection.type == 0 && rectangle_contains_point(r, context->mouse_position)) {
-      // process selection
-      selection.type = Process_Selection_Process;
-      context->hot_id = selection.process_id;
-      selection.hot_id_assigned = 1;
+    if (selection.type == 0) {
+      Process_Shape shape = get_process_shape(context, p);
+      B32 contains = process_shape_contains_point(context, shape, context->mouse_position);
+
+      if (contains) {
+        // process selection
+        selection.type = Process_Selection_Process;
+        context->hot_id = selection.process_id;
+        selection.hot_id_assigned = 1;
+      }
     }
   }
 
