@@ -61,6 +61,7 @@ typedef struct {
   Vector2 outer_points[4];
   Vector2 inner_points[4];
   S32 point_count;
+  Vector2 center;
 } Process_Shape;
 
 
@@ -126,6 +127,16 @@ typedef struct {
 
 
 
+function Vector2 get_center_between_points(Vector2 p0, Vector2 p1) {
+  Vector2 norm_delta = Vector2Normalize(Vector2Subtract(p1, p0));
+  F32 mid_distance = 0.5f * Vector2Distance(p1, p0);
+  Vector2 center = Vector2Add(p0, Vector2Scale(norm_delta, mid_distance));
+
+  return center;
+}
+
+
+
 function Vector2 get_process_position(Context *context, Process *process) {
   arena *pa = &context->process_arena;
 
@@ -143,22 +154,6 @@ function Vector2 get_process_position(Context *context, Process *process) {
 }
 
 
-function Vector2 get_process_size(Context *context, Process *process) {
-  F32 padding = global_process_wire_padding;
-  F32 spacing = global_process_wire_spacing;
-  S32 max_connection_count = Max(process->in_count, process->out_count);
-  Vector2 size = (Vector2){(F32)max_connection_count*spacing + padding*2.0f,
-                           50.0f};
-  if (process->label[0]) {
-    const char *text = (char *)process->label;
-    F32 text_width = (F32)MeasureText(text, global_process_font_size);
-    if (text_width > (size.x-2.0f*padding)) {
-      size.x = text_width+2.0f*padding;
-    }
-  }
-
-  return size;
-}
 
 
 
@@ -179,20 +174,6 @@ get_process_wire_out_position(Context *context, Process *p, Process_Shape shape,
 }
 
 
-#if 0
-function Vector2
-get_process_wire_in_position(Context *context, Process *p, Process_Shape shape, U32 wire_index) {
-  F32 padding = global_process_wire_padding;
-  F32 spacing = global_process_wire_spacing;
-  Vector2 in_size = get_process_size(context, p);
-
-  Vector2 in_position = get_process_position(context, p);
-  in_position.x += padding + 0.5f*spacing + spacing*wire_index;
-  in_position.y += in_size.y;
-
-  return in_position;
-}
-#else
 function Vector2
 get_process_wire_in_position(Context *context, Process *p, Process_Shape shape, U32 wire_index) {
   Vector2 p0 = shape.outer_points[2];
@@ -212,7 +193,6 @@ get_process_wire_in_position(Context *context, Process *p, Process_Shape shape, 
 
   return in_position;
 }
-#endif
 
 
 
@@ -334,6 +314,7 @@ get_process_shape(Context *context, Process *p) {
     shape.outer_points[2].y = position.y + global_shape_half_size;
     shape.outer_points[3].x = position.x - global_shape_half_size;
     shape.outer_points[3].y = position.y + global_shape_half_size;
+    shape.center = get_center_between_points(shape.outer_points[0], shape.outer_points[3]);
   } else if (has_in) {
     // upward triangle
     shape.point_count = 3;
@@ -344,6 +325,9 @@ get_process_shape(Context *context, Process *p) {
     shape.outer_points[1].y = position.y + global_shape_half_size;
     shape.outer_points[2].x = position.x + global_shape_half_size;
     shape.outer_points[2].y = position.y + global_shape_half_size;
+    Vector2 outer_mid = get_center_between_points(shape.outer_points[1], shape.outer_points[2]);
+    // TODO: better triangle centering
+    shape.center = get_center_between_points(shape.outer_points[0], outer_mid);
   } else if (has_out) {
     // downward triangle
     shape.point_count = 3;
@@ -354,6 +338,9 @@ get_process_shape(Context *context, Process *p) {
     shape.outer_points[1].y = position.y - global_shape_half_size;
     shape.outer_points[2].x = position.x;
     shape.outer_points[2].y = position.y + global_shape_half_size;
+    Vector2 outer_mid = get_center_between_points(shape.outer_points[0], shape.outer_points[1]);
+    // TODO: better triangle centering
+    shape.center = get_center_between_points(shape.outer_points[2], outer_mid);
   } else {
     // diamond
     shape.point_count = 4;
@@ -366,6 +353,7 @@ get_process_shape(Context *context, Process *p) {
     shape.outer_points[2].y = position.y;
     shape.outer_points[3].x = position.x;
     shape.outer_points[3].y = position.y + global_shape_half_size;
+    shape.center = get_center_between_points(shape.outer_points[0], shape.outer_points[3]);
   }
 
   return shape;
@@ -609,15 +597,31 @@ function void draw_processes(Context *context) {
       B32 is_active = context->active_id == i;
       F32 thickness = (is_hot||is_active) ? 3.0f : 2.0f;
 
+      // draw process background
       render_DrawTriangleStrip(ra, shape.outer_points, shape.point_count, bg_color);
+
+      // draw process lines
+      Vector2 p0 = shape.outer_points[0];
+      Vector2 p1 = shape.outer_points[1];
+      Vector2 p2 = shape.outer_points[2];
+      Vector2 p3 = shape.outer_points[3];
+      if (shape.point_count == 3) {
+        render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
+        render_DrawLine(ra, p1.x, p1.y, p2.x, p2.y, thickness, stroke_color);
+        render_DrawLine(ra, p2.x, p2.y, p0.x, p0.y, thickness, stroke_color);
+      } else if (shape.point_count == 4) {
+        render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
+        render_DrawLine(ra, p1.x, p1.y, p3.x, p3.y, thickness, stroke_color);
+        render_DrawLine(ra, p3.x, p3.y, p2.x, p2.y, thickness, stroke_color);
+        render_DrawLine(ra, p2.x, p2.y, p0.x, p0.y, thickness, stroke_color);
+      }
 
       // draw label
       if (p->label[0]) {
-        Vector2 size = (Vector2){40.0f, 40.0f}; // TODO: This is just a temp size, it should be replaced with a shape-aware sizing.
         const char *text = (char *)p->label;
         F32 text_width = (F32)MeasureText(text, global_process_font_size);
-        F32 text_x = p->position.x+0.5f*(size.x-text_width);
-        F32 text_y = p->position.y+0.5f*(size.y-global_process_font_size);
+        F32 text_x = shape.center.x-0.5f*text_width;
+        F32 text_y = shape.center.y-0.5f*global_process_font_size;
         render_DrawText(ra, text, text_x, text_y, global_process_font_size, text_color, 0);
       }
 
