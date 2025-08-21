@@ -8,10 +8,21 @@
 #define Megabytes(n) (1024 * Kilobytes(n))
 #define Gigabytes(n) (1024 * Megabytes(n))
 
-#define   Set_Flag(flags, flag) ((flags) |=  (flag))
-#define Unset_Flag(flags, flag) ((flags) &= ~(flag))
-#define   Get_Flag(flags, flag) ((flags) &   (flag))
+#define    Set_Flag(flags, flag) ((flags) |=  (flag))
+#define  Unset_Flag(flags, flag) ((flags) &= ~(flag))
+#define    Get_Flag(flags, flag) ((flags) &   (flag))
+#define Toggle_Flag(flags, flag) ((flags) ^=  (flag))
 
+
+
+
+/*
+    0010  <--- flag
+    0100  <--- value
+
+    Set_Flag(v, Get_Flag(v, flag) ^ flag)
+
+*/
 
 
 

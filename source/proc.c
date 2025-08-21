@@ -16,8 +16,12 @@
 
 #define Process_Id U32
 
+// TODO: Should Process_Flag just be a non-flag enum?
 typedef enum {
   Process_Flag_Wire   = 1 << 0,
+  Process_Flag_Empty  = 1 << 1,
+  Process_Flag_Cup    = 1 << 2,
+  Process_Flag_Cap    = 1 << 3,
 } Process_Flag;
 
 typedef enum {
@@ -546,9 +550,22 @@ function void handle_user_input(Context *context) {
           p->label[p->label_cursor] = 0;
         }
       }
-    } else if (IsKeyDown(KEY_I)) {
+    } else if (IsKeyPressed(KEY_I)) {
       // begin process label editing
       Set_Flag(context->flags, Context_Flag_EditText);
+    } else if (IsKeyPressed(KEY_TAB)) {
+      // cycle through special process types (cups/caps/empty)
+      if (!Get_Flag(p->flags, Process_Flag_Wire)) {
+        if ((p->in_count == 0 && p->out_count == 0) ||
+            (p->in_count == 1 && p->out_count == 0) ||
+            (p->in_count == 0 && p->out_count == 1)) {
+          Toggle_Flag(p->flags, Process_Flag_Empty);
+        } else if (p->in_count == 0 && p->out_count == 2) {
+          Toggle_Flag(p->flags, Process_Flag_Cup);
+        } else if (p->in_count == 2 && p->out_count == 0) {
+          Toggle_Flag(p->flags, Process_Flag_Cap);
+        }
+      }
     }
   }
 
@@ -598,23 +615,31 @@ function void draw_processes(Context *context) {
       B32 is_active = context->active_id == i;
       F32 thickness = (is_hot||is_active) ? 3.0f : 2.0f;
 
-      // draw process background
-      render_DrawTriangleStrip(ra, shape.outer_points, shape.point_count, bg_color);
+      if (Get_Flag(p->flags, Process_Flag_Empty)) {
+        // don't draw anything, allowing for dangling wire-ends
+      } else if (Get_Flag(p->flags, Process_Flag_Cup)) {
+        render_DrawRectangle(ra, shape.outer_points[0].x, shape.outer_points[0].y, 10.0f, 10.0f, RED);
+      } else if (Get_Flag(p->flags, Process_Flag_Cap)) {
+        render_DrawRectangle(ra, shape.outer_points[0].x, shape.outer_points[0].y, 10.0f, 10.0f, BLUE);
+      } else {
+        // draw process background
+        render_DrawTriangleStrip(ra, shape.outer_points, shape.point_count, bg_color);
 
-      // draw process lines
-      Vector2 p0 = shape.outer_points[0];
-      Vector2 p1 = shape.outer_points[1];
-      Vector2 p2 = shape.outer_points[2];
-      Vector2 p3 = shape.outer_points[3];
-      if (shape.point_count == 3) {
-        render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
-        render_DrawLine(ra, p1.x, p1.y, p2.x, p2.y, thickness, stroke_color);
-        render_DrawLine(ra, p2.x, p2.y, p0.x, p0.y, thickness, stroke_color);
-      } else if (shape.point_count == 4) {
-        render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
-        render_DrawLine(ra, p1.x, p1.y, p3.x, p3.y, thickness, stroke_color);
-        render_DrawLine(ra, p3.x, p3.y, p2.x, p2.y, thickness, stroke_color);
-        render_DrawLine(ra, p2.x, p2.y, p0.x, p0.y, thickness, stroke_color);
+        // draw process lines
+        Vector2 p0 = shape.outer_points[0];
+        Vector2 p1 = shape.outer_points[1];
+        Vector2 p2 = shape.outer_points[2];
+        Vector2 p3 = shape.outer_points[3];
+        if (shape.point_count == 3) {
+          render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
+          render_DrawLine(ra, p1.x, p1.y, p2.x, p2.y, thickness, stroke_color);
+          render_DrawLine(ra, p2.x, p2.y, p0.x, p0.y, thickness, stroke_color);
+        } else if (shape.point_count == 4) {
+          render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
+          render_DrawLine(ra, p1.x, p1.y, p3.x, p3.y, thickness, stroke_color);
+          render_DrawLine(ra, p3.x, p3.y, p2.x, p2.y, thickness, stroke_color);
+          render_DrawLine(ra, p2.x, p2.y, p0.x, p0.y, thickness, stroke_color);
+        }
       }
 
       // draw label
