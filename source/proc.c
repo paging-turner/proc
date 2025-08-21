@@ -73,7 +73,7 @@ global_variable F32 global_box_size = Default_Box_Size;
 global_variable F32 global_box_half_size = 0.5f*Default_Box_Size;
 
 global_variable F32 global_shape_size = 40.0f;
-global_variable F32 global_shape_half_size = 40.0f;
+global_variable F32 global_shape_half_size = 20.0f;
 
 
 global_variable F32 global_process_font_size = 14.0f;
@@ -127,10 +127,10 @@ typedef struct {
 
 
 
-function Vector2 get_center_between_points(Vector2 p0, Vector2 p1) {
+function Vector2 get_percentage_between_points(Vector2 p0, Vector2 p1, F32 percentage) {
   Vector2 norm_delta = Vector2Normalize(Vector2Subtract(p1, p0));
-  F32 mid_distance = 0.5f * Vector2Distance(p1, p0);
-  Vector2 center = Vector2Add(p0, Vector2Scale(norm_delta, mid_distance));
+  F32 distance_along_delta = percentage * Vector2Distance(p1, p0);
+  Vector2 center = Vector2Add(p0, Vector2Scale(norm_delta, distance_along_delta));
 
   return center;
 }
@@ -298,6 +298,7 @@ get_process_shape(Context *context, Process *p) {
 
   Vector2 position = get_process_position(context, p);
 
+  F32 quarter_size = global_shape_size / 4.0f;
 
   S32 has_in = p->in_count > 0;
   S32 has_out = p->out_count > 0;
@@ -314,20 +315,20 @@ get_process_shape(Context *context, Process *p) {
     shape.outer_points[2].y = position.y + global_shape_half_size;
     shape.outer_points[3].x = position.x - global_shape_half_size;
     shape.outer_points[3].y = position.y + global_shape_half_size;
-    shape.center = get_center_between_points(shape.outer_points[0], shape.outer_points[3]);
+    shape.center = get_percentage_between_points(shape.outer_points[0], shape.outer_points[3], 0.5f);
   } else if (has_in) {
     // upward triangle
     shape.point_count = 3;
     // outer
     shape.outer_points[0].x = position.x;
-    shape.outer_points[0].y = position.y - global_shape_half_size;
+    shape.outer_points[0].y = position.y - quarter_size;
     shape.outer_points[1].x = position.x - global_shape_half_size;
     shape.outer_points[1].y = position.y + global_shape_half_size;
     shape.outer_points[2].x = position.x + global_shape_half_size;
     shape.outer_points[2].y = position.y + global_shape_half_size;
-    Vector2 outer_mid = get_center_between_points(shape.outer_points[1], shape.outer_points[2]);
+    Vector2 outer_mid = get_percentage_between_points(shape.outer_points[1], shape.outer_points[2], 0.5f);
     // TODO: better triangle centering
-    shape.center = get_center_between_points(shape.outer_points[0], outer_mid);
+    shape.center = get_percentage_between_points(shape.outer_points[0], outer_mid, 0.66f);
   } else if (has_out) {
     // downward triangle
     shape.point_count = 3;
@@ -337,10 +338,10 @@ get_process_shape(Context *context, Process *p) {
     shape.outer_points[1].x = position.x - global_shape_half_size;
     shape.outer_points[1].y = position.y - global_shape_half_size;
     shape.outer_points[2].x = position.x;
-    shape.outer_points[2].y = position.y + global_shape_half_size;
-    Vector2 outer_mid = get_center_between_points(shape.outer_points[0], shape.outer_points[1]);
+    shape.outer_points[2].y = position.y + quarter_size;
+    Vector2 outer_mid = get_percentage_between_points(shape.outer_points[0], shape.outer_points[1], 0.5f);
     // TODO: better triangle centering
-    shape.center = get_center_between_points(shape.outer_points[2], outer_mid);
+    shape.center = get_percentage_between_points(shape.outer_points[2], outer_mid, 0.66f);
   } else {
     // diamond
     shape.point_count = 4;
@@ -353,7 +354,7 @@ get_process_shape(Context *context, Process *p) {
     shape.outer_points[2].y = position.y;
     shape.outer_points[3].x = position.x;
     shape.outer_points[3].y = position.y + global_shape_half_size;
-    shape.center = get_center_between_points(shape.outer_points[0], shape.outer_points[3]);
+    shape.center = get_percentage_between_points(shape.outer_points[0], shape.outer_points[3], 0.5f);
   }
 
   return shape;
