@@ -69,8 +69,8 @@ typedef struct {
 } Process_Shape;
 
 
-global_variable F32 global_process_wire_padding = 6.0f;
-global_variable F32 global_process_wire_spacing = 12.0f;
+global_variable F32 global_process_wire_padding = 8.0f;
+global_variable F32 global_process_wire_spacing = 22.0f;
 #define Default_Box_Size 10.0f
 
 global_variable F32 global_box_size = Default_Box_Size;
@@ -80,7 +80,7 @@ global_variable F32 global_shape_size = 40.0f;
 global_variable F32 global_shape_half_size = 20.0f;
 
 
-global_variable F32 global_process_font_size = 14.0f;
+global_variable F32 global_process_font_size = 16.0f;
 global_variable F32 global_panel_font_size = 14.0f;
 
 global_variable Color global_background_color = (Color){220, 220, 200, 255};
@@ -303,43 +303,49 @@ get_process_shape(Context *context, Process *p) {
   Vector2 position = get_process_position(context, p);
 
   F32 quarter_size = global_shape_size / 4.0f;
+  F32 padding = global_process_wire_padding;
+  F32 spacing = global_process_wire_spacing;
 
   S32 has_in = p->in_count > 0;
   S32 has_out = p->out_count > 0;
 
   if (has_in && has_out) {
     // rectangular
+    F32 max_conn = (F32)Max(p->in_count, p->out_count);
+    F32 half_width = 0.5f*(2.0f*padding + max_conn*spacing);
     shape.point_count = 4;
     // outer
-    shape.outer_points[0].x = position.x + global_shape_half_size;
+    shape.outer_points[0].x = position.x + half_width;
     shape.outer_points[0].y = position.y - global_shape_half_size;
-    shape.outer_points[1].x = position.x - global_shape_half_size;
+    shape.outer_points[1].x = position.x - half_width;
     shape.outer_points[1].y = position.y - global_shape_half_size;
-    shape.outer_points[2].x = position.x + global_shape_half_size;
+    shape.outer_points[2].x = position.x + half_width;
     shape.outer_points[2].y = position.y + global_shape_half_size;
-    shape.outer_points[3].x = position.x - global_shape_half_size;
+    shape.outer_points[3].x = position.x - half_width;
     shape.outer_points[3].y = position.y + global_shape_half_size;
     shape.center = get_percentage_between_points(shape.outer_points[0], shape.outer_points[3], 0.5f);
   } else if (has_in) {
     // upward triangle
+    F32 half_width = 0.5f*(2.0f*padding + p->in_count*spacing);
     shape.point_count = 3;
     // outer
     shape.outer_points[0].x = position.x;
     shape.outer_points[0].y = position.y - quarter_size;
-    shape.outer_points[1].x = position.x - global_shape_half_size;
+    shape.outer_points[1].x = position.x - half_width;
     shape.outer_points[1].y = position.y + global_shape_half_size;
-    shape.outer_points[2].x = position.x + global_shape_half_size;
+    shape.outer_points[2].x = position.x + half_width;
     shape.outer_points[2].y = position.y + global_shape_half_size;
     Vector2 outer_mid = get_percentage_between_points(shape.outer_points[1], shape.outer_points[2], 0.5f);
     // TODO: better triangle centering
     shape.center = get_percentage_between_points(shape.outer_points[0], outer_mid, 0.66f);
   } else if (has_out) {
     // downward triangle
+    F32 half_width = 0.5f*(2.0f*padding + p->out_count*spacing);
     shape.point_count = 3;
     // outer
-    shape.outer_points[0].x = position.x + global_shape_half_size;
+    shape.outer_points[0].x = position.x + half_width;
     shape.outer_points[0].y = position.y - global_shape_half_size;
-    shape.outer_points[1].x = position.x - global_shape_half_size;
+    shape.outer_points[1].x = position.x - half_width;
     shape.outer_points[1].y = position.y - global_shape_half_size;
     shape.outer_points[2].x = position.x;
     shape.outer_points[2].y = position.y + quarter_size;
@@ -614,13 +620,22 @@ function void draw_processes(Context *context) {
       B32 is_hot = context->hot_id == i;
       B32 is_active = context->active_id == i;
       F32 thickness = (is_hot||is_active) ? 3.0f : 2.0f;
+      F32 cup_cap_control_offset = 10.0f;
 
       if (Get_Flag(p->flags, Process_Flag_Empty)) {
         // don't draw anything, allowing for dangling wire-ends
       } else if (Get_Flag(p->flags, Process_Flag_Cup)) {
-        render_DrawRectangle(ra, shape.outer_points[0].x, shape.outer_points[0].y, 10.0f, 10.0f, RED);
+        Vector2 pos0 = get_process_wire_out_position(context, p, shape, 0);
+        Vector2 pos1 = get_process_wire_out_position(context, p, shape, 1);
+        Vector2 ctrl0 = (Vector2){pos0.x, pos0.y+cup_cap_control_offset};
+        Vector2 ctrl1 = (Vector2){pos1.x, pos1.y+cup_cap_control_offset};
+        render_DrawLineBezierCubic(ra, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color);
       } else if (Get_Flag(p->flags, Process_Flag_Cap)) {
-        render_DrawRectangle(ra, shape.outer_points[0].x, shape.outer_points[0].y, 10.0f, 10.0f, BLUE);
+        Vector2 pos0 = get_process_wire_in_position(context, p, shape, 0);
+        Vector2 pos1 = get_process_wire_in_position(context, p, shape, 1);
+        Vector2 ctrl0 = (Vector2){pos0.x, pos0.y-cup_cap_control_offset};
+        Vector2 ctrl1 = (Vector2){pos1.x, pos1.y-cup_cap_control_offset};
+        render_DrawLineBezierCubic(ra, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color);
       } else {
         // draw process background
         render_DrawTriangleStrip(ra, shape.outer_points, shape.point_count, bg_color);

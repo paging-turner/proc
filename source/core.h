@@ -16,16 +16,6 @@
 
 
 
-/*
-    0010  <--- flag
-    0100  <--- value
-
-    Set_Flag(v, Get_Flag(v, flag) ^ flag)
-
-*/
-
-
-
 ////////////////
 //  NOT REAL UTF-8
 //    TODO: implement utf-8 editing
