@@ -1,3 +1,13 @@
+/*
+    This is a copy of the base-layer provided by https://mr4th.com/
+
+    The original base-layer was built for Windows, and this copy is slowly filling out code for Mac/Linux.
+
+    TODO:
+    [ ] Implement os_memory_* functions. Doing this will give access to arena functionality on Mac/Linux.
+    [ ] Add linked-list macros for index based lists. (This is only important if we end up using index-based lists for processes in the app, which is only used to make saving to disk more convenient.)
+*/
+
 ////////////////////////////////////////////////
 ////////////////////////////////////////////////
 ///////////////   INTRODUCTION   ///////////////

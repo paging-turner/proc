@@ -1,3 +1,21 @@
+/*
+   Proc is intended to be an app to help edit diagrams for doing exercises in "Picturing Quantum Processes" found at https://www.cs.ox.ac.uk/ss2014/programme/Bob.pdf
+
+   The initial focus is to offer basic diagram editing features in order to communicate concepts from the book. At some point it would be nice to implement compilation features and simulation. Baby steps...
+
+   TODO:
+   [ ] Allow deleting of processes
+   [ ] File save and load
+   [ ] Processes should expand to contain it's label
+   [ ] Allow multi-selection of processes
+   [ ] Click-and-drag selection rectangle
+   [ ] Allow dragging all selected processes
+   [ ] Use a font other than the raylib default
+   [ ] Copy-paste of selected processes
+   [ ] Expand base-layer and let it consume core.h and ryn_memory.h
+   [ ] Make some sliders/fields for global settings like process-size and font-size.
+*/
+
 #if !No_Assert
 # define MR4TH_ASSERTS 1
 #endif
@@ -62,8 +80,7 @@ typedef struct {
 } Process;
 
 typedef struct {
-  Vector2 outer_points[4];
-  Vector2 inner_points[4];
+  Vector2 points[4];
   S32 point_count;
   Vector2 center;
 } Process_Shape;
@@ -163,8 +180,8 @@ function Vector2 get_process_position(Context *context, Process *process) {
 
 function Vector2
 get_process_wire_out_position(Context *context, Process *p, Process_Shape shape, U32 wire_index) {
-  Vector2 p0 = shape.outer_points[0];
-  Vector2 p1 = shape.outer_points[1];
+  Vector2 p0 = shape.points[0];
+  Vector2 p1 = shape.points[1];
 
   Vector2 delta = Vector2Subtract(p0, p1);
   Vector2 delta_norm = Vector2Normalize(delta);
@@ -180,11 +197,11 @@ get_process_wire_out_position(Context *context, Process *p, Process_Shape shape,
 
 function Vector2
 get_process_wire_in_position(Context *context, Process *p, Process_Shape shape, U32 wire_index) {
-  Vector2 p0 = shape.outer_points[2];
-  Vector2 p1 = shape.outer_points[1];
+  Vector2 p0 = shape.points[2];
+  Vector2 p1 = shape.points[1];
   if (shape.point_count == 4) {
-    p0 = shape.outer_points[2];
-    p1 = shape.outer_points[3];
+    p0 = shape.points[2];
+    p1 = shape.points[3];
   }
 
   Vector2 delta = Vector2Subtract(p0, p1);
@@ -211,8 +228,8 @@ function Rectangle get_wire_box(Context *context, Vector2 position) {
 function Rectangle get_new_wire_box(Context *context, Process *p, Process_Shape shape) {
   // NOTE: Currently, the first point of any process-shape is always the corner where the new-wire-box wants to be.
   Rectangle new_wire_box = (Rectangle){
-    shape.outer_points[0].x - global_box_half_size,
-    shape.outer_points[0].y - global_box_half_size,
+    shape.points[0].x - global_box_half_size,
+    shape.points[0].y - global_box_half_size,
     global_box_size, global_box_size
   };
 
@@ -314,57 +331,51 @@ get_process_shape(Context *context, Process *p) {
     F32 max_conn = (F32)Max(p->in_count, p->out_count);
     F32 half_width = 0.5f*(2.0f*padding + max_conn*spacing);
     shape.point_count = 4;
-    // outer
-    shape.outer_points[0].x = position.x + half_width;
-    shape.outer_points[0].y = position.y - global_shape_half_size;
-    shape.outer_points[1].x = position.x - half_width;
-    shape.outer_points[1].y = position.y - global_shape_half_size;
-    shape.outer_points[2].x = position.x + half_width;
-    shape.outer_points[2].y = position.y + global_shape_half_size;
-    shape.outer_points[3].x = position.x - half_width;
-    shape.outer_points[3].y = position.y + global_shape_half_size;
-    shape.center = get_percentage_between_points(shape.outer_points[0], shape.outer_points[3], 0.5f);
+    shape.points[0].x = position.x + half_width;
+    shape.points[0].y = position.y - global_shape_half_size;
+    shape.points[1].x = position.x - half_width;
+    shape.points[1].y = position.y - global_shape_half_size;
+    shape.points[2].x = position.x + half_width;
+    shape.points[2].y = position.y + global_shape_half_size;
+    shape.points[3].x = position.x - half_width;
+    shape.points[3].y = position.y + global_shape_half_size;
+    shape.center = get_percentage_between_points(shape.points[0], shape.points[3], 0.5f);
   } else if (has_in) {
     // upward triangle
     F32 half_width = 0.5f*(2.0f*padding + p->in_count*spacing);
     shape.point_count = 3;
-    // outer
-    shape.outer_points[0].x = position.x;
-    shape.outer_points[0].y = position.y - quarter_size;
-    shape.outer_points[1].x = position.x - half_width;
-    shape.outer_points[1].y = position.y + global_shape_half_size;
-    shape.outer_points[2].x = position.x + half_width;
-    shape.outer_points[2].y = position.y + global_shape_half_size;
-    Vector2 outer_mid = get_percentage_between_points(shape.outer_points[1], shape.outer_points[2], 0.5f);
-    // TODO: better triangle centering
-    shape.center = get_percentage_between_points(shape.outer_points[0], outer_mid, 0.66f);
+    shape.points[0].x = position.x;
+    shape.points[0].y = position.y - quarter_size;
+    shape.points[1].x = position.x - half_width;
+    shape.points[1].y = position.y + global_shape_half_size;
+    shape.points[2].x = position.x + half_width;
+    shape.points[2].y = position.y + global_shape_half_size;
+    Vector2 outer_mid = get_percentage_between_points(shape.points[1], shape.points[2], 0.5f);
+    shape.center = get_percentage_between_points(shape.points[0], outer_mid, 0.66f);
   } else if (has_out) {
     // downward triangle
     F32 half_width = 0.5f*(2.0f*padding + p->out_count*spacing);
     shape.point_count = 3;
-    // outer
-    shape.outer_points[0].x = position.x + half_width;
-    shape.outer_points[0].y = position.y - global_shape_half_size;
-    shape.outer_points[1].x = position.x - half_width;
-    shape.outer_points[1].y = position.y - global_shape_half_size;
-    shape.outer_points[2].x = position.x;
-    shape.outer_points[2].y = position.y + quarter_size;
-    Vector2 outer_mid = get_percentage_between_points(shape.outer_points[0], shape.outer_points[1], 0.5f);
-    // TODO: better triangle centering
-    shape.center = get_percentage_between_points(shape.outer_points[2], outer_mid, 0.66f);
+    shape.points[0].x = position.x + half_width;
+    shape.points[0].y = position.y - global_shape_half_size;
+    shape.points[1].x = position.x - half_width;
+    shape.points[1].y = position.y - global_shape_half_size;
+    shape.points[2].x = position.x;
+    shape.points[2].y = position.y + quarter_size;
+    Vector2 outer_mid = get_percentage_between_points(shape.points[0], shape.points[1], 0.5f);
+    shape.center = get_percentage_between_points(shape.points[2], outer_mid, 0.66f);
   } else {
     // diamond
     shape.point_count = 4;
-    // outer
-    shape.outer_points[0].x = position.x;
-    shape.outer_points[0].y = position.y - global_shape_half_size;
-    shape.outer_points[1].x = position.x - global_shape_half_size;
-    shape.outer_points[1].y = position.y;
-    shape.outer_points[2].x = position.x + global_shape_half_size;
-    shape.outer_points[2].y = position.y;
-    shape.outer_points[3].x = position.x;
-    shape.outer_points[3].y = position.y + global_shape_half_size;
-    shape.center = get_percentage_between_points(shape.outer_points[0], shape.outer_points[3], 0.5f);
+    shape.points[0].x = position.x;
+    shape.points[0].y = position.y - global_shape_half_size;
+    shape.points[1].x = position.x - global_shape_half_size;
+    shape.points[1].y = position.y;
+    shape.points[2].x = position.x + global_shape_half_size;
+    shape.points[2].y = position.y;
+    shape.points[3].x = position.x;
+    shape.points[3].y = position.y + global_shape_half_size;
+    shape.center = get_percentage_between_points(shape.points[0], shape.points[3], 0.5f);
   }
 
   return shape;
@@ -377,16 +388,18 @@ process_shape_contains_point(Context *context, Process_Shape shape, Vector2 poin
   B32 contains = 0;
 
   if (shape.point_count == 3 || shape.point_count == 4) {
-    F32 side1 = which_side_of_line(shape.outer_points[0], shape.outer_points[1], point);
-    F32 side2 = which_side_of_line(shape.outer_points[1], shape.outer_points[2], point);
-    F32 side3 = which_side_of_line(shape.outer_points[2], shape.outer_points[0], point);
+    F32 side1 = which_side_of_line(shape.points[0], shape.points[1], point);
+    F32 side2 = which_side_of_line(shape.points[1], shape.points[2], point);
+    F32 side3 = which_side_of_line(shape.points[2], shape.points[0], point);
 
+    // test first triangle
     if (side1 < 0.0f && side2 < 0.0f && side3 < 0.0f) {
       contains = 1;
     } else if (shape.point_count == 4) {
-      F32 side4 = which_side_of_line(shape.outer_points[2], shape.outer_points[3], point);
-      F32 side5 = which_side_of_line(shape.outer_points[3], shape.outer_points[1], point);
+      F32 side4 = which_side_of_line(shape.points[2], shape.points[3], point);
+      F32 side5 = which_side_of_line(shape.points[3], shape.points[1], point);
 
+      // test second triangle
       if (side2 > 0.0f && side4 > 0.0f && side5 > 0.0f) {
         contains = 1;
       }
@@ -479,7 +492,9 @@ function void handle_user_input(Context *context) {
     hot_id_assigned = selection.hot_id_assigned || hot_id_assigned;
 
     if (mouse_pressed) {
-      if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
+      if (selection.type == Process_Selection_In ||
+          selection.type == Process_Selection_Out) {
+        // select wire
         Process *wire = get_process_wire_by_selection(context, selection);
         if (wire) {
           Process_Id wire_id = Get_Process_Id(pa, wire);
@@ -638,13 +653,13 @@ function void draw_processes(Context *context) {
         render_DrawLineBezierCubic(ra, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color);
       } else {
         // draw process background
-        render_DrawTriangleStrip(ra, shape.outer_points, shape.point_count, bg_color);
+        render_DrawTriangleStrip(ra, shape.points, shape.point_count, bg_color);
 
         // draw process lines
-        Vector2 p0 = shape.outer_points[0];
-        Vector2 p1 = shape.outer_points[1];
-        Vector2 p2 = shape.outer_points[2];
-        Vector2 p3 = shape.outer_points[3];
+        Vector2 p0 = shape.points[0];
+        Vector2 p1 = shape.points[1];
+        Vector2 p2 = shape.points[2];
+        Vector2 p3 = shape.points[3];
         if (shape.point_count == 3) {
           render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
           render_DrawLine(ra, p1.x, p1.y, p2.x, p2.y, thickness, stroke_color);
@@ -725,7 +740,7 @@ function void draw_processes(Context *context) {
   if (Get_Flag(context->flags, Context_Flag_NewWire) && context->active_id) {
     Process *p = Get_Process_By_Id(pa, context->active_id);
     Process_Shape shape = get_process_shape(context, p);
-    Vector2 position = shape.outer_points[0];
+    Vector2 position = shape.points[0];
 
     Vector2 from_control = position;
     from_control.y -= 30.f;

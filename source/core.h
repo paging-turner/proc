@@ -39,7 +39,7 @@ U8 is_editable_char_lookup[256] = {
 #undef X
 };
 
-#define Is_Ascii_Range(c) ((c) >= 0&&(c)<=255)
+#define Is_Ascii_Range(c) ((c) >= 0 && (c)<=255)
 #define Is_Editable_Char(c)  (Is_Ascii_Range(c)?is_editable_char_lookup[c&0xff]:0)
 
 
@@ -59,7 +59,6 @@ U8 is_editable_char_lookup[256] = {
 
 */
 function F32 which_side_of_line(Vector2 a, Vector2 b, Vector2 p) {
-  // TODO: Subtracting certain values could cause problems here...
   F32 side = a.x*b.y + a.y*p.x + b.x*p.y - b.y*p.x - a.y*b.x - a.x*p.y;
   return side;
 }

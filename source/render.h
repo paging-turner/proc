@@ -1,4 +1,6 @@
-// TODO: add "render commands" that the render functions use to push on commands, then render those commands later.
+/*
+    A wrapper for raylib rendering functions. Also, implements a command buffer, just in case we want to process the render-commands before actually drawing anything.
+*/
 
 typedef enum
 {
