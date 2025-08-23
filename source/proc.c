@@ -1,5 +1,5 @@
 /*
-   Proc is intended to be an app to help edit diagrams for doing exercises in "Picturing Quantum Processes" found at https://www.cs.ox.ac.uk/ss2014/programme/Bob.pdf
+   Proc is intended to be an app to help edit diagrams for doing exercises in "Picturing Quantum Processes" found at https://www.cs.ox.ac.uk/people/aleks.kissinger/PQP.pdf
 
    The initial focus is to offer basic diagram editing features in order to communicate concepts from the book. At some point it would be nice to implement compilation features and simulation. Baby steps...
 
@@ -715,7 +715,7 @@ function void handle_user_input(Context *context) {
       U32 flags_to_unset = (Context_Flag_NewWire|
                             Context_Flag_EditText);
       Unset_Flag(context->flags, flags_to_unset);
-    } else if (IsKeyDown(KEY_LEFT_CONTROL)) {
+    } else if (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) {
       // new process
       Process *new_p = create_process(context);
       if (new_p) {
