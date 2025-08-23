@@ -4,7 +4,8 @@
    The initial focus is to offer basic diagram editing features in order to communicate concepts from the book. At some point it would be nice to implement compilation features and simulation. Baby steps...
 
    TODO:
-   [ ] Allow deleting of processes
+   [x] Allow deleting of processes
+     [ ] Connect two process with two wires. Delete one wire. Reconnect a second wire. Now when you hover, it highlights the wrong wire.
    [ ] File save and load
    [ ] Processes should expand to contain it's label
    [ ] Allow multi-selection of processes
@@ -14,6 +15,7 @@
    [ ] Copy-paste of selected processes
    [ ] Expand base-layer and let it consume core.h and ryn_memory.h
    [ ] Make some sliders/fields for global settings like process-size and font-size.
+   [ ] Show cursor when editing the text of a process.
 */
 
 #if !No_Assert
@@ -36,10 +38,11 @@
 
 // TODO: Should Process_Flag just be a non-flag enum?
 typedef enum {
-  Process_Flag_Wire   = 1 << 0,
-  Process_Flag_Empty  = 1 << 1,
-  Process_Flag_Cup    = 1 << 2,
-  Process_Flag_Cap    = 1 << 3,
+  Process_Flag_Wire    = 1 << 0,
+  Process_Flag_Empty   = 1 << 1,
+  Process_Flag_Cup     = 1 << 2,
+  Process_Flag_Cap     = 1 << 3,
+  Process_Flag_Deleted = 1 << 4,
 } Process_Flag;
 
 typedef enum {
@@ -64,8 +67,6 @@ typedef struct {
 
   S32 in_count;
   S32 out_count;
-
-  Process_Id next_id;
 
   Process_Id in_id;
   Process_Id out_id;
@@ -286,9 +287,118 @@ function Process *get_process_wire_by_selection(Context *context, Process_Select
 
 function Process *create_process(Context *context) {
   arena *pa = &context->process_arena;
-  Process *p = ryn_memory_PushZeroStruct(pa, Process);
+  Process *p = 0;
+  S32 pc = Get_Process_Count(pa);
+
+  for (S32 i = 1; i <= pc; ++i) {
+    Process *test_p = Get_Process_By_Id(pa, i);
+    if (Get_Flag(test_p->flags, Process_Flag_Deleted)) {
+      p = test_p;
+      *p = (Process){0};
+      break;
+    }
+  }
+
+  if (!p) {
+    p = ryn_memory_PushZeroStruct(pa, Process);
+  }
+
   return p;
 }
+
+
+
+
+function void delete_process(Context *context, Process *p) {
+  arena *pa = &context->process_arena;
+  S32 pc = Get_Process_Count(pa);
+  Process_Id id = Get_Process_Id(pa, p);
+
+  // if deleting a wire, adjust connected processes
+  if (Get_Flag(p->flags, Process_Flag_Wire)) {
+    B32 in_matched = 0;
+    B32 out_matched = 0;
+
+    for (S32 j = 1; j <= pc; ++j) {
+      Process *test_wire = Get_Process_By_Id(pa, j);
+      // adjust in-connections that come after deleted wire
+      if (test_wire->in_id == p->in_id && test_wire->which_in > p->which_in) {
+        test_wire->which_in -= 1;
+        in_matched = 1;
+      }
+
+      // adjust out-connections that come after deleted wire
+      if (test_wire->out_id == p->out_id && test_wire->which_out > p->which_out) {
+        test_wire->which_out -= 1;
+        out_matched = 1;
+      }
+    }
+
+    B32 only_in_conn = p->in_id != 0 && p->which_in == 0;
+    B32 only_out_conn = p->out_id != 0 && p->which_out == 0;
+
+    // decrement process' in-count
+    if (in_matched || only_in_conn) {
+      Process *conn_proc = Get_Process_By_Id(pa, p->in_id);
+      conn_proc->in_count -= 1;
+    }
+
+    // decrement process' out-count
+    if (out_matched || only_out_conn) {
+      Process *conn_proc = Get_Process_By_Id(pa, p->out_id);
+      conn_proc->out_count -= 1;
+    }
+  }
+
+  // clear out the deleted process
+  *p = (Process){0};
+  Set_Flag(p->flags, Process_Flag_Deleted);
+  context->active_id = 0;
+
+  // check for wires connected to the deleted process, and delete those also
+  for (S32 i = 1; i <= pc; ++i) {
+    Process *wire = Get_Process_By_Id(pa, i);
+
+    B32 in_match = wire->in_id == id;
+    B32 out_match = wire->out_id == id;
+
+    if (in_match || out_match) {
+      if (!in_match) {
+        Process *conn_proc = Get_Process_By_Id(pa, wire->in_id);
+
+        // adjust in-connections to deleted wire
+        for (S32 j = 1; j <= pc; ++j) {
+          Process *test_wire = Get_Process_By_Id(pa, j);
+          if (test_wire->in_id == wire->in_id &&
+              test_wire->which_in > wire->which_in) {
+            test_wire->which_in -= 1;
+          }
+        }
+
+        conn_proc->in_count -= 1;
+      }
+
+      if (!out_match) {
+        Process *conn_proc = Get_Process_By_Id(pa, wire->out_id);
+
+        // adjust out-connections to deleted wire
+        for (S32 j = 1; j <= pc; ++j) {
+          Process *test_wire = Get_Process_By_Id(pa, j);
+          if (test_wire->out_id == wire->out_id &&
+              test_wire->which_out > wire->which_out) {
+            test_wire->which_out -= 1;
+          }
+        }
+
+        conn_proc->out_count -= 1;
+      }
+
+      *wire = (Process){0};
+      Set_Flag(wire->flags, Process_Flag_Deleted);
+    }
+  }
+}
+
 
 
 function void connect_processes(Context *context, Process *out, Process *in) {
@@ -488,56 +598,60 @@ function void handle_user_input(Context *context) {
   // process interaction
   for (S32 i = 1; i <= pc; ++i) {
     Process *p = Get_Process_By_Id(pa, i);
-    Process_Selection selection = handle_process_selection(context, p);
-    hot_id_assigned = selection.hot_id_assigned || hot_id_assigned;
 
-    if (mouse_pressed) {
-      if (selection.type == Process_Selection_In ||
-          selection.type == Process_Selection_Out) {
-        // select wire
-        Process *wire = get_process_wire_by_selection(context, selection);
-        if (wire) {
-          Process_Id wire_id = Get_Process_Id(pa, wire);
-          context->active_id = wire_id;
-          if (selection.type == Process_Selection_In) {
-            context->hot_id = wire->in_id;
-          } else if (selection.type == Process_Selection_Out) {
-            context->hot_id = wire->out_id;
+    if (!Get_Flag(p->flags, Process_Flag_Deleted)) {
+      Process_Selection selection = handle_process_selection(context, p);
+      hot_id_assigned = selection.hot_id_assigned || hot_id_assigned;
+
+      if (mouse_pressed) {
+        if (selection.type == Process_Selection_In ||
+            selection.type == Process_Selection_Out) {
+          // select wire
+          Process *wire = get_process_wire_by_selection(context, selection);
+          if (wire) {
+            Process_Id wire_id = Get_Process_Id(pa, wire);
+            context->active_id = wire_id;
+            if (selection.type == Process_Selection_In) {
+              context->hot_id = wire->in_id;
+            } else if (selection.type == Process_Selection_Out) {
+              context->hot_id = wire->out_id;
+            }
+            process_clicked = 1;
           }
-          process_clicked = 1;
-        }
-      } else if ((context->active_id == i || context->hot_id == i) &&
-                 selection.type == Process_Selection_NewWire) {
-        // begin new-wire
-        Set_Flag(context->flags, Context_Flag_NewWire);
-        context->active_id = i;
-        process_clicked = 1;
-      } else if (selection.type == Process_Selection_Process) {
-        if (Get_Flag(context->flags, Context_Flag_NewWire)) {
-          // connect processes
-          Process *active_p = Get_Process_By_Id(pa, context->active_id);
-          connect_processes(context, active_p, p);
-        } else {
-          // select process
-          context->hot_id = i;
+        } else if ((context->active_id == i || context->hot_id == i) &&
+                   selection.type == Process_Selection_NewWire) {
+          // begin new-wire
+          Set_Flag(context->flags, Context_Flag_NewWire);
           context->active_id = i;
-          U32 unset_flags = (Context_Flag_NewWire |
-                             Context_Flag_EditText);
-          Unset_Flag(context->flags, unset_flags);
-          Set_Flag(context->flags, Context_Flag_Dragging);
-          context->active_position = context->mouse_position;
           process_clicked = 1;
+        } else if (selection.type == Process_Selection_Process) {
+          if (Get_Flag(context->flags, Context_Flag_NewWire)) {
+            // connect processes
+            Process *active_p = Get_Process_By_Id(pa, context->active_id);
+            connect_processes(context, active_p, p);
+          } else {
+            // select process
+            context->hot_id = i;
+            context->active_id = i;
+            U32 unset_flags = (Context_Flag_NewWire |
+                               Context_Flag_EditText);
+            Unset_Flag(context->flags, unset_flags);
+            Set_Flag(context->flags, Context_Flag_Dragging);
+            context->active_position = context->mouse_position;
+            process_clicked = 1;
+          }
         }
+      } else if (selection.type == Process_Selection_Process) {
+        // process hover
+        context->hot_id = i;
       }
-    } else if (selection.type == Process_Selection_Process) {
-      // process hover
-      context->hot_id = i;
+
+      // break if there has been an interaction
+      if (selection.type > -1) {
+        break;
+      }
     }
 
-    // break if there has been an interaction
-    if (selection.type > -1) {
-      break;
-    }
   }
 
   // zero the old hot-id
@@ -587,6 +701,9 @@ function void handle_user_input(Context *context) {
           Toggle_Flag(p->flags, Process_Flag_Cap);
         }
       }
+    } else if (IsKeyPressed(KEY_BACKSPACE)) {
+      // delete process
+      delete_process(context, p);
     }
   }
 
@@ -629,7 +746,7 @@ function void draw_processes(Context *context) {
     Process *p = Get_Process_By_Id(pa, i);
     B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
 
-    if (!is_wire) {
+    if (!is_wire && !Get_Flag(p->flags, Process_Flag_Deleted)) {
       Process_Shape shape = get_process_shape(context, p);
 
       B32 is_hot = context->hot_id == i;
@@ -698,7 +815,7 @@ function void draw_processes(Context *context) {
     Process *p = Get_Process_By_Id(pa, i);
     B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
 
-    if (is_wire) {
+    if (is_wire && !Get_Flag(p->flags, Process_Flag_Deleted)) {
       Process *out = Get_Process_By_Id(pa, p->out_id);
       Process *in = Get_Process_By_Id(pa, p->in_id);
 
@@ -714,23 +831,26 @@ function void draw_processes(Context *context) {
       in_control.y += 30.0f;
 
       B32 is_active = context->active_id == i || context->hot_id == i;
-      B32 connected_process_active = (context->active_id == p->in_id ||
-                                      context->hot_id == p->in_id ||
-                                      context->active_id == p->out_id ||
-                                      context->hot_id == p->out_id);
+      B32 connected_in_active = (context->active_id == p->in_id ||
+                                 context->hot_id == p->in_id);
+      B32 connected_out_active = (context->active_id == p->out_id ||
+                                  context->hot_id == p->out_id);
       F32 thickness = is_active ? 4.0f : 2.0f;
 
       // draw wire
       render_DrawLineBezierCubic(ra, out_position, in_position, out_control, in_control, thickness, stroke_color);
 
-      // draw wire-boxes
-      if (connected_process_active || is_active) {
+      // draw out wire-box
+      if (connected_out_active || is_active) {
         Rectangle box = get_wire_box(context, out_position);
         Color c = is_active ? box_hover_color : box_color;
         render_DrawRectangleRec(ra, box, c);
+      }
 
-        box = get_wire_box(context, in_position);
-        c = is_active ? box_hover_color : box_color;
+      // draw in wire-box
+      if (connected_in_active || is_active) {
+        Rectangle box = get_wire_box(context, in_position);
+        Color c = is_active ? box_hover_color : box_color;
         render_DrawRectangleRec(ra, box, c);
       }
     }
