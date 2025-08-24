@@ -91,6 +91,7 @@ typedef enum {
   Process_Shape_HalfCircle,
 } Process_Shape_Kind;
 
+// TODO: We should be able to get away with just using only triangle-fans (or strips), which would make a lot of the shape code simpler.
 typedef struct {
   Process_Shape_Kind kind;
   Vector2 points[4];
@@ -1067,6 +1068,10 @@ int main(void) {
 
   InitWindow(800, 500, "proc");
   SetTargetFPS(60);
+
+#define debug_point_count 10
+  Vector2 points[debug_point_count];
+  S32 max_point_count = debug_point_count;
 
   while (!WindowShouldClose()) {
     handle_user_input(&context);

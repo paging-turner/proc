@@ -117,18 +117,18 @@ function F32 which_side_of_bezier(Vector2 first_point, Vector2 second_point, Vec
     + 2.0f* a2 *b0 *b1* a3 * a3 + 2.0f* a3 *b1 *b3 * a1 * a1 + 3.0f* a0 * a1 * a2 *b3*b3
     + 4.0f* a1 *b0 *b2* a3 * a3 + 6.0f* a0 *b0 *b3 * a3 * a3 + 2.0f* b0 *b3* a2 * a2 * a2;
   F32 v_0 = a0 * a1 * a2 *b1 *b2*b3 + a0 * a1 * a3 *b0 *b2*b3 - a0 * a2 * a3 *b0 *b1 *b3
-- a1 * a2 * a3 *b0*b1 *b2 + b0 * a1 * a1 * a1 *b3 *b3 - b3 * a2 * a2 * a2 *b0 *b0
-+ a1 *b0* a3 * a3 *b1 *b1 + a1 *b2* a0 * a0 *b3 *b3 + a3 *b0* a1 * a1 *b2 *b2
-+ a3 *b2* a2 * a2 *b0 *b0 - a0 *b1* a1 * a1 *b3 *b3 - a0 *b3* a2 * a2 *b1 *b1
-- a2 *b1* a3 * a3 *b0 *b0 - a2 *b3* a0 * a0 *b2 *b2 - 3.0f* a0 *b3 * a3 * a3 *b0 *b0
-- 2.0f* a1 *b2 * a3 * a3 *b0*b0 + 2.0f* a2 *b1 * a0 * a0 *b3*b3
-+ 3.0f* a3 *b0 * a0 * a0 *b3*b3 + a0 * a2 * a3 *b2 *b1*b1 + a1 *b0 *b1*b3 * a2 * a2
-- a0 * a1 * a3 *b1*b2 *b2 - a2 *b0*b2 *b3* a1 * a1 - 3.0f* a0 * a1 * a2 *b0 *b3 *b3
-- 3.0f* a3 *b1 *b2*b3 * a0 * a0 - 2.0f* a0 * a2 * a3 *b0 *b2*b2
-- 2.0f* a3 *b0 *b1*b3 * a1 * a1 + 2.0f* a0 * a1 * a3 *b3 *b1*b1
-+ 2.0f* a0 *b0 *b2*b3 * a2 * a2 + 3.0f* a0 *b0 *b1 *b2 * a3 * a3
-+ 3.0f* a1 * a2 * a3 *b3 *b0*b0 + a3 * a3 * a3 *b0 *b0*b0 - a0 * a0 * a0 *b3 *b3 *b3
-+ a3 * a0 * a0 *b2*b2 *b2 - a0 * a3 * a3 *b1*b1 *b1;
+    - a1 * a2 * a3 *b0*b1 *b2 + b0 * a1 * a1 * a1 *b3 *b3 - b3 * a2 * a2 * a2 *b0 *b0
+    + a1 *b0* a3 * a3 *b1 *b1 + a1 *b2* a0 * a0 *b3 *b3 + a3 *b0* a1 * a1 *b2 *b2
+    + a3 *b2* a2 * a2 *b0 *b0 - a0 *b1* a1 * a1 *b3 *b3 - a0 *b3* a2 * a2 *b1 *b1
+    - a2 *b1* a3 * a3 *b0 *b0 - a2 *b3* a0 * a0 *b2 *b2 - 3.0f* a0 *b3 * a3 * a3 *b0 *b0
+    - 2.0f* a1 *b2 * a3 * a3 *b0*b0 + 2.0f* a2 *b1 * a0 * a0 *b3*b3
+    + 3.0f* a3 *b0 * a0 * a0 *b3*b3 + a0 * a2 * a3 *b2 *b1*b1 + a1 *b0 *b1*b3 * a2 * a2
+    - a0 * a1 * a3 *b1*b2 *b2 - a2 *b0*b2 *b3* a1 * a1 - 3.0f* a0 * a1 * a2 *b0 *b3 *b3
+    - 3.0f* a3 *b1 *b2*b3 * a0 * a0 - 2.0f* a0 * a2 * a3 *b0 *b2*b2
+    - 2.0f* a3 *b0 *b1*b3 * a1 * a1 + 2.0f* a0 * a1 * a3 *b3 *b1*b1
+    + 2.0f* a0 *b0 *b2*b3 * a2 * a2 + 3.0f* a0 *b0 *b1 *b2 * a3 * a3
+    + 3.0f* a1 * a2 * a3 *b3 *b0*b0 + a3 * a3 * a3 *b0 *b0*b0 - a0 * a0 * a0 *b3 *b3 *b3
+    + a3 * a0 * a0 *b2*b2 *b2 - a0 * a3 * a3 *b1*b1 *b1;
   // NOTE: Really should study up on this stuff and give better annotations...
   F32 x = test_point.x;
   F32 y = test_point.y;
@@ -141,4 +141,46 @@ function F32 which_side_of_bezier(Vector2 first_point, Vector2 second_point, Vec
   F32 side = v_xxx*xxx + v_xxy*xx*y + v_xyy*x*yy + v_yyy*yyy + v_xx*xx + v_xy*x*y + v_yy*yy + v_x*x + v_y*y + v_0;
 
   return side;
+}
+
+
+
+function Vector2 get_bezier_point(Vector2 first_point, Vector2 second_point, Vector2 first_control, Vector2 second_control, F32 t) {
+  Vector2 result = (Vector2){0};
+
+  if (t > 0.0f && t < 1.0f) {
+    F32 it = 1.0f - t;
+    Vector2 a = Vector2Scale(first_point, it*it*it);
+    Vector2 b = Vector2Scale(first_control, 3.0f*it*it*t);
+    Vector2 c = Vector2Scale(second_control, 3.0f*it*t*t);
+    Vector2 d = Vector2Scale(second_point, t*t*t);
+
+    result = Vector2Add(a, Vector2Add(b, Vector2Add(c, d)));
+  }
+
+  return result;
+}
+
+
+
+/*
+  This assumes that the bezier is convex, otherwise the triangles might get wonky.
+*/
+function S32 create_bezier_triangle_fan(Vector2 first_point, Vector2 second_point, Vector2 first_control, Vector2 second_control, Vector2 *points, S32 max_points, S32 triangle_count) {
+  S32 point_count = 0;
+  S32 needed_point_count = triangle_count + 2;
+
+  if (needed_point_count <= max_points) {
+    point_count = needed_point_count;
+    points[point_count-1] = first_point;
+    points[0] = second_point;
+    for (S32 i = 1; i < point_count-1; ++i) {
+      F32 amount = (point_count-1) - i;
+      F32 t = (F32)amount / (F32)(point_count-1);
+      Vector2 p = get_bezier_point(first_point, second_point, first_control, second_control, t);
+      points[i] = p;
+    }
+  }
+
+  return point_count;
 }

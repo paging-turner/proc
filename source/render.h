@@ -14,6 +14,7 @@ typedef enum
   render_command_DrawPoly,
   render_command_DrawPolyLinesEx,
   render_command_DrawTriangleStrip,
+  render_command_DrawTriangleFan,
   render_command_DrawCircle,
   render_command_DrawCircleSector,
   render_command_DrawCircleLines,
@@ -43,7 +44,8 @@ typedef struct render_command
   Color Color;
   F32 Width;
   F32 Height;
-  Vector2 Points[4];
+#define render_Max_Points 32
+  Vector2 Points[render_Max_Points];
   S32 PointCount;
   F32 StartAngle;
   F32 EndAngle;
@@ -223,9 +225,24 @@ function void render_DrawTriangleStrip(arena *Arena, Vector2 *Points, S32 PointC
 {
   render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
 
-  if (Command)
+  if (Command && PointCount <= render_Max_Points)
   {
     Command->Kind = render_command_DrawTriangleStrip;
+    for (S32 i = 0; i < PointCount; ++i) {
+      Command->Points[i] = Points[i];
+    }
+    Command->PointCount = PointCount;
+    Command->Color = Color;
+  }
+}
+
+function void render_DrawTriangleFan(arena *Arena, Vector2 *Points, int PointCount, Color Color)
+{
+  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+
+  if (Command && PointCount <= render_Max_Points)
+  {
+    Command->Kind = render_command_DrawTriangleFan;
     for (S32 i = 0; i < PointCount; ++i) {
       Command->Points[i] = Points[i];
     }
@@ -318,6 +335,7 @@ function void render_Commands(arena *Arena)
     case render_command_DrawPoly: { DrawPoly((Vector2){C->X, C->Y}, C->Sides, C->Radius, C->Rotation, C->Color); } break;
     case render_command_DrawPolyLinesEx: { DrawPolyLinesEx((Vector2){C->X, C->Y}, C->Sides, C->Radius, C->Rotation, C->Thickness, C->Color); } break;
     case render_command_DrawTriangleStrip: { DrawTriangleStrip(C->Points, C->PointCount, C->Color); } break;
+    case render_command_DrawTriangleFan: { DrawTriangleStrip(C->Points, C->PointCount, C->Color); } break;
     case render_command_DrawCircle: { DrawCircle(C->X, C->Y, C->Radius, C->Color); } break;
     case render_command_DrawCircleSector: { DrawCircleSector((Vector2){C->X, C->Y}, C->Radius, C->StartAngle, C->EndAngle, 10, C->Color); } break;
     case render_command_DrawCircleLines: { DrawCircleLines(C->X, C->Y, C->Radius, C->Color); } break;
