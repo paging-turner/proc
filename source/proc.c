@@ -16,7 +16,8 @@
    [ ] Expand base-layer and let it consume core.h and ryn_memory.h
    [ ] Make some sliders/fields for global settings like process-size and font-size.
    [ ] Show cursor when editing the text of a process.
-   [ ] Allow toggling on/off "mr4th style" process drawing, which is a variation on the visual style of diragrams in the book.
+   [x] Allow toggling on/off "mr4th style" process drawing, which is a variation on the visual style of diragrams in the book.
+     [ ] Rounded half-circles should be implemented as ellipses to give independent sizing of x/y axes.
    [ ] Undo/redo
 */
 
