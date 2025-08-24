@@ -82,28 +82,45 @@ typedef struct {
   U32 label_cursor;
 } Process;
 
+typedef enum {
+  Process_Shape_Triangle,
+  Process_Shape_Quadrangle, // TODO: Do we need both Quadrangle and Rectangle?
+  Process_Shape_Rectangle,
+  Process_Shape_Circle,
+  Process_Shape_HalfCircle,
+} Process_Shape_Kind;
+
 typedef struct {
+  Process_Shape_Kind kind;
   Vector2 points[4];
+  F32 radius;
+  F32 start_angle;
+  F32 end_angle;
   S32 point_count;
   Vector2 center;
+  B32 downward;
 } Process_Shape;
 
 
 global_variable F32 global_process_wire_padding = 8.0f;
 global_variable F32 global_process_wire_spacing = 22.0f;
-#define Default_Box_Size 10.0f
 
+#define Default_Box_Size 10.0f
 global_variable F32 global_box_size = Default_Box_Size;
 global_variable F32 global_box_half_size = 0.5f*Default_Box_Size;
 
-global_variable F32 global_shape_size = 40.0f;
-global_variable F32 global_shape_half_size = 20.0f;
+#define Default_Shape_Size 40.0f
+global_variable F32 global_shape_size = Default_Shape_Size;
+global_variable F32 global_shape_half_size = 0.5f*Default_Shape_Size;
 
 
 global_variable F32 global_process_font_size = 16.0f;
 global_variable F32 global_panel_font_size = 14.0f;
 
 global_variable Color global_background_color = (Color){220, 220, 200, 255};
+
+#define Half_Circle_Fudge 1.32f
+#define Half_Circle_Radius_Fudge 1.0f
 
 
 
@@ -130,9 +147,10 @@ global_variable Process global_zero_process;
 
 // TODO: maybe this should be a mode and not flags?
 typedef enum {
-  Context_Flag_Dragging  = 1 << 0,
-  Context_Flag_NewWire   = 1 << 1,
-  Context_Flag_EditText  = 1 << 2,
+  Context_Flag_Dragging       = 1 << 0,
+  Context_Flag_NewWire        = 1 << 1,
+  Context_Flag_EditText       = 1 << 2,
+  Context_Flag_RoundedShapes  = 1 << 3,
 } Context_Flag;
 
 typedef struct {
@@ -186,6 +204,12 @@ get_process_wire_out_position(Context *context, Process *p, Process_Shape shape,
   Vector2 p0 = shape.points[0];
   Vector2 p1 = shape.points[1];
 
+  if (shape.kind == Process_Shape_HalfCircle) {
+    // @Copypasta draw_processes and process_shape_contains_point
+    p0 = (Vector2){shape.center.x+shape.radius, shape.center.y};
+    p1 = (Vector2){shape.center.x-shape.radius, shape.center.y};
+  }
+
   Vector2 delta = Vector2Subtract(p0, p1);
   Vector2 delta_norm = Vector2Normalize(delta);
   F32 inner_distance = fmax(0.0f, Vector2Distance(p0, p1) - 2.0f*global_process_wire_padding);
@@ -202,7 +226,11 @@ function Vector2
 get_process_wire_in_position(Context *context, Process *p, Process_Shape shape, U32 wire_index) {
   Vector2 p0 = shape.points[2];
   Vector2 p1 = shape.points[1];
-  if (shape.point_count == 4) {
+  if (shape.kind == Process_Shape_HalfCircle) {
+    // @Copypasta draw_processes
+    p0 = (Vector2){shape.center.x+shape.radius, shape.center.y};
+    p1 = (Vector2){shape.center.x-shape.radius, shape.center.y};
+  } else if (shape.point_count == 4) {
     p0 = shape.points[2];
     p1 = shape.points[3];
   }
@@ -230,11 +258,29 @@ function Rectangle get_wire_box(Context *context, Vector2 position) {
 
 function Rectangle get_new_wire_box(Context *context, Process *p, Process_Shape shape) {
   // NOTE: Currently, the first point of any process-shape is always the corner where the new-wire-box wants to be.
+  F32 x = shape.points[0].x;
+  F32 y = shape.points[0].y;
+
+  // @Copypasta draw_processes
+  if (shape.kind == Process_Shape_Circle) {
+    x = shape.center.x;
+    y = shape.center.y - shape.radius;
+  } else if (shape.kind == Process_Shape_HalfCircle) {
+    if (shape.downward) {
+      x = shape.center.x + shape.radius;
+      y = shape.center.y;
+    } else {
+      x = shape.center.x;
+      y = shape.center.y - shape.radius;
+    }
+  }
+
   Rectangle new_wire_box = (Rectangle){
-    shape.points[0].x - global_box_half_size,
-    shape.points[0].y - global_box_half_size,
+    x - global_box_half_size,
+    y - global_box_half_size,
     global_box_size, global_box_size
   };
+
 
   return new_wire_box;
 }
@@ -438,56 +484,88 @@ get_process_shape(Context *context, Process *p) {
   S32 has_in = p->in_count > 0;
   S32 has_out = p->out_count > 0;
 
+  B32 rounded = Get_Flag(context->flags, Context_Flag_RoundedShapes);
+
   if (has_in && has_out) {
-    // rectangular
-    F32 max_conn = (F32)Max(p->in_count, p->out_count);
-    F32 half_width = 0.5f*(2.0f*padding + max_conn*spacing);
-    shape.point_count = 4;
-    shape.points[0].x = position.x + half_width;
-    shape.points[0].y = position.y - global_shape_half_size;
-    shape.points[1].x = position.x - half_width;
-    shape.points[1].y = position.y - global_shape_half_size;
-    shape.points[2].x = position.x + half_width;
-    shape.points[2].y = position.y + global_shape_half_size;
-    shape.points[3].x = position.x - half_width;
-    shape.points[3].y = position.y + global_shape_half_size;
-    shape.center = get_percentage_between_points(shape.points[0], shape.points[3], 0.5f);
+      // rectangular
+      F32 max_conn = (F32)Max(p->in_count, p->out_count);
+      F32 half_width = 0.5f*(2.0f*padding + max_conn*spacing);
+      shape.kind = Process_Shape_Rectangle;
+      shape.point_count = 4;
+      shape.points[0].x = position.x + half_width;
+      shape.points[0].y = position.y - global_shape_half_size;
+      shape.points[1].x = position.x - half_width;
+      shape.points[1].y = position.y - global_shape_half_size;
+      shape.points[2].x = position.x + half_width;
+      shape.points[2].y = position.y + global_shape_half_size;
+      shape.points[3].x = position.x - half_width;
+      shape.points[3].y = position.y + global_shape_half_size;
+      shape.center = get_percentage_between_points(shape.points[0], shape.points[3], 0.5f);
   } else if (has_in) {
-    // upward triangle
     F32 half_width = 0.5f*(2.0f*padding + p->in_count*spacing);
-    shape.point_count = 3;
-    shape.points[0].x = position.x;
-    shape.points[0].y = position.y - quarter_size;
-    shape.points[1].x = position.x - half_width;
-    shape.points[1].y = position.y + global_shape_half_size;
-    shape.points[2].x = position.x + half_width;
-    shape.points[2].y = position.y + global_shape_half_size;
-    Vector2 outer_mid = get_percentage_between_points(shape.points[1], shape.points[2], 0.5f);
-    shape.center = get_percentage_between_points(shape.points[0], outer_mid, 0.66f);
+    if (rounded) {
+      // upward half-circle
+      shape.kind = Process_Shape_HalfCircle;
+      shape.radius = Half_Circle_Radius_Fudge*half_width;
+      shape.center = (Vector2){position.x, position.y+shape.radius};
+      shape.start_angle = 90.0f;
+      shape.end_angle = 270.0f;
+    } else {
+      // upward triangle
+      shape.kind = Process_Shape_Triangle;
+      shape.point_count = 3;
+      shape.points[0].x = position.x;
+      shape.points[0].y = position.y - quarter_size;
+      shape.points[1].x = position.x - half_width;
+      shape.points[1].y = position.y + global_shape_half_size;
+      shape.points[2].x = position.x + half_width;
+      shape.points[2].y = position.y + global_shape_half_size;
+      Vector2 outer_mid = get_percentage_between_points(shape.points[1], shape.points[2], 0.5f);
+      shape.center = get_percentage_between_points(shape.points[0], outer_mid, 0.66f);
+    }
   } else if (has_out) {
-    // downward triangle
     F32 half_width = 0.5f*(2.0f*padding + p->out_count*spacing);
-    shape.point_count = 3;
-    shape.points[0].x = position.x + half_width;
-    shape.points[0].y = position.y - global_shape_half_size;
-    shape.points[1].x = position.x - half_width;
-    shape.points[1].y = position.y - global_shape_half_size;
-    shape.points[2].x = position.x;
-    shape.points[2].y = position.y + quarter_size;
-    Vector2 outer_mid = get_percentage_between_points(shape.points[0], shape.points[1], 0.5f);
-    shape.center = get_percentage_between_points(shape.points[2], outer_mid, 0.66f);
+    if (rounded) {
+      // downward half-circle
+      shape.kind = Process_Shape_HalfCircle;
+      shape.radius = Half_Circle_Radius_Fudge*half_width;
+      shape.center = (Vector2){position.x, position.y-shape.radius};
+      shape.start_angle = 270.0f;
+      shape.end_angle = 450.0f;
+      shape.downward = 1;
+    } else {
+      // downward triangle
+      shape.kind = Process_Shape_Triangle;
+      shape.point_count = 3;
+      shape.points[0].x = position.x + half_width;
+      shape.points[0].y = position.y - global_shape_half_size;
+      shape.points[1].x = position.x - half_width;
+      shape.points[1].y = position.y - global_shape_half_size;
+      shape.points[2].x = position.x;
+      shape.points[2].y = position.y + quarter_size;
+      Vector2 outer_mid = get_percentage_between_points(shape.points[0], shape.points[1], 0.5f);
+      shape.center = get_percentage_between_points(shape.points[2], outer_mid, 0.66f);
+    }
   } else {
-    // diamond
-    shape.point_count = 4;
-    shape.points[0].x = position.x;
-    shape.points[0].y = position.y - global_shape_half_size;
-    shape.points[1].x = position.x - global_shape_half_size;
-    shape.points[1].y = position.y;
-    shape.points[2].x = position.x + global_shape_half_size;
-    shape.points[2].y = position.y;
-    shape.points[3].x = position.x;
-    shape.points[3].y = position.y + global_shape_half_size;
-    shape.center = get_percentage_between_points(shape.points[0], shape.points[3], 0.5f);
+    if (rounded) {
+      // circle
+      shape.kind = Process_Shape_Circle;
+      shape.center = position;
+      shape.radius = global_shape_half_size;
+    } else {
+      // diamond
+      shape.kind = Process_Shape_Quadrangle;
+      shape.point_count = 4;
+      shape.points[0].x = position.x;
+      shape.points[0].y = position.y - global_shape_half_size;
+      shape.points[1].x = position.x - global_shape_half_size;
+      shape.points[1].y = position.y;
+      shape.points[2].x = position.x + global_shape_half_size;
+      shape.points[2].y = position.y;
+      shape.points[3].x = position.x;
+      shape.points[3].y = position.y + global_shape_half_size;
+      shape.center = get_percentage_between_points(shape.points[0], shape.points[3], 0.5f);
+    }
   }
 
   return shape;
@@ -499,23 +577,42 @@ function B32
 process_shape_contains_point(Context *context, Process_Shape shape, Vector2 point) {
   B32 contains = 0;
 
-  if (shape.point_count == 3 || shape.point_count == 4) {
-    F32 side1 = which_side_of_line(shape.points[0], shape.points[1], point);
-    F32 side2 = which_side_of_line(shape.points[1], shape.points[2], point);
-    F32 side3 = which_side_of_line(shape.points[2], shape.points[0], point);
+  switch(shape.kind) {
+  case Process_Shape_Triangle:
+  case Process_Shape_Quadrangle:
+  case Process_Shape_Rectangle: {
+    if (shape.point_count == 3 || shape.point_count == 4) {
+      F32 side1 = which_side_of_line(shape.points[0], shape.points[1], point);
+      F32 side2 = which_side_of_line(shape.points[1], shape.points[2], point);
+      F32 side3 = which_side_of_line(shape.points[2], shape.points[0], point);
 
-    // test first triangle
-    if (side1 < 0.0f && side2 < 0.0f && side3 < 0.0f) {
-      contains = 1;
-    } else if (shape.point_count == 4) {
-      F32 side4 = which_side_of_line(shape.points[2], shape.points[3], point);
-      F32 side5 = which_side_of_line(shape.points[3], shape.points[1], point);
-
-      // test second triangle
-      if (side2 > 0.0f && side4 > 0.0f && side5 > 0.0f) {
+      // test first triangle
+      if (side1 < 0.0f && side2 < 0.0f && side3 < 0.0f) {
         contains = 1;
+      } else if (shape.point_count == 4) {
+        F32 side4 = which_side_of_line(shape.points[2], shape.points[3], point);
+        F32 side5 = which_side_of_line(shape.points[3], shape.points[1], point);
+
+        // test second triangle
+        if (side2 > 0.0f && side4 > 0.0f && side5 > 0.0f) {
+          contains = 1;
+        }
       }
     }
+  } break;
+  case Process_Shape_Circle: {
+    F32 distance = Vector2Distance(shape.center, point);
+    contains = distance <= shape.radius;
+  } break;
+  case Process_Shape_HalfCircle: {
+    // @Copypasta get_process_wire_*_position
+    Vector2 p0 = (Vector2){shape.center.x+shape.radius, shape.center.y};
+    Vector2 p1 = (Vector2){shape.center.x-shape.radius, shape.center.y};
+    F32 side = which_side_of_line(p0, p1, point);
+    F32 distance = Vector2Distance(shape.center, point);
+    F32 correct_side = shape.downward ? (side < 0.0f) : (side > 0.0f);
+    contains = correct_side && (distance <= shape.radius);
+  } break;
   }
 
   return contains;
@@ -725,6 +822,12 @@ function void handle_user_input(Context *context) {
       }
     }
   }
+
+  // top-level actions
+  if (IsKeyPressed(KEY_M)) {
+    // toggle between rounded and triangular shapes
+    Toggle_Flag(context->flags, Context_Flag_RoundedShapes);
+  }
 }
 
 
@@ -771,23 +874,53 @@ function void draw_processes(Context *context) {
         Vector2 ctrl1 = (Vector2){pos1.x, pos1.y-cup_cap_control_offset};
         render_DrawLineBezierCubic(ra, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color);
       } else {
-        // draw process background
-        render_DrawTriangleStrip(ra, shape.points, shape.point_count, bg_color);
+        switch(shape.kind) {
+        case Process_Shape_Triangle:
+        case Process_Shape_Quadrangle:
+        case Process_Shape_Rectangle: {
+          // draw process background
+          render_DrawTriangleStrip(ra, shape.points, shape.point_count, bg_color);
 
-        // draw process lines
-        Vector2 p0 = shape.points[0];
-        Vector2 p1 = shape.points[1];
-        Vector2 p2 = shape.points[2];
-        Vector2 p3 = shape.points[3];
-        if (shape.point_count == 3) {
-          render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
-          render_DrawLine(ra, p1.x, p1.y, p2.x, p2.y, thickness, stroke_color);
-          render_DrawLine(ra, p2.x, p2.y, p0.x, p0.y, thickness, stroke_color);
-        } else if (shape.point_count == 4) {
-          render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
-          render_DrawLine(ra, p1.x, p1.y, p3.x, p3.y, thickness, stroke_color);
-          render_DrawLine(ra, p3.x, p3.y, p2.x, p2.y, thickness, stroke_color);
-          render_DrawLine(ra, p2.x, p2.y, p0.x, p0.y, thickness, stroke_color);
+          // draw process lines
+          Vector2 p0 = shape.points[0];
+          Vector2 p1 = shape.points[1];
+          Vector2 p2 = shape.points[2];
+          Vector2 p3 = shape.points[3];
+          if (shape.point_count == 3) {
+            render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
+            render_DrawLine(ra, p1.x, p1.y, p2.x, p2.y, thickness, stroke_color);
+            render_DrawLine(ra, p2.x, p2.y, p0.x, p0.y, thickness, stroke_color);
+          } else if (shape.point_count == 4) {
+            render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
+            render_DrawLine(ra, p1.x, p1.y, p3.x, p3.y, thickness, stroke_color);
+            render_DrawLine(ra, p3.x, p3.y, p2.x, p2.y, thickness, stroke_color);
+            render_DrawLine(ra, p2.x, p2.y, p0.x, p0.y, thickness, stroke_color);
+          }
+        } break;
+        case Process_Shape_Circle: {
+          render_DrawCircle(ra, shape.center, shape.radius, bg_color);
+          F32 fudge = Half_Circle_Fudge*shape.radius;
+          Vector2 first_point = (Vector2){shape.center.x-shape.radius, shape.center.y};
+          Vector2 second_point = (Vector2){shape.center.x+shape.radius, shape.center.y};
+          Vector2 control0 = (Vector2){first_point.x, first_point.y-fudge};
+          Vector2 control1 = (Vector2){second_point.x, second_point.y-fudge};
+          render_DrawLineBezierCubic(ra, first_point, second_point, control0, control1, thickness, stroke_color);
+          Vector2 control2 = (Vector2){first_point.x, first_point.y+fudge};
+          Vector2 control3 = (Vector2){second_point.x, second_point.y+fudge};
+          render_DrawLineBezierCubic(ra, first_point, second_point, control2, control3, thickness, stroke_color);
+        } break;
+        case Process_Shape_HalfCircle: {
+          render_DrawCircleSector(ra, shape.center, shape.radius, shape.start_angle, shape.end_angle, bg_color);
+          F32 flip = shape.downward ? -1.0f : 1.0f;
+          // @Copypasta get_process_wire_*_position
+          F32 fudge = Half_Circle_Fudge*shape.radius;
+          Vector2 first_point = (Vector2){shape.center.x-shape.radius, shape.center.y};
+          Vector2 second_point = (Vector2){shape.center.x+shape.radius, shape.center.y};
+          Vector2 control0 = (Vector2){first_point.x, first_point.y-fudge*flip};
+          Vector2 control1 = (Vector2){second_point.x, second_point.y-fudge*flip};
+          render_DrawLineBezierCubic(ra, first_point, second_point, control0, control1, thickness, stroke_color);
+          render_DrawLine(ra, first_point.x, first_point.y, second_point.x, second_point.y, thickness, stroke_color);
+        } break;
         }
       }
 
@@ -797,6 +930,12 @@ function void draw_processes(Context *context) {
         F32 text_width = (F32)MeasureText(text, global_process_font_size);
         F32 text_x = shape.center.x-0.5f*text_width;
         F32 text_y = shape.center.y-0.5f*global_process_font_size;
+        if (shape.kind == Process_Shape_HalfCircle) {
+          F32 flip = shape.downward ? -1.0f : 1.0f;
+          F32 fudge = 0.9f;
+          F32 offset = fudge * flip * (0.5f * shape.radius);
+          text_y -= offset;
+        }
         render_DrawText(ra, text, text_x, text_y, global_process_font_size, text_color, 0);
       }
 
@@ -863,6 +1002,19 @@ function void draw_processes(Context *context) {
     Process *p = Get_Process_By_Id(pa, context->active_id);
     Process_Shape shape = get_process_shape(context, p);
     Vector2 position = shape.points[0];
+    // @Copypasta get_new_wire_box
+    if (shape.kind == Process_Shape_Circle) {
+      position.x = shape.center.x;
+      position.y = shape.center.y - shape.radius;
+    } else if (shape.kind == Process_Shape_HalfCircle) {
+      if (shape.downward) {
+        position.x = shape.center.x + shape.radius;
+        position.y = shape.center.y;
+      } else {
+        position.x = shape.center.x;
+        position.y = shape.center.y - shape.radius;
+      }
+    }
 
     Vector2 from_control = position;
     from_control.y -= 30.f;

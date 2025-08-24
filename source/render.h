@@ -14,6 +14,10 @@ typedef enum
   render_command_DrawPoly,
   render_command_DrawPolyLinesEx,
   render_command_DrawTriangleStrip,
+  render_command_DrawCircle,
+  render_command_DrawCircleSector,
+  render_command_DrawCircleLines,
+  render_command_DrawCircleSectorLines,
 } render_command_kind;
 
 
@@ -41,6 +45,8 @@ typedef struct render_command
   F32 Height;
   Vector2 Points[4];
   S32 PointCount;
+  F32 StartAngle;
+  F32 EndAngle;
 } render_command;
 
 
@@ -213,7 +219,8 @@ function void render_DrawPolyLinesEx(arena *Arena, Vector2 center, int sides, fl
   }
 }
 
-function void render_DrawTriangleStrip(arena *Arena, Vector2 *Points, S32 PointCount, Color Color) {
+function void render_DrawTriangleStrip(arena *Arena, Vector2 *Points, S32 PointCount, Color Color)
+{
   render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
 
   if (Command)
@@ -226,6 +233,68 @@ function void render_DrawTriangleStrip(arena *Arena, Vector2 *Points, S32 PointC
     Command->Color = Color;
   }
 }
+
+function void render_DrawCircle(arena *Arena, Vector2 center, F32 radius, Color color)
+{
+  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+
+  if (Command)
+  {
+    Command->Kind = render_command_DrawCircle;
+    Command->X = center.x;
+    Command->Y = center.y;
+    Command->Radius = radius;
+    Command->Color = color;
+  }
+}
+
+function void render_DrawCircleSector(arena *Arena, Vector2 center, float radius, float startAngle, float endAngle, Color color)
+{
+  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+
+  if (Command)
+  {
+    Command->Kind = render_command_DrawCircleSector;
+    Command->X = center.x;
+    Command->Y = center.y;
+    Command->Radius = radius;
+    Command->StartAngle = startAngle;
+    Command->EndAngle = endAngle;
+    Command->Color = color;
+  }
+}
+
+function void render_DrawCircleLines(arena *Arena, int centerX, int centerY, float radius, Color color)
+{
+  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+
+  if (Command)
+  {
+    Command->Kind = render_command_DrawCircleLines;
+    Command->X = centerX;
+    Command->Y = centerY;
+    Command->Radius = radius;
+    Command->Color = color;
+  }
+}
+
+function void render_DrawCircleSectorLines(arena *Arena, Vector2 center, float radius, float startAngle, float endAngle, Color color)
+{
+  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+
+  if (Command)
+  {
+    Command->Kind = render_command_DrawCircleSectorLines;
+    Command->X = center.x;
+    Command->Y = center.y;
+    Command->Radius = radius;
+    Command->StartAngle = startAngle;
+    Command->EndAngle = endAngle;
+    Command->Color = color;
+  }
+}
+
+
 
 function void render_Commands(arena *Arena)
 {
@@ -249,6 +318,10 @@ function void render_Commands(arena *Arena)
     case render_command_DrawPoly: { DrawPoly((Vector2){C->X, C->Y}, C->Sides, C->Radius, C->Rotation, C->Color); } break;
     case render_command_DrawPolyLinesEx: { DrawPolyLinesEx((Vector2){C->X, C->Y}, C->Sides, C->Radius, C->Rotation, C->Thickness, C->Color); } break;
     case render_command_DrawTriangleStrip: { DrawTriangleStrip(C->Points, C->PointCount, C->Color); } break;
+    case render_command_DrawCircle: { DrawCircle(C->X, C->Y, C->Radius, C->Color); } break;
+    case render_command_DrawCircleSector: { DrawCircleSector((Vector2){C->X, C->Y}, C->Radius, C->StartAngle, C->EndAngle, 10, C->Color); } break;
+    case render_command_DrawCircleLines: { DrawCircleLines(C->X, C->Y, C->Radius, C->Color); } break;
+    case render_command_DrawCircleSectorLines: { DrawCircleSectorLines((Vector2){C->X, C->Y}, C->Radius, C->StartAngle, C->EndAngle, 10, C->Color); } break;
 
     default: Assert(0); break;
     }
