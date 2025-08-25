@@ -19,6 +19,7 @@
    [x] Allow toggling on/off "mr4th style" process drawing, which is a variation on the visual style of diragrams in the book.
      [ ] Move towards defining shapes using triangle strips/fans. We used some raylib funcs for circles and stuff just because it was easy, but now we need more control.
      [ ] Implement collision detection for triangle strip/fan so we can just define a shape with triangles and be able to interact and draw with the same shape.
+   [ ] If you toggle a process to be a special display (cup/cap/invisible), and then connect a new wire to it, the special visual still applies and you cannot toggle away. When connecting wires, we need to check if the special display flag should be unset.
    [ ] Undo/redo
 */
 
@@ -99,10 +100,10 @@ typedef struct {
   Vector2 points[Process_Shape_Max_Points];
   S32 triangle_count;
   F32 radius;
-  F32 start_angle;
-  F32 end_angle;
   S32 point_count;
   Vector2 center;
+  Vector2 first_control;
+  Vector2 second_control;
   B32 downward;
 } Process_Shape;
 
@@ -211,8 +212,8 @@ get_process_wire_out_position(Context *context, Process *p, Process_Shape shape,
 
   if (shape.kind == Process_Shape_HalfCircle) {
     // @Copypasta draw_processes and process_shape_contains_point
-    p0 = (Vector2){shape.center.x+shape.radius, shape.center.y};
-    p1 = (Vector2){shape.center.x-shape.radius, shape.center.y};
+    p0 = shape.points[shape.point_count-1];
+    p1 = shape.points[0];
   }
 
   Vector2 delta = Vector2Subtract(p0, p1);
@@ -231,10 +232,11 @@ function Vector2
 get_process_wire_in_position(Context *context, Process *p, Process_Shape shape, U32 wire_index) {
   Vector2 p0 = shape.points[2];
   Vector2 p1 = shape.points[1];
+
   if (shape.kind == Process_Shape_HalfCircle) {
     // @Copypasta draw_processes
-    p0 = (Vector2){shape.center.x+shape.radius, shape.center.y};
-    p1 = (Vector2){shape.center.x-shape.radius, shape.center.y};
+    p0 = shape.points[0];
+    p1 = shape.points[shape.point_count-1];
   } else if (shape.point_count == 4) {
     p0 = shape.points[2];
     p1 = shape.points[3];
@@ -261,28 +263,40 @@ function Rectangle get_wire_box(Context *context, Vector2 position) {
 }
 
 
+function Vector2 get_new_wire_position(Context *context, Process *p, Process_Shape shape) {
+  Vector2 position = shape.points[0];
+
+  if (shape.kind == Process_Shape_Circle) {
+    position.x = shape.center.x;
+    position.y = shape.center.y - shape.radius;
+  } else if (shape.kind == Process_Shape_HalfCircle) {
+    if (shape.downward) {
+      position.x = shape.points[shape.point_count-1].x;
+      position.y = shape.points[shape.point_count-1].y;
+    } else {
+      Vector2 point = get_bezier_point(
+        shape.points[0], shape.points[shape.point_count-1],
+        shape.first_control, shape.second_control,
+        0.5f);
+      position.x = point.x;
+      position.y = point.y;
+    }
+  }
+
+  return position;
+}
+
+
 function Rectangle get_new_wire_box(Context *context, Process *p, Process_Shape shape) {
   // NOTE: Currently, the first point of any process-shape is always the corner where the new-wire-box wants to be.
   F32 x = shape.points[0].x;
   F32 y = shape.points[0].y;
 
-  // @Copypasta draw_processes
-  if (shape.kind == Process_Shape_Circle) {
-    x = shape.center.x;
-    y = shape.center.y - shape.radius;
-  } else if (shape.kind == Process_Shape_HalfCircle) {
-    if (shape.downward) {
-      x = shape.center.x + shape.radius;
-      y = shape.center.y;
-    } else {
-      x = shape.center.x;
-      y = shape.center.y - shape.radius;
-    }
-  }
+  Vector2 position = get_new_wire_position(context, p, shape);
 
   Rectangle new_wire_box = (Rectangle){
-    x - global_box_half_size,
-    y - global_box_half_size,
+    position.x - global_box_half_size,
+    position.y - global_box_half_size,
     global_box_size, global_box_size
   };
 
@@ -497,12 +511,19 @@ fill_out_half_circle_shape(Context *context, Process_Shape *shape, Process *p, V
 
   Vector2 first_point = (Vector2){position.x-x_offset, position.y+y_offset};
   Vector2 second_point = (Vector2){position.x+x_offset, position.y+y_offset};
-  Vector2 first_control = (Vector2){first_point.x, first_point.y-2.0f*y_offset};
-  Vector2 second_control = (Vector2){second_point.x, second_point.y-2.0f*y_offset};
+  shape->first_control = (Vector2){first_point.x, first_point.y-2.0f*y_offset};
+  shape->second_control = (Vector2){second_point.x, second_point.y-2.0f*y_offset};
+
+  Vector2 middle_of_curve = get_bezier_point(
+    first_point, second_point,
+    shape->first_control, shape->second_control,
+    0.5f);
+  Vector2 middle_of_line = get_percentage_between_points(first_point, second_point, 0.5f);
+  shape->center = get_percentage_between_points(middle_of_curve, middle_of_line, 0.5);
 
   shape->point_count = create_bezier_triangle_fan(
     first_point, second_point,
-    first_control, second_control,
+    shape->first_control, shape->second_control,
     shape->points, Process_Shape_Max_Points, shape->triangle_count);
 }
 
@@ -1052,20 +1073,7 @@ function void draw_processes(Context *context) {
   if (Get_Flag(context->flags, Context_Flag_NewWire) && context->active_id) {
     Process *p = Get_Process_By_Id(pa, context->active_id);
     Process_Shape shape = get_process_shape(context, p);
-    Vector2 position = shape.points[0];
-    // @Copypasta get_new_wire_box
-    if (shape.kind == Process_Shape_Circle) {
-      position.x = shape.center.x;
-      position.y = shape.center.y - shape.radius;
-    } else if (shape.kind == Process_Shape_HalfCircle) {
-      if (shape.downward) {
-        position.x = shape.center.x + shape.radius;
-        position.y = shape.center.y;
-      } else {
-        position.x = shape.center.x;
-        position.y = shape.center.y - shape.radius;
-      }
-    }
+    Vector2 position = get_new_wire_position(context, p, shape);
 
     Vector2 from_control = position;
     from_control.y -= 30.f;
