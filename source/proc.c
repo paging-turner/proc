@@ -826,9 +826,11 @@ function void handle_user_input(Context *context) {
   }
 
   // top-level actions
-  if (IsKeyPressed(KEY_M)) {
-    // toggle between rounded and triangular shapes
-    Toggle_Flag(context->flags, Context_Flag_RoundedShapes);
+  if (!Get_Flag(context->flags, Context_Flag_EditText)) {
+    if (IsKeyPressed(KEY_M)) {
+      // toggle between rounded and triangular shapes
+      Toggle_Flag(context->flags, Context_Flag_RoundedShapes);
+    }
   }
 }
 
