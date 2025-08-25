@@ -335,7 +335,7 @@ function void render_Commands(arena *Arena)
     case render_command_DrawPoly: { DrawPoly((Vector2){C->X, C->Y}, C->Sides, C->Radius, C->Rotation, C->Color); } break;
     case render_command_DrawPolyLinesEx: { DrawPolyLinesEx((Vector2){C->X, C->Y}, C->Sides, C->Radius, C->Rotation, C->Thickness, C->Color); } break;
     case render_command_DrawTriangleStrip: { DrawTriangleStrip(C->Points, C->PointCount, C->Color); } break;
-    case render_command_DrawTriangleFan: { DrawTriangleStrip(C->Points, C->PointCount, C->Color); } break;
+    case render_command_DrawTriangleFan: { DrawTriangleFan(C->Points, C->PointCount, C->Color); } break;
     case render_command_DrawCircle: { DrawCircle(C->X, C->Y, C->Radius, C->Color); } break;
     case render_command_DrawCircleSector: { DrawCircleSector((Vector2){C->X, C->Y}, C->Radius, C->StartAngle, C->EndAngle, 10, C->Color); } break;
     case render_command_DrawCircleLines: { DrawCircleLines(C->X, C->Y, C->Radius, C->Color); } break;

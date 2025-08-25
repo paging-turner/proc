@@ -17,7 +17,8 @@
    [ ] Make some sliders/fields for global settings like process-size and font-size.
    [ ] Show cursor when editing the text of a process.
    [x] Allow toggling on/off "mr4th style" process drawing, which is a variation on the visual style of diragrams in the book.
-     [ ] Rounded half-circles should be implemented as ellipses to give independent sizing of x/y axes.
+     [ ] Move towards defining shapes using triangle strips/fans. We used some raylib funcs for circles and stuff just because it was easy, but now we need more control.
+     [ ] Implement collision detection for triangle strip/fan so we can just define a shape with triangles and be able to interact and draw with the same shape.
    [ ] Undo/redo
 */
 
@@ -91,10 +92,12 @@ typedef enum {
   Process_Shape_HalfCircle,
 } Process_Shape_Kind;
 
-// TODO: We should be able to get away with just using only triangle-fans (or strips), which would make a lot of the shape code simpler.
+
 typedef struct {
   Process_Shape_Kind kind;
-  Vector2 points[4];
+#define Process_Shape_Max_Points 16
+  Vector2 points[Process_Shape_Max_Points];
+  S32 triangle_count;
   F32 radius;
   F32 start_angle;
   F32 end_angle;
@@ -473,6 +476,38 @@ function void connect_processes(Context *context, Process *out, Process *in) {
 
 
 
+function void
+fill_out_half_circle_shape(Context *context, Process_Shape *shape, Process *p, Vector2 position, B32 downward) {
+  F32 padding = global_process_wire_padding;
+  F32 spacing = global_process_wire_spacing;
+
+  F32 conn_count = (F32)(downward ? p->out_count : p->in_count);
+  F32 width = (2.0f*padding + conn_count*spacing);
+  F32 half_width = 0.5f*(width);
+
+  F32 height = global_shape_size;
+  F32 half_height = global_shape_half_size;
+  shape->kind = Process_Shape_HalfCircle;
+  shape->triangle_count = 8;
+  shape->downward = downward;
+
+  F32 multiplier = downward ? -1.0f : 1.0f;
+  F32 x_offset = multiplier * half_width;
+  F32 y_offset = multiplier * half_height;
+
+  Vector2 first_point = (Vector2){position.x-x_offset, position.y+y_offset};
+  Vector2 second_point = (Vector2){position.x+x_offset, position.y+y_offset};
+  Vector2 first_control = (Vector2){first_point.x, first_point.y-2.0f*y_offset};
+  Vector2 second_control = (Vector2){second_point.x, second_point.y-2.0f*y_offset};
+
+  shape->point_count = create_bezier_triangle_fan(
+    first_point, second_point,
+    first_control, second_control,
+    shape->points, Process_Shape_Max_Points, shape->triangle_count);
+}
+
+
+
 function Process_Shape
 get_process_shape(Context *context, Process *p) {
   Process_Shape shape = {0};
@@ -489,29 +524,26 @@ get_process_shape(Context *context, Process *p) {
   B32 rounded = Get_Flag(context->flags, Context_Flag_RoundedShapes);
 
   if (has_in && has_out) {
-      // rectangular
-      F32 max_conn = (F32)Max(p->in_count, p->out_count);
-      F32 half_width = 0.5f*(2.0f*padding + max_conn*spacing);
-      shape.kind = Process_Shape_Rectangle;
-      shape.point_count = 4;
-      shape.points[0].x = position.x + half_width;
-      shape.points[0].y = position.y - global_shape_half_size;
-      shape.points[1].x = position.x - half_width;
-      shape.points[1].y = position.y - global_shape_half_size;
-      shape.points[2].x = position.x + half_width;
-      shape.points[2].y = position.y + global_shape_half_size;
-      shape.points[3].x = position.x - half_width;
-      shape.points[3].y = position.y + global_shape_half_size;
-      shape.center = get_percentage_between_points(shape.points[0], shape.points[3], 0.5f);
+    // rectangular
+    F32 max_conn = (F32)Max(p->in_count, p->out_count);
+    F32 half_width = 0.5f*(2.0f*padding + max_conn*spacing);
+    shape.kind = Process_Shape_Rectangle;
+    shape.point_count = 4;
+    shape.points[0].x = position.x + half_width;
+    shape.points[0].y = position.y - global_shape_half_size;
+    shape.points[1].x = position.x - half_width;
+    shape.points[1].y = position.y - global_shape_half_size;
+    shape.points[2].x = position.x + half_width;
+    shape.points[2].y = position.y + global_shape_half_size;
+    shape.points[3].x = position.x - half_width;
+    shape.points[3].y = position.y + global_shape_half_size;
+    shape.center = get_percentage_between_points(shape.points[0], shape.points[3], 0.5f);
   } else if (has_in) {
-    F32 half_width = 0.5f*(2.0f*padding + p->in_count*spacing);
+    F32 width = (2.0f*padding + p->in_count*spacing);
+    F32 half_width = 0.5f*(width);
     if (rounded) {
       // upward half-circle
-      shape.kind = Process_Shape_HalfCircle;
-      shape.radius = Half_Circle_Radius_Fudge*half_width;
-      shape.center = (Vector2){position.x, position.y+shape.radius};
-      shape.start_angle = 90.0f;
-      shape.end_angle = 270.0f;
+      fill_out_half_circle_shape(context, &shape, p, position, 0);
     } else {
       // upward triangle
       shape.kind = Process_Shape_Triangle;
@@ -526,15 +558,11 @@ get_process_shape(Context *context, Process *p) {
       shape.center = get_percentage_between_points(shape.points[0], outer_mid, 0.66f);
     }
   } else if (has_out) {
-    F32 half_width = 0.5f*(2.0f*padding + p->out_count*spacing);
+    F32 width = (2.0f*padding + p->out_count*spacing);
+    F32 half_width = 0.5f*(width);
     if (rounded) {
       // downward half-circle
-      shape.kind = Process_Shape_HalfCircle;
-      shape.radius = Half_Circle_Radius_Fudge*half_width;
-      shape.center = (Vector2){position.x, position.y-shape.radius};
-      shape.start_angle = 270.0f;
-      shape.end_angle = 450.0f;
-      shape.downward = 1;
+      fill_out_half_circle_shape(context, &shape, p, position, 1);
     } else {
       // downward triangle
       shape.kind = Process_Shape_Triangle;
@@ -553,7 +581,7 @@ get_process_shape(Context *context, Process *p) {
       // circle
       shape.kind = Process_Shape_Circle;
       shape.center = position;
-      shape.radius = global_shape_half_size;
+      shape.radius = global_shape_half_size*0.7f;
     } else {
       // diamond
       shape.kind = Process_Shape_Quadrangle;
@@ -571,6 +599,26 @@ get_process_shape(Context *context, Process *p) {
   }
 
   return shape;
+}
+
+
+
+function B32
+triangle_fan_contains_point(Vector2 *points, S32 triangle_count, Vector2 point) {
+  B32 contains = 0;
+
+  for (S32 i = 1; i <= triangle_count; ++i) {
+    F32 side1 = which_side_of_line(points[0], points[i], point);
+    F32 side2 = which_side_of_line(points[i], points[i+1], point);
+    F32 side3 = which_side_of_line(points[i+1], points[0], point);
+
+    if (side1 < 0.0f && side2 < 0.0f && side3 < 0.0f) {
+      contains = 1;
+      break;
+    }
+  }
+
+  return contains;
 }
 
 
@@ -607,13 +655,7 @@ process_shape_contains_point(Context *context, Process_Shape shape, Vector2 poin
     contains = distance <= shape.radius;
   } break;
   case Process_Shape_HalfCircle: {
-    // @Copypasta get_process_wire_*_position
-    Vector2 p0 = (Vector2){shape.center.x+shape.radius, shape.center.y};
-    Vector2 p1 = (Vector2){shape.center.x-shape.radius, shape.center.y};
-    F32 side = which_side_of_line(p0, p1, point);
-    F32 distance = Vector2Distance(shape.center, point);
-    F32 correct_side = shape.downward ? (side < 0.0f) : (side > 0.0f);
-    contains = correct_side && (distance <= shape.radius);
+    contains = triangle_fan_contains_point(shape.points, shape.triangle_count, point);
   } break;
   }
 
@@ -914,16 +956,21 @@ function void draw_processes(Context *context) {
           render_DrawLineBezierCubic(ra, first_point, second_point, control2, control3, thickness, stroke_color);
         } break;
         case Process_Shape_HalfCircle: {
-          render_DrawCircleSector(ra, shape.center, shape.radius, shape.start_angle, shape.end_angle, bg_color);
-          F32 flip = shape.downward ? -1.0f : 1.0f;
-          // @Copypasta get_process_wire_*_position
-          F32 fudge = Half_Circle_Fudge*shape.radius;
-          Vector2 first_point = (Vector2){shape.center.x-shape.radius, shape.center.y};
-          Vector2 second_point = (Vector2){shape.center.x+shape.radius, shape.center.y};
-          Vector2 control0 = (Vector2){first_point.x, first_point.y-fudge*flip};
-          Vector2 control1 = (Vector2){second_point.x, second_point.y-fudge*flip};
-          render_DrawLineBezierCubic(ra, first_point, second_point, control0, control1, thickness, stroke_color);
-          render_DrawLine(ra, first_point.x, first_point.y, second_point.x, second_point.y, thickness, stroke_color);
+          // draw half-circle background
+          render_DrawTriangleFan(ra, shape.points, shape.point_count, bg_color);
+          // draw half-circle lines
+          for (S32 i = 0; i < shape.point_count-1; ++i) {
+            Vector2 p0 = shape.points[i];
+            Vector2 p1 = shape.points[i+1];
+            render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
+          }
+          // connect the line endpoints
+          render_DrawLine(ra,
+                          shape.points[0].x,
+                          shape.points[0].y,
+                          shape.points[shape.point_count-1].x,
+                          shape.points[shape.point_count-1].y,
+                          thickness, stroke_color);
         } break;
         }
       }
@@ -1070,10 +1117,6 @@ int main(void) {
 
   InitWindow(800, 500, "proc");
   SetTargetFPS(60);
-
-#define debug_point_count 10
-  Vector2 points[debug_point_count];
-  S32 max_point_count = debug_point_count;
 
   while (!WindowShouldClose()) {
     handle_user_input(&context);
