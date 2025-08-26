@@ -43,6 +43,11 @@ U8 is_editable_char_lookup[256] = {
 #define Is_Editable_Char(c)  (Is_Ascii_Range(c)?is_editable_char_lookup[c&0xff]:0)
 
 
+
+
+
+
+
 /*
   Figure out which "side" of the line "p" is at. This is useful for collision/bounds checking.
 

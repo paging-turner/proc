@@ -4,8 +4,10 @@
    The initial focus is to offer basic diagram editing features in order to communicate concepts from the book. At some point it would be nice to implement compilation features and simulation. Baby steps...
 
    TODO:
+   [ ] Fix naming collisions with Raylib and "Windows.h" !!!
+
    [x] Allow deleting of processes
-     [ ] Connect two process with two wires. Delete one wire. Reconnect a second wire. Now when you hover, it highlights the wrong wire.
+     [ ] BUG: Connect two process with two wires. Delete one wire. Reconnect a second wire. Now when you hover, it highlights the wrong wire.
    [ ] File save and load
    [ ] Processes should expand to contain it's label
    [ ] Allow multi-selection of processes
@@ -21,12 +23,38 @@
      [ ] Implement collision detection for triangle strip/fan so we can just define a shape with triangles and be able to interact and draw with the same shape.
    [ ] If you toggle a process to be a special display (cup/cap/invisible), and then connect a new wire to it, the special visual still applies and you cannot toggle away. When connecting wires, we need to check if the special display flag should be unset.
    [ ] Undo/redo
+   [ ] Allow reordering of connected wires
+   [ ] BUG: Connect a two processes. Make one process invisible. Delete the *other* process. The invisible process is still there but, well, you can't see it! Either delete the invisible one, or make it visible again. Probably just delete it??
 */
 
-#if !No_Assert
-# define MR4TH_ASSERTS 1
+#if 0
+# if !No_Assert
+#  define MR4TH_ASSERTS 1
+# endif
+# include "../libraries/mr4th/src/mr4th_base.h"
 #endif
-#include "../libraries/mr4th/src/mr4th_base.h"
+
+// NOTE: Cherry-pick some stuff from mr4th_base until the naming collisions with "Windows.h" is fixed
+//         >:(
+#define Stmnt(S) do{ S }while(0)
+#define AssertBreak() (*(volatile int*)0 = 0)
+#define Assert(c) Stmnt( if (!(c)){ AssertBreak(); } )
+
+#include <stdint.h>
+typedef uint8_t U8;
+typedef uint32_t U32;
+typedef int32_t S32;
+typedef uint32_t B32;
+typedef float F32;
+
+#define Min(a,b) (((a)<(b))?(a):(b))
+#define Max(a,b) (((a)>(b))?(a):(b))
+#define CLAMP(a,x,b) (((x)<(a))?(a):\
+((b)<(x))?(b):(x))
+#define ClampTop(a,b) Min(a,b)
+#define ClampBot(a,b) Max(a,b)
+
+
 
 #include "../libraries/raylib.h"
 #include "../libraries/raymath.h"
@@ -125,6 +153,8 @@ global_variable F32 global_panel_font_size = 14.0f;
 
 global_variable Color global_background_color = (Color){220, 220, 200, 255};
 
+global_variable S32 global_shape_fan_triangle_count = 12;
+
 #define Half_Circle_Fudge 1.32f
 #define Half_Circle_Radius_Fudge 1.0f
 
@@ -211,7 +241,6 @@ get_process_wire_out_position(Context *context, Process *p, Process_Shape shape,
   Vector2 p1 = shape.points[1];
 
   if (shape.kind == Process_Shape_HalfCircle) {
-    // @Copypasta draw_processes and process_shape_contains_point
     p0 = shape.points[shape.point_count-1];
     p1 = shape.points[0];
   }
@@ -502,7 +531,7 @@ fill_out_half_circle_shape(Context *context, Process_Shape *shape, Process *p, V
   F32 height = global_shape_size;
   F32 half_height = global_shape_half_size;
   shape->kind = Process_Shape_HalfCircle;
-  shape->triangle_count = 8;
+  shape->triangle_count = global_shape_fan_triangle_count;
   shape->downward = downward;
 
   F32 multiplier = downward ? -1.0f : 1.0f;
