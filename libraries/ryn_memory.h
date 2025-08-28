@@ -38,6 +38,40 @@
 #define ryn_memory_(identifier) ryn_memory_##identifier
 #endif
 
+
+
+#include <stdio.h> /* TODO: Create a way to disable or replace printf. */
+
+#include <stdint.h>
+
+typedef struct
+{
+    uint64_t Offset;
+    uint64_t Capacity;
+    uint8_t *Data;
+    uint64_t ParentOffset;
+} ryn_memory_(arena);
+
+void *ryn_memory_AllocateVirtualMemory(size_t Size);
+
+#ifdef Ryn_Memory_Types_Only
+ryn_memory_(arena) ryn_memory_(CreateArena)(uint64_t Size);
+void *ryn_memory_(PushSize)(ryn_memory_(arena) *Arena, uint64_t Size);
+uint64_t ryn_memory_(GetArenaFreeSpace)(ryn_memory_(arena) *Arena);
+ryn_memory_(arena) ryn_memory_(CreateSubArena)(ryn_memory_(arena) *Arena, uint64_t Size);
+uint32_t ryn_memory_(IsArenaUsable)(ryn_memory_(arena) Arena);
+int32_t ryn_memory_(WriteArena)(ryn_memory_(arena) *Arena, uint8_t *Data, uint64_t Size);
+uint8_t *ryn_memory_(GetArenaWriteLocation)(ryn_memory_(arena) *Arena);
+uint32_t ryn_memory_(FreeArena)(ryn_memory_(arena) Arena);
+void *ryn_memory_(PushZeroArena)(ryn_memory_(arena) *Arena, uint64_t Size);
+uint64_t ryn_memory_(PushChar)(ryn_memory_(arena) *Arena, uint8_t Char);
+#endif /* Ryn_Memory_Types_Only */
+
+
+
+
+
+
 /*
   The following are macros that you would want to define wrappers for, in order to change the macro's prefix.
 
@@ -65,6 +99,7 @@
 
 
 
+#ifndef Ryn_Memory_Types_Only
 
 #if defined(__MACH__) || defined(__APPLE__)
 #define ryn_memory_Mac 1
@@ -86,32 +121,6 @@
 #include "memory.h"
 #include <errno.h>
 #endif
-
-#include <stdio.h> /* TODO: Create a way to disable or replace printf. */
-
-#include <stdint.h>
-
-
-
-typedef struct
-{
-    uint64_t Offset;
-    uint64_t Capacity;
-    uint8_t *Data;
-    uint64_t ParentOffset;
-} ryn_memory_(arena);
-
-void *ryn_memory_AllocateVirtualMemory(size_t Size);
-
-ryn_memory_(arena) ryn_memory_(CreateArena)(uint64_t Size);
-void *ryn_memory_(PushSize)(ryn_memory_(arena) *Arena, uint64_t Size);
-uint64_t ryn_memory_(GetArenaFreeSpace)(ryn_memory_(arena) *Arena);
-ryn_memory_(arena) ryn_memory_(CreateSubArena)(ryn_memory_(arena) *Arena, uint64_t Size);
-uint32_t ryn_memory_(IsArenaUsable)(ryn_memory_(arena) Arena);
-int32_t ryn_memory_(WriteArena)(ryn_memory_(arena) *Arena, uint8_t *Data, uint64_t Size);
-uint8_t *ryn_memory_(GetArenaWriteLocation)(ryn_memory_(arena) *Arena);
-uint32_t ryn_memory_(FreeArena)(ryn_memory_(arena) Arena);
-
 
 
 
@@ -275,6 +284,12 @@ uint64_t ryn_memory_(PushNullTerminatedBytes)(ryn_memory_(arena) *Arena, uint8_t
     return TotalBytesWritten;
 }
 
+uint8_t *ryn_memory_(GetArenaWriteLocation)(ryn_memory_(arena) *Arena)
+{
+    uint8_t *WriteLocation = Arena->Data + Arena->Offset;
+    return WriteLocation;
+}
+
 ryn_memory_(arena) ryn_memory_(CreateSubArena)(ryn_memory_(arena) *Arena, uint64_t Size)
 {
     ryn_memory_(arena) SubArena = {0};
@@ -310,12 +325,6 @@ int32_t ryn_memory_(WriteArena)(ryn_memory_(arena) *Arena, uint8_t *Data, uint64
     }
 
     return ErrorCode;
-}
-
-uint8_t *ryn_memory_(GetArenaWriteLocation)(ryn_memory_(arena) *Arena)
-{
-    uint8_t *WriteLocation = Arena->Data + Arena->Offset;
-    return WriteLocation;
 }
 
 #if ryn_memory_Mac
@@ -373,5 +382,6 @@ void ryn_memory_(ArenaStackPop)(ryn_memory_(arena) *Arena)
 
 
 
+#endif /* Ryn_Memory_Types_Only */
 
 #endif /* __RYN_MEMORY__ */

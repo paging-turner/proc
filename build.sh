@@ -1,7 +1,9 @@
 #!/usr/bin/env sh
 
+
 Compiler="clang"
 GO_FAST=0
+
 
 if [ $GO_FAST -eq 1 ]; then
     Debug=0
@@ -13,26 +15,17 @@ else
     No_Assert=0
 fi
 
+
 if [ $# -eq 0 ]; then
     Source_File_Name="proc"
 else
     Source_File_Name=$1
 fi
 
-Source_File="../source/$Source_File_Name.c"
 
 mkdir -p build
 cd build
 
-Settings="-std=c99 -Wall -Wextra -Wstrict-prototypes -Wold-style-definition -Wno-comment"
-Settings="$Settings -Wno-unused-function"
-Settings="$Settings -Wno-unused-parameter"
-# Settings="$Settings -Wmissing-prototypes -Wmissing-declarations"
-
-Graphics_Frameworks="-framework CoreVideo -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL"
-Graphics_Lib="../libraries/libraylib.a"
-
-Executable_File="-o $Source_File_Name.out"
 
 if [ $Debug -eq 0 ]; then
     Debug=""
@@ -54,9 +47,21 @@ if [ $GO_FAST -eq 1 ]; then
     Settings="$Settings -DGO_FAST"
 fi
 
+Base_File_Name="base"
+Source_File="../source/$Source_File_Name.c"
+Base_File="../source/$Base_File_Name.c"
 
+Base_Object_File="$Base_File_Name.o"
+Executable_File="$Source_File_Name.out"
 
+Graphics_Frameworks="-framework CoreVideo -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL"
+Graphics_Lib="../libraries/libraylib.a"
+
+Settings="-std=c99 -Wall -Wextra -Wstrict-prototypes -Wold-style-definition -Wno-comment"
 # Toggle settings
+Settings="$Settings -Wno-unused-function"
+Settings="$Settings -Wno-unused-parameter"
+# Settings="$Settings -Wmissing-prototypes -Wmissing-declarations"
 Settings="$Settings -Wno-switch"
 Settings="$Settings -Wno-unused-variable"
 Settings="$Settings -Wno-char-subscripts"
@@ -66,12 +71,24 @@ Settings="$Settings -fno-inline-functions"
 # Settings="$Settings -E"
 
 
-Settings="$Settings $Graphics_Frameworks $Graphics_Lib"
+
+
+Base_Settings="-c $Settings"
+App_Settings="$Settings $Graphics_Frameworks $Graphics_Lib"
 
 
 
-Compiler_Args="$Source_File $Executable_File $Target $Debug $Settings"
+Base_Args="$Base_File -o $Base_Object_File $Target $Debug $Base_Settings"
+App_Args="$Source_File -o $Executable_File base.o $Target $Debug $App_Settings"
+
+echo
+echo "Compiling $Base_File_Name"
+echo "    $Base_Args"
+$Compiler $Base_Args
+
+# ar -r base.a base.o
+
 echo
 echo "Compiling $Source_File_Name"
-echo "    $Compiler_Args"
-$Compiler $Compiler_Args
+echo "    $App_Args"
+$Compiler $App_Args

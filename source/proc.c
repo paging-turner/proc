@@ -60,6 +60,7 @@ typedef float F32;
 #include "../libraries/raymath.h"
 #include "../source/core.h"
 
+#define Ryn_Memory_Types_Only
 #define ryn_memory_(identifier) identifier
 #include "../libraries/ryn_memory.h"
 
