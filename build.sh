@@ -55,7 +55,7 @@ Base_Object_File="$Base_File_Name.o"
 Executable_File="$Source_File_Name.out"
 
 Graphics_Frameworks="-framework CoreVideo -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL"
-Graphics_Lib="../libraries/libraylib.a"
+Graphics_Lib="../libraries/raylib-5.5_macos/lib/libraylib.a"
 
 Settings="-std=c99 -Wall -Wextra -Wstrict-prototypes -Wold-style-definition -Wno-comment"
 # Toggle settings
@@ -79,14 +79,12 @@ App_Settings="$Settings $Graphics_Frameworks $Graphics_Lib"
 
 
 Base_Args="$Base_File -o $Base_Object_File $Target $Debug $Base_Settings"
-App_Args="$Source_File -o $Executable_File base.o $Target $Debug $App_Settings"
+App_Args="$Source_File -o $Executable_File $Base_Object_File $Target $Debug $App_Settings"
 
 echo
 echo "Compiling $Base_File_Name"
 echo "    $Base_Args"
 $Compiler $Base_Args
-
-# ar -r base.a base.o
 
 echo
 echo "Compiling $Source_File_Name"

@@ -27,37 +27,20 @@
    [ ] BUG: Connect a two processes. Make one process invisible. Delete the *other* process. The invisible process is still there but, well, you can't see it! Either delete the invisible one, or make it visible again. Probably just delete it??
 */
 
-#if 0
-# if !No_Assert
-#  define MR4TH_ASSERTS 1
-# endif
-# include "../libraries/mr4th/src/mr4th_base.h"
+#include "../source/mr4thbase_cherrypick.h"
+
+
+
+#if OS_WINDOWS
+# include "../libraries/raylib-5.5_win32_msvc16/include/raylib.h"
+# include "../libraries/raylib-5.5_win32_msvc16/include/raymath.h"
+#elif OS_MAC
+# include "../libraries/raylib-5.5_macos/include/raylib.h"
+# include "../libraries/raylib-5.5_macos/include/raymath.h"
+#else
+# error We have not included the raylib release for this OS yet.
 #endif
 
-// NOTE: Cherry-pick some stuff from mr4th_base until the naming collisions with "Windows.h" is fixed
-//         >:(
-#define Stmnt(S) do{ S }while(0)
-#define AssertBreak() (*(volatile int*)0 = 0)
-#define Assert(c) Stmnt( if (!(c)){ AssertBreak(); } )
-
-#include <stdint.h>
-typedef uint8_t U8;
-typedef uint32_t U32;
-typedef int32_t S32;
-typedef uint32_t B32;
-typedef float F32;
-
-#define Min(a,b) (((a)<(b))?(a):(b))
-#define Max(a,b) (((a)>(b))?(a):(b))
-#define CLAMP(a,x,b) (((x)<(a))?(a):\
-((b)<(x))?(b):(x))
-#define ClampTop(a,b) Min(a,b)
-#define ClampBot(a,b) Max(a,b)
-
-
-
-#include "../libraries/raylib.h"
-#include "../libraries/raymath.h"
 #include "../source/core.h"
 
 #define Ryn_Memory_Types_Only

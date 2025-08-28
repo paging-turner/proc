@@ -176,14 +176,11 @@ function void render_DrawLineBezierCubic(arena *Arena, Vector2 startPos, Vector2
   if (Command)
   {
     Command->Kind = render_command_DrawLineBezierCubic;
-    Command->X = startPos.x;
-    Command->Y = startPos.y;
-    Command->X2 = endPos.x;
-    Command->Y2 = endPos.y;
-    Command->ControlX = startControlPos.x;
-    Command->ControlY = startControlPos.y;
-    Command->ControlX2 = endControlPos.x;
-    Command->ControlY2 = endControlPos.y;
+    Command->Points[0] = startPos;
+    Command->Points[1] = startControlPos;
+    Command->Points[2] = endControlPos;
+    Command->Points[3] = endPos;
+    Command->PointCount = 4;
     Command->Thickness = thick;
     Command->Color = color;
   }
@@ -331,7 +328,7 @@ function void render_Commands(arena *Arena)
     case render_command_DrawRectangleLinesEx: { DrawRectangleLinesEx(C->Rectangle, C->Thickness, C->Color); } break;
     case render_command_DrawRectangle: { DrawRectangle(C->X, C->Y, C->Width, C->Height, C->Color); } break;
     case render_command_DrawLine: { DrawLineEx((Vector2){C->X, C->Y}, (Vector2){C->X2, C->Y2}, C->Thickness, C->Color); } break;
-    case render_command_DrawLineBezierCubic: { DrawLineBezierCubic((Vector2){C->X, C->Y}, (Vector2){C->X2, C->Y2}, (Vector2){C->ControlX, C->ControlY}, (Vector2){C->ControlX2, C->ControlY2}, C->Thickness, C->Color); } break;
+    case render_command_DrawLineBezierCubic: { DrawSplineBezierCubic(C->Points, C->PointCount, C->Thickness, C->Color); } break;
     case render_command_DrawPoly: { DrawPoly((Vector2){C->X, C->Y}, C->Sides, C->Radius, C->Rotation, C->Color); } break;
     case render_command_DrawPolyLinesEx: { DrawPolyLinesEx((Vector2){C->X, C->Y}, C->Sides, C->Radius, C->Rotation, C->Thickness, C->Color); } break;
     case render_command_DrawTriangleStrip: { DrawTriangleStrip(C->Points, C->PointCount, C->Color); } break;
