@@ -311,11 +311,11 @@ function void render_DrawCircleSectorLines(Arena *Arena, Vector2 center, float r
 
 
 
-function void render_Commands(Context *context, Arena *Arena)
+function void render_Commands(Context *context, Arena *arena)
 {
   // NOTE: Assume that the render commands get cleared every frame, so start from the start.
   S32 CommandCount = (context->render_arena->chunk_pos - context->render_zero_pos)/sizeof(render_command);
-  render_command *Commands = (render_command *)((U8 *)Arena + sizeof(Arena));
+  render_command *Commands = (render_command *)(arena + 1);
 
   for (U32 i = 0; i < CommandCount; ++i)
   {
@@ -325,7 +325,7 @@ function void render_Commands(Context *context, Arena *Arena)
     {
     case render_command_ClearBackground: { ClearBackground(C->Color); } break;
     case render_command_DrawRectangleRec: { DrawRectangleRec(C->Rectangle, C->Color); } break;
-    case render_command_DrawText: { DrawText(C->Text, C->X, C->Y, C->FontSize, C->Color); } break;
+    case render_command_DrawText: { /*DrawText(C->Text, C->X, C->Y, C->FontSize, C->Color);*/ } break;
     case render_command_DrawRectangleLinesEx: { DrawRectangleLinesEx(C->Rectangle, C->Thickness, C->Color); } break;
     case render_command_DrawRectangle: { DrawRectangle(C->X, C->Y, C->Width, C->Height, C->Color); } break;
     case render_command_DrawLine: { DrawLineEx((Vector2){C->X, C->Y}, (Vector2){C->X2, C->Y2}, C->Thickness, C->Color); } break;
