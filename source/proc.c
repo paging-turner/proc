@@ -194,10 +194,10 @@ global_variable Process global_zero_process;
 
 // NOTE: This only works if we use a non-growing arena, so that all processes are in contiguous memory!!!
 #define Get_Process_Count(ctx)\
-  (((ctx)->process_arena->chunk_pos - (ctx)->process_zero_pos)/sizeof(Process))
+  ((((ctx)->process_arena->chunk_pos - (ctx)->process_zero_pos)/sizeof(Process))-1)
 
 #define Process_Id_Is_Valid(ctx, id)\
-  ((id) >= 0 && (id) < Get_Process_Count(ctx))
+  ((id) > 0 && (id) <= Get_Process_Count(ctx))
 
 #define Get_Process_By_Id(ctx, id)\
   (Process_Id_Is_Valid((ctx), (id))\
@@ -205,8 +205,8 @@ global_variable Process global_zero_process;
    : Zero_Process())
 
 #define Get_Process_Id(ctx, p)\
-  (((U8 *)(p) > ((U8 *)(ctx) + (ctx)->process_zero_pos))\
-   ? (U32)(((U8 *)(p)-((U8 *)(ctx) + (ctx)->process_zero_pos))/sizeof(Process))\
+  (((U8 *)(p) > ((U8 *)(ctx)->process_arena + (ctx)->process_zero_pos))\
+   ? (U32)(((U8 *)(p)-((U8 *)(ctx)->process_arena + (ctx)->process_zero_pos))/sizeof(Process))\
    : 0)
 
 
@@ -359,7 +359,7 @@ function Process *get_process_wire_by_selection(Context *context, Process_Select
   S32 pc = Get_Process_Count(context);
   S32 match_count = 0;
 
-  for (S32 i = 0; i < pc; ++i) {
+  for (S32 i = 1; i <= pc; ++i) {
     Process *p = Get_Process_By_Id(context, i);
     if (Get_Flag(p->flags, Process_Flag_Wire)) {
       if (selection.type == Process_Selection_In && p->in_id == selection.process_id) {
@@ -393,7 +393,7 @@ function Process *create_process(Context *context) {
   Process *p = 0;
   S32 pc = Get_Process_Count(context);
 
-  for (S32 i = 0; i < pc; ++i) {
+  for (S32 i = 1; i <= pc; ++i) {
     Process *test_p = Get_Process_By_Id(context, i);
     if (Get_Flag(test_p->flags, Process_Flag_Deleted)) {
       p = test_p;
@@ -422,7 +422,7 @@ function void delete_process(Context *context, Process *p) {
     B32 in_matched = 0;
     B32 out_matched = 0;
 
-    for (S32 j = 0; j < pc; ++j) {
+    for (S32 j = 1; j <= pc; ++j) {
       Process *test_wire = Get_Process_By_Id(context, j);
       // adjust in-connections that come after deleted wire
       if (test_wire->in_id == p->in_id && test_wire->which_in > p->which_in) {
@@ -459,7 +459,7 @@ function void delete_process(Context *context, Process *p) {
   context->active_id = 0;
 
   // check for wires connected to the deleted process, and delete those also
-  for (S32 i = 0; i < pc; ++i) {
+  for (S32 i = 1; i <= pc; ++i) {
     Process *wire = Get_Process_By_Id(context, i);
 
     B32 in_match = wire->in_id == id;
@@ -470,7 +470,7 @@ function void delete_process(Context *context, Process *p) {
         Process *conn_proc = Get_Process_By_Id(context, wire->in_id);
 
         // adjust in-connections to deleted wire
-        for (S32 j = 0; j < pc; ++j) {
+        for (S32 j = 1; j <= pc; ++j) {
           Process *test_wire = Get_Process_By_Id(context, j);
           if (test_wire->in_id == wire->in_id &&
               test_wire->which_in > wire->which_in) {
@@ -485,7 +485,7 @@ function void delete_process(Context *context, Process *p) {
         Process *conn_proc = Get_Process_By_Id(context, wire->out_id);
 
         // adjust out-connections to deleted wire
-        for (S32 j = 0; j < pc; ++j) {
+        for (S32 j = 1; j <= pc; ++j) {
           Process *test_wire = Get_Process_By_Id(context, j);
           if (test_wire->out_id == wire->out_id &&
               test_wire->which_out > wire->which_out) {
@@ -796,7 +796,7 @@ function void handle_user_input(Context *context) {
   B32 hot_id_assigned = 0;
 
   // process interaction
-  for (S32 i = 0; i < pc; ++i) {
+  for (S32 i = 1; i <= pc; ++i) {
     Process *p = Get_Process_By_Id(context, i);
     /* printf("process[%d] %p\n", i, p); */
 
@@ -951,7 +951,7 @@ function void draw_processes(Context *context) {
   F32 spacing = global_process_wire_spacing;
 
   // draw processes
-  for (S32 i = 0; i < pc; ++i) {
+  for (S32 i = 1; i <= pc; ++i) {
     Process *p = Get_Process_By_Id(context, i);
     B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
 
@@ -1061,7 +1061,7 @@ function void draw_processes(Context *context) {
   }
 
   // draw wires
-  for (S32 i = 0; i < pc; ++i) {
+  for (S32 i = 1; i <= pc; ++i) {
     Process *p = Get_Process_By_Id(context, i);
     B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
 
@@ -1185,6 +1185,8 @@ int main(void) {
   context.process_zero_pos = pa->chunk_pos;
   context.render_zero_pos = ra->chunk_pos;
   context.temp_zero_pos = ta->chunk_pos;
+  push_struct(pa, Process); // NOTE: Null process
+
 #if 0
   // TODO: TEST THE ARENA BEFORE WORKING ON PROC ANYMORE!!!
   //       There are a lot of assumptions made about how the arena works and we need to test them before we can be confident that the app is ready to test.
