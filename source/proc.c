@@ -27,7 +27,7 @@
    [ ] BUG: Connect a two processes. Make one process invisible. Delete the *other* process. The invisible process is still there but, well, you can't see it! Either delete the invisible one, or make it visible again. Probably just delete it??
 */
 
-/* #include "../source/mr4thbase_cherrypick.h" */
+#include <stdio.h>
 
 #define MR4TH_NO_INCLUDES 1
 #define MR4TH_NO_CLAMP 1
@@ -50,15 +50,45 @@
 
 #include "../source/core.h"
 
-#define Ryn_Memory_Types_Only
-#define ryn_memory_(identifier) identifier
-#include "../libraries/ryn_memory.h"
+#if 0
+# define Ryn_Memory_Types_Only
+# define ryn_memory_(identifier) identifier
+# include "../libraries/ryn_memory.h"
+#endif
 
-#include "../source/render.h"
 
 
 
 #define Process_Id U32
+
+// TODO: maybe this should be a mode and not flags?
+typedef enum {
+  Context_Flag_Dragging       = 1 << 0,
+  Context_Flag_NewWire        = 1 << 1,
+  Context_Flag_EditText       = 1 << 2,
+  Context_Flag_RoundedShapes  = 1 << 3,
+} Context_Flag;
+
+typedef struct {
+  Arena *render_arena;
+  U64 render_zero_pos;
+  Arena *process_arena;
+  U64 process_zero_pos;
+  Arena *temp_arena;
+  U32 flags;
+
+  Process_Id first_free_process_id;
+  Process_Id hot_id;
+  Process_Id active_id;
+
+  Vector2 mouse_position;
+  Vector2 active_position;
+} Context;
+
+
+#include "../source/render.h"
+
+
 
 // TODO: Should Process_Flag just be a non-flag enum?
 typedef enum {
@@ -156,44 +186,27 @@ global_variable Process global_zero_process;
   ((global_zero_process=(Process){}),\
    &global_zero_process)
 
+
 // NOTE: This only works if we use a non-growing arena, so that all processes are in contiguous memory!!!
-#define Get_Process_Count(pa)  ((arena_current_pos(pa)/sizeof(Process))-1)
+#define Get_Arena_Used_Size(a, zero_pos) ((
 
-#define Process_Id_Is_Valid(pa, id)\
-  ((id) > 0 && (id) <= Get_Process_Count(pa))
+// NOTE: This only works if we use a non-growing arena, so that all processes are in contiguous memory!!!
+#define Get_Process_Count(ctx)\
+  (((ctx)->process_arena->chunk_pos - (ctx)->process_zero_pos)/sizeof(Process))
 
-#define Get_Process_By_Id(pa, id)\
-  (Process_Id_Is_Valid((pa), (id))\
-   ? (Process *)(((pa)+sizeof(Arena)) + ((id)*sizeof(Process)))\
+#define Process_Id_Is_Valid(ctx, id)\
+  ((id) > 0 && (id) <= Get_Process_Count(ctx))
+
+#define Get_Process_By_Id(ctx, id)\
+  (Process_Id_Is_Valid((ctx), (id))\
+   ? (Process *)((U8 *)(ctx)->process_arena + (ctx)->process_zero_pos + ((id)*sizeof(Process)))\
    : Zero_Process())
 
-#define Get_Process_Id(pa, p)\
-  (((U8 *)(p) > (U8 *)arena_current_pos(pa))\
-   ? (U32)(((U8 *)(p)-((U8 *)arena_current_pos(pa)))/sizeof(Process))\
+#define Get_Process_Id(ctx, p)\
+  (((U8 *)(p) > ((U8 *)(ctx) + (ctx)->process_zero_pos))\
+   ? (U32)(((U8 *)(p)-((U8 *)(ctx) + (ctx)->process_zero_pos))/sizeof(Process))\
    : 0)
 
-
-// TODO: maybe this should be a mode and not flags?
-typedef enum {
-  Context_Flag_Dragging       = 1 << 0,
-  Context_Flag_NewWire        = 1 << 1,
-  Context_Flag_EditText       = 1 << 2,
-  Context_Flag_RoundedShapes  = 1 << 3,
-} Context_Flag;
-
-typedef struct {
-  Arena *render_arena;
-  Arena *process_arena;
-  Arena *temp_arena;
-  U32 flags;
-
-  Process_Id first_free_process_id;
-  Process_Id hot_id;
-  Process_Id active_id;
-
-  Vector2 mouse_position;
-  Vector2 active_position;
-} Context;
 
 
 
@@ -210,7 +223,7 @@ function Vector2 get_percentage_between_points(Vector2 p0, Vector2 p1, F32 perce
 function Vector2 get_process_position(Context *context, Process *process) {
   Arena *pa = context->process_arena;
 
-  U32 id = Get_Process_Id(pa, process);
+  U32 id = Get_Process_Id(context, process);
   B32 is_active = context->active_id == id;
   B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging);
 
@@ -341,11 +354,11 @@ function B32 rectangle_contains_point(Rectangle r, Vector2 p) {
 function Process *get_process_wire_by_selection(Context *context, Process_Selection selection) {
   Arena *pa = context->process_arena;
   Process *wire = 0;
-  S32 pc = Get_Process_Count(pa);
+  S32 pc = Get_Process_Count(context);
   S32 match_count = 0;
 
   for (S32 i = 1; i <= pc; ++i) {
-    Process *p = Get_Process_By_Id(pa, i);
+    Process *p = Get_Process_By_Id(context, i);
     if (Get_Flag(p->flags, Process_Flag_Wire)) {
       if (selection.type == Process_Selection_In && p->in_id == selection.process_id) {
         // matching in-wire
@@ -376,10 +389,10 @@ function Process *get_process_wire_by_selection(Context *context, Process_Select
 function Process *create_process(Context *context) {
   Arena *pa = context->process_arena;
   Process *p = 0;
-  S32 pc = Get_Process_Count(pa);
+  S32 pc = Get_Process_Count(context);
 
   for (S32 i = 1; i <= pc; ++i) {
-    Process *test_p = Get_Process_By_Id(pa, i);
+    Process *test_p = Get_Process_By_Id(context, i);
     if (Get_Flag(test_p->flags, Process_Flag_Deleted)) {
       p = test_p;
       *p = (Process){0};
@@ -399,8 +412,8 @@ function Process *create_process(Context *context) {
 
 function void delete_process(Context *context, Process *p) {
   Arena *pa = context->process_arena;
-  S32 pc = Get_Process_Count(pa);
-  Process_Id id = Get_Process_Id(pa, p);
+  S32 pc = Get_Process_Count(context);
+  Process_Id id = Get_Process_Id(context, p);
 
   // if deleting a wire, adjust connected processes
   if (Get_Flag(p->flags, Process_Flag_Wire)) {
@@ -408,7 +421,7 @@ function void delete_process(Context *context, Process *p) {
     B32 out_matched = 0;
 
     for (S32 j = 1; j <= pc; ++j) {
-      Process *test_wire = Get_Process_By_Id(pa, j);
+      Process *test_wire = Get_Process_By_Id(context, j);
       // adjust in-connections that come after deleted wire
       if (test_wire->in_id == p->in_id && test_wire->which_in > p->which_in) {
         test_wire->which_in -= 1;
@@ -427,13 +440,13 @@ function void delete_process(Context *context, Process *p) {
 
     // decrement process' in-count
     if (in_matched || only_in_conn) {
-      Process *conn_proc = Get_Process_By_Id(pa, p->in_id);
+      Process *conn_proc = Get_Process_By_Id(context, p->in_id);
       conn_proc->in_count -= 1;
     }
 
     // decrement process' out-count
     if (out_matched || only_out_conn) {
-      Process *conn_proc = Get_Process_By_Id(pa, p->out_id);
+      Process *conn_proc = Get_Process_By_Id(context, p->out_id);
       conn_proc->out_count -= 1;
     }
   }
@@ -445,18 +458,18 @@ function void delete_process(Context *context, Process *p) {
 
   // check for wires connected to the deleted process, and delete those also
   for (S32 i = 1; i <= pc; ++i) {
-    Process *wire = Get_Process_By_Id(pa, i);
+    Process *wire = Get_Process_By_Id(context, i);
 
     B32 in_match = wire->in_id == id;
     B32 out_match = wire->out_id == id;
 
     if (in_match || out_match) {
       if (!in_match) {
-        Process *conn_proc = Get_Process_By_Id(pa, wire->in_id);
+        Process *conn_proc = Get_Process_By_Id(context, wire->in_id);
 
         // adjust in-connections to deleted wire
         for (S32 j = 1; j <= pc; ++j) {
-          Process *test_wire = Get_Process_By_Id(pa, j);
+          Process *test_wire = Get_Process_By_Id(context, j);
           if (test_wire->in_id == wire->in_id &&
               test_wire->which_in > wire->which_in) {
             test_wire->which_in -= 1;
@@ -467,11 +480,11 @@ function void delete_process(Context *context, Process *p) {
       }
 
       if (!out_match) {
-        Process *conn_proc = Get_Process_By_Id(pa, wire->out_id);
+        Process *conn_proc = Get_Process_By_Id(context, wire->out_id);
 
         // adjust out-connections to deleted wire
         for (S32 j = 1; j <= pc; ++j) {
-          Process *test_wire = Get_Process_By_Id(pa, j);
+          Process *test_wire = Get_Process_By_Id(context, j);
           if (test_wire->out_id == wire->out_id &&
               test_wire->which_out > wire->which_out) {
             test_wire->which_out -= 1;
@@ -494,8 +507,8 @@ function void connect_processes(Context *context, Process *out, Process *in) {
   Process *new_wire = create_process(context);
 
   if (new_wire) {
-    U32 out_id = Get_Process_Id(pa, out);
-    U32 in_id = Get_Process_Id(pa, in);
+    U32 out_id = Get_Process_Id(context, out);
+    U32 in_id = Get_Process_Id(context, in);
 
     Set_Flag(new_wire->flags, Process_Flag_Wire);
     new_wire->out_id = out_id;
@@ -711,7 +724,7 @@ handle_process_selection(Context *context, Process *p) {
   Arena *pa = context->process_arena;
   Process_Selection selection = {0};
   selection.index = -1;
-  selection.process_id = Get_Process_Id(pa, p);
+  selection.process_id = Get_Process_Id(context, p);
 
   Process_Shape shape = get_process_shape(context, p);
   Rectangle new_wire_box = get_new_wire_box(context, p, shape);
@@ -730,7 +743,7 @@ handle_process_selection(Context *context, Process *p) {
         selection.type = Process_Selection_In;
         selection.index = i;
         Process *wire = get_process_wire_by_selection(context, selection);
-        Process_Id wire_id = Get_Process_Id(pa, wire);
+        Process_Id wire_id = Get_Process_Id(context, wire);
         context->hot_id = wire_id;
         selection.hot_id_assigned = 1;
         break;
@@ -746,7 +759,7 @@ handle_process_selection(Context *context, Process *p) {
           selection.type = Process_Selection_Out;
           selection.index = i;
           Process *wire = get_process_wire_by_selection(context, selection);
-          Process_Id wire_id = Get_Process_Id(pa, wire);
+          Process_Id wire_id = Get_Process_Id(context, wire);
           context->hot_id = wire_id;
           selection.hot_id_assigned = 1;
           break;
@@ -772,7 +785,7 @@ handle_process_selection(Context *context, Process *p) {
 
 function void handle_user_input(Context *context) {
   Arena *pa = context->process_arena;
-  S32 pc = Get_Process_Count(pa);
+  S32 pc = Get_Process_Count(context);
 
   context->mouse_position = GetMousePosition();
   B32 mouse_pressed = IsMouseButtonPressed(0);
@@ -782,9 +795,10 @@ function void handle_user_input(Context *context) {
 
   // process interaction
   for (S32 i = 1; i <= pc; ++i) {
-    Process *p = Get_Process_By_Id(pa, i);
+    Process *p = Get_Process_By_Id(context, i);
+    printf("process[%d] %p\n", i, p);
 
-    if (!Get_Flag(p->flags, Process_Flag_Deleted)) {
+    if (p && !Get_Flag(p->flags, Process_Flag_Deleted)) {
       Process_Selection selection = handle_process_selection(context, p);
       hot_id_assigned = selection.hot_id_assigned || hot_id_assigned;
 
@@ -794,7 +808,7 @@ function void handle_user_input(Context *context) {
           // select wire
           Process *wire = get_process_wire_by_selection(context, selection);
           if (wire) {
-            Process_Id wire_id = Get_Process_Id(pa, wire);
+            Process_Id wire_id = Get_Process_Id(context, wire);
             context->active_id = wire_id;
             if (selection.type == Process_Selection_In) {
               context->hot_id = wire->in_id;
@@ -812,7 +826,7 @@ function void handle_user_input(Context *context) {
         } else if (selection.type == Process_Selection_Process) {
           if (Get_Flag(context->flags, Context_Flag_NewWire)) {
             // connect processes
-            Process *active_p = Get_Process_By_Id(pa, context->active_id);
+            Process *active_p = Get_Process_By_Id(context, context->active_id);
             connect_processes(context, active_p, p);
           } else {
             // select process
@@ -846,7 +860,7 @@ function void handle_user_input(Context *context) {
 
   // handle active-id
   if (context->active_id) {
-    Process *p = Get_Process_By_Id(pa, context->active_id);
+    Process *p = Get_Process_By_Id(context, context->active_id);
     B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging);
     if (is_dragging && !mouse_down) {
       // stop dragging
@@ -923,7 +937,7 @@ function void handle_user_input(Context *context) {
 function void draw_processes(Context *context) {
   Arena *pa = context->process_arena;
   Arena *ra = context->render_arena;
-  S32 pc = Get_Process_Count(pa);
+  S32 pc = Get_Process_Count(context);
 
   Color bg_color = (Color){255, 255, 255, 255};
   Color stroke_color = (Color){0, 0, 0, 255};
@@ -936,7 +950,7 @@ function void draw_processes(Context *context) {
 
   // draw processes
   for (S32 i = 1; i <= pc; ++i) {
-    Process *p = Get_Process_By_Id(pa, i);
+    Process *p = Get_Process_By_Id(context, i);
     B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
 
     if (!is_wire && !Get_Flag(p->flags, Process_Flag_Deleted)) {
@@ -1046,12 +1060,12 @@ function void draw_processes(Context *context) {
 
   // draw wires
   for (S32 i = 1; i <= pc; ++i) {
-    Process *p = Get_Process_By_Id(pa, i);
+    Process *p = Get_Process_By_Id(context, i);
     B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
 
     if (is_wire && !Get_Flag(p->flags, Process_Flag_Deleted)) {
-      Process *out = Get_Process_By_Id(pa, p->out_id);
-      Process *in = Get_Process_By_Id(pa, p->in_id);
+      Process *out = Get_Process_By_Id(context, p->out_id);
+      Process *in = Get_Process_By_Id(context, p->in_id);
 
       Process_Shape out_shape = get_process_shape(context, out);
       Process_Shape in_shape = get_process_shape(context, in);
@@ -1092,7 +1106,7 @@ function void draw_processes(Context *context) {
 
   // draw new wire
   if (Get_Flag(context->flags, Context_Flag_NewWire) && context->active_id) {
-    Process *p = Get_Process_By_Id(pa, context->active_id);
+    Process *p = Get_Process_By_Id(context, context->active_id);
     Process_Shape shape = get_process_shape(context, p);
     Vector2 position = get_new_wire_position(context, p, shape);
 
@@ -1137,15 +1151,53 @@ function Context initialize_context(void) {
 
 
 
+function void debug_print_arena(Context *context, Arena *arena) {
+  printf("---- Arena %p ----\n", arena);
+  printf("  current    %p\n", arena->current);
+  printf("  prev       %p\n", arena->prev);
+  printf("  alignment  %llu\n", arena->alignment);
+  printf("  growing    %d\n", arena->growing);
+
+  printf("  filler  '");
+  for (S32 i = 0; i < 7; ++i) {
+    printf("%c", arena->filler[i]);
+  }
+  printf("'\n");
+
+  printf("  base_pos   %llu\n", arena->base_pos);
+  printf("  chunk_cap  %llu\n", arena->chunk_cap);
+  printf("  chunk_pos  %llu\n", arena->chunk_pos);
+  printf("  chunk_commit_pos %llu\n", arena->chunk_commit_pos);
+  printf("**** Process Count %llu\n", Get_Process_Count(context));
+  printf("\n");
+}
+
+
+
 int main(void) {
   Context context = initialize_context();
 
   Arena *ra = context.render_arena;
   Arena *ta = context.temp_arena;
+#if 0
+  Arena *pa = context.process_arena;
   // TODO: TEST THE ARENA BEFORE WORKING ON PROC ANYMORE!!!
   //       There are a lot of assumptions made about how the arena works and we need to test them before we can be confident that the app is ready to test.
-  printf("ra base pos %llu\n", ra->base_pos);
+  context.process_zero_pos = pa->chunk_pos;
+  printf("sizeof(Arena) %lu\n", sizeof(Arena));
+  printf("sizeof(Process) %lu\n", sizeof(Process));
+  debug_print_arena(&context, context.process_arena);
+  printf("push Process\n"); push_struct(pa, Process);
+  debug_print_arena(&context, context.process_arena);
+  printf("push Process\n"); push_struct(pa, Process);
+  printf("push Process\n"); push_struct(pa, Process);
+  printf("push Process\n"); push_struct(pa, Process);
+  printf("push Process\n"); push_struct(pa, Process);
+  debug_print_arena(&context, context.process_arena);
+  printf("pop to 0\n"); arena_pop_to(pa, context.process_zero_pos);
+  debug_print_arena(&context, context.process_arena);
   return 0;
+#else
   render_Initialize(ta);
 
   InitWindow(800, 500, "proc");
@@ -1159,11 +1211,12 @@ int main(void) {
     draw_info_panel(&context);
 
     BeginDrawing();
-    render_Commands(ra);
+    render_Commands(&context, ra);
     arena_pop_to(context.render_arena, 0);
     EndDrawing();
   }
 
   CloseWindow();
   return 0;
+#endif
 }

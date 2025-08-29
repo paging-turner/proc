@@ -311,12 +311,11 @@ function void render_DrawCircleSectorLines(Arena *Arena, Vector2 center, float r
 
 
 
-function void render_Commands(Arena *Arena)
+function void render_Commands(Context *context, Arena *Arena)
 {
   // NOTE: Assume that the render commands get cleared every frame, so start from the start.
-  U64 current = arena_current_pos(Arena);
-  U32 CommandCount = current / sizeof(render_command);
-  render_command *Commands = (render_command *)current;
+  S32 CommandCount = (context->render_arena->chunk_pos - context->render_zero_pos)/sizeof(render_command);
+  render_command *Commands = (render_command *)((U8 *)Arena + sizeof(Arena));
 
   for (U32 i = 0; i < CommandCount; ++i)
   {
