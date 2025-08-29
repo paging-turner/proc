@@ -401,8 +401,11 @@ __attribute__((constructor)) static void n(void)
 
 #define Min(a,b) (((a)<(b))?(a):(b))
 #define Max(a,b) (((a)>(b))?(a):(b))
-#define CLAMP(a,x,b) (((x)<(a))?(a):\
+// TODO: HACK: hacky hacky hacky hack.........
+#if !MR4TH_NO_CLAMP
+# define Clamp(a,x,b) (((x)<(a))?(a):\
 ((b)<(x))?(b):(x))
+#endif
 #define ClampTop(a,b) Min(a,b)
 #define ClampBot(a,b) Max(a,b)
 
@@ -1349,7 +1352,7 @@ MR4TH_SYMBOL void        os_exit_process(U32 code);
 
 // TODO(allen): memory protection options?
 MR4TH_SYMBOL void* os_memory_reserve(U64 size);
-MR4TH_SYMBOL B32   os_memory_commit(void *ptr, U64 size);
+MR4TH_SYMBOL void* os_memory_commit(void *ptr, U64 size);
 MR4TH_SYMBOL void  os_memory_decommit(void *ptr, U64 size);
 MR4TH_SYMBOL void  os_memory_release(void *ptr, U64 size);
 
@@ -1425,7 +1428,8 @@ MR4TH_SYMBOL B32 os_file_write(String8 file_name, String8 data);
 ////////////////////////////////////////////////
 ////////////////////////////////////////////////
 
-#if OS_WINDOWS
+// TODO: HACK: MR4TH_NO_INCLUDES is a hack so that you can build/link to mr4th_base and avoid naming conflicts with OS names. There's probably a better way...
+#if OS_WINDOWS && !MR4TH_NO_INCLUDES
 
 ////////////////////////////////
 // Win32: Includes
@@ -1481,7 +1485,7 @@ MR4TH_SYMBOL DataAccessFlags   w32_access_from_attributes(DWORD attribs);
 ////////////////////////////////////////////////
 ////////////////////////////////////////////////
 
-#if OS_LINUX
+#if OS_LINUX && !MR4TH_NO_INCLUDES
 
 #include <clfcn.h>
 
@@ -1494,10 +1498,11 @@ MR4TH_SYMBOL DataAccessFlags   w32_access_from_attributes(DWORD attribs);
 //////////////////////////////////////////////
 //////////////////////////////////////////////
 
-#if OS_MAC
+#if OS_MAC && !MR4TH_NO_INCLUDES
 
 #include <dlfcn.h> // for dlopen, dlsym, etc.
 #include <mach-o/getsect.h> // for getsectbyname
+#include <sys/mman.h> // mmap, munmap, madvise
 
 #endif /* OS_MAC */
 

@@ -27,7 +27,14 @@
    [ ] BUG: Connect a two processes. Make one process invisible. Delete the *other* process. The invisible process is still there but, well, you can't see it! Either delete the invisible one, or make it visible again. Probably just delete it??
 */
 
-#include "../source/mr4thbase_cherrypick.h"
+/* #include "../source/mr4thbase_cherrypick.h" */
+
+#define MR4TH_NO_INCLUDES 1
+#define MR4TH_NO_CLAMP 1
+#include "../libraries/mr4th/src/mr4th_base.h"
+
+#define push_struct(a, s) arena_push((a), sizeof(s))
+#define push_char(a, c) arena_push((a), 1)
 
 
 
@@ -142,26 +149,27 @@ global_variable S32 global_shape_fan_triangle_count = 12;
 #define Half_Circle_Fudge 1.32f
 #define Half_Circle_Radius_Fudge 1.0f
 
-
+global_variable Process *global_base_process;
 
 global_variable Process global_zero_process;
 #define Zero_Process()\
   ((global_zero_process=(Process){}),\
    &global_zero_process)
 
-#define Get_Process_Count(pa)  (((pa)->Offset/sizeof(Process))-1)
+// NOTE: This only works if we use a non-growing arena, so that all processes are in contiguous memory!!!
+#define Get_Process_Count(pa)  ((arena_current_pos(pa)/sizeof(Process))-1)
 
 #define Process_Id_Is_Valid(pa, id)\
   ((id) > 0 && (id) <= Get_Process_Count(pa))
 
 #define Get_Process_By_Id(pa, id)\
   (Process_Id_Is_Valid((pa), (id))\
-   ? (Process *)((pa)->Data + ((id)*sizeof(Process)))\
+   ? (Process *)(((pa)+sizeof(Arena)) + ((id)*sizeof(Process)))\
    : Zero_Process())
 
 #define Get_Process_Id(pa, p)\
-  (((U8 *)(p) > (pa)->Data)\
-   ? (U32)(((U8 *)(p)-((pa)->Data))/sizeof(Process))\
+  (((U8 *)(p) > (U8 *)arena_current_pos(pa))\
+   ? (U32)(((U8 *)(p)-((U8 *)arena_current_pos(pa)))/sizeof(Process))\
    : 0)
 
 
@@ -174,9 +182,9 @@ typedef enum {
 } Context_Flag;
 
 typedef struct {
-  arena render_arena;
-  arena process_arena;
-  arena temp_arena;
+  Arena *render_arena;
+  Arena *process_arena;
+  Arena *temp_arena;
   U32 flags;
 
   Process_Id first_free_process_id;
@@ -200,7 +208,7 @@ function Vector2 get_percentage_between_points(Vector2 p0, Vector2 p1, F32 perce
 
 
 function Vector2 get_process_position(Context *context, Process *process) {
-  arena *pa = &context->process_arena;
+  Arena *pa = context->process_arena;
 
   U32 id = Get_Process_Id(pa, process);
   B32 is_active = context->active_id == id;
@@ -331,7 +339,7 @@ function B32 rectangle_contains_point(Rectangle r, Vector2 p) {
 
 
 function Process *get_process_wire_by_selection(Context *context, Process_Selection selection) {
-  arena *pa = &context->process_arena;
+  Arena *pa = context->process_arena;
   Process *wire = 0;
   S32 pc = Get_Process_Count(pa);
   S32 match_count = 0;
@@ -366,7 +374,7 @@ function Process *get_process_wire_by_selection(Context *context, Process_Select
 
 
 function Process *create_process(Context *context) {
-  arena *pa = &context->process_arena;
+  Arena *pa = context->process_arena;
   Process *p = 0;
   S32 pc = Get_Process_Count(pa);
 
@@ -380,7 +388,7 @@ function Process *create_process(Context *context) {
   }
 
   if (!p) {
-    p = ryn_memory_PushZeroStruct(pa, Process);
+    p = push_struct(pa, Process);
   }
 
   return p;
@@ -390,7 +398,7 @@ function Process *create_process(Context *context) {
 
 
 function void delete_process(Context *context, Process *p) {
-  arena *pa = &context->process_arena;
+  Arena *pa = context->process_arena;
   S32 pc = Get_Process_Count(pa);
   Process_Id id = Get_Process_Id(pa, p);
 
@@ -482,7 +490,7 @@ function void delete_process(Context *context, Process *p) {
 
 
 function void connect_processes(Context *context, Process *out, Process *in) {
-  arena *pa = &context->process_arena;
+  Arena *pa = context->process_arena;
   Process *new_wire = create_process(context);
 
   if (new_wire) {
@@ -700,7 +708,7 @@ process_shape_contains_point(Context *context, Process_Shape shape, Vector2 poin
 
 function Process_Selection
 handle_process_selection(Context *context, Process *p) {
-  arena *pa = &context->process_arena;
+  Arena *pa = context->process_arena;
   Process_Selection selection = {0};
   selection.index = -1;
   selection.process_id = Get_Process_Id(pa, p);
@@ -763,7 +771,7 @@ handle_process_selection(Context *context, Process *p) {
 
 
 function void handle_user_input(Context *context) {
-  arena *pa = &context->process_arena;
+  Arena *pa = context->process_arena;
   S32 pc = Get_Process_Count(pa);
 
   context->mouse_position = GetMousePosition();
@@ -913,8 +921,8 @@ function void handle_user_input(Context *context) {
 
 
 function void draw_processes(Context *context) {
-  arena *pa = &context->process_arena;
-  arena *ra = &context->render_arena;
+  Arena *pa = context->process_arena;
+  Arena *ra = context->render_arena;
   S32 pc = Get_Process_Count(pa);
 
   Color bg_color = (Color){255, 255, 255, 255};
@@ -1102,7 +1110,7 @@ function void draw_processes(Context *context) {
 
 
 function void draw_info_panel(Context *context) {
-  arena *ra = &context->render_arena;
+  Arena *ra = context->render_arena;
   Color text_color = (Color){0, 0, 0, 255};
 
   if (context->active_id) {
@@ -1118,10 +1126,10 @@ function void draw_info_panel(Context *context) {
 function Context initialize_context(void) {
   Context context = (Context){};
 
-  context.render_arena = CreateArena(Megabytes(1));
-  context.process_arena = CreateArena(Megabytes(1));
-  context.temp_arena = CreateArena(Megabytes(1));
-  create_process(&context); // NOTE: unused first process
+  context.render_arena = arena_alloc_reserve(Megabytes(1), 0);
+  context.process_arena = arena_alloc_reserve(Megabytes(1), 0);
+  context.temp_arena = arena_alloc_reserve(Megabytes(1), 0);
+  global_base_process = create_process(&context); // NOTE: unused first process
 
   return context;
 }
@@ -1132,8 +1140,12 @@ function Context initialize_context(void) {
 int main(void) {
   Context context = initialize_context();
 
-  arena *ra = &context.render_arena;
-  arena *ta = &context.temp_arena;
+  Arena *ra = context.render_arena;
+  Arena *ta = context.temp_arena;
+  // TODO: TEST THE ARENA BEFORE WORKING ON PROC ANYMORE!!!
+  //       There are a lot of assumptions made about how the arena works and we need to test them before we can be confident that the app is ready to test.
+  printf("ra base pos %llu\n", ra->base_pos);
+  return 0;
   render_Initialize(ta);
 
   InitWindow(800, 500, "proc");
@@ -1148,7 +1160,7 @@ int main(void) {
 
     BeginDrawing();
     render_Commands(ra);
-    context.render_arena.Offset = 0;
+    arena_pop_to(context.render_arena, 0);
     EndDrawing();
   }
 

@@ -3104,9 +3104,9 @@ os_memory_reserve(U64 size){
   return(result);
 }
 
-MR4TH_SYMBOL B32
+MR4TH_SYMBOL void*
 os_memory_commit(void *ptr, U64 size){
-  B32 result = (VirtualAlloc(ptr, size, MEM_COMMIT, PAGE_READWRITE) != 0);
+  void *result = (VirtualAlloc(ptr, size, MEM_COMMIT, PAGE_READWRITE) != 0);
   return(result);
 }
 
@@ -3713,25 +3713,33 @@ w32_access_from_attributes(DWORD attribs){
 MR4TH_SYMBOL void*
 os_memory_reserve(U64 size){
   void *result = 0;
-  Assert(!"TODO: Call mmap");
+  uint8_t *addr = 0;
+  int file_descriptor = -1;
+  int offset = 0;
+
+  result = mmap(addr, size, PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, file_descriptor, offset);
+  // We, probably want to return 0 instead of MAP_FAILED, right?
+  result = result == MAP_FAILED ? 0 : result;
+
   return result;
 }
 
-MR4TH_SYMBOL B32
+MR4TH_SYMBOL void*
 os_memory_commit(void *ptr, U64 size){
-  B32 result = 0;
-  Assert(!"TODO: Do we need to do anything here?");
+  // NOTE: We return the ptr to mimic what VirtualAlloc does.
+  void *result = ptr;
+  // TODO: Should we call madvise here to let the OS know we are about to use the memory?
   return result;
 }
 
 MR4TH_SYMBOL void
 os_memory_decommit(void *ptr, U64 size){
-  Assert(!"TODO: Do we need to do anything here?");
+  madvise(ptr, size, MADV_DONTNEED);
 }
 
 MR4TH_SYMBOL void
 os_memory_release(void *ptr, U64 size){
-  Assert(!"TODO: Call munmap.");
+  munmap(ptr, size);
 }
 
 MR4TH_SYMBOL B32

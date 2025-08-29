@@ -52,26 +52,26 @@ typedef struct render_command
 } render_command;
 
 
-global_variable arena *GlobalTempArena;
+global_variable Arena *GlobalTempArena;
 
 
-function void render_Initialize(arena *TempArena) {
+function void render_Initialize(Arena *TempArena) {
   GlobalTempArena = TempArena;
 }
 
 
-function void render_ClearBackground(arena *Arena, Color C)
+function void render_ClearBackground(Arena *Arena, Color C)
 {
-  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+  render_command *Command = push_struct(Arena, render_command);
   if (Command)
   {
     Command->Color = C;
   }
 }
 
-function void render_DrawRectangleRec(arena *Arena, Rectangle R, Color C)
+function void render_DrawRectangleRec(Arena *Arena, Rectangle R, Color C)
 {
-  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+  render_command *Command = push_struct(Arena, render_command);
 
   if (Command)
   {
@@ -84,12 +84,13 @@ function void render_DrawRectangleRec(arena *Arena, Rectangle R, Color C)
 function char *render_PushTempString(const char *CString)
 {
   Assert(GlobalTempArena);
-  char *Result = (char *)GetArenaWriteLocation(GlobalTempArena);
+  char *Result = (char *)arena_current_pos(GlobalTempArena);
+
   const char *C = CString;
 
   for (;; ++C)
   {
-    if (PushChar(GlobalTempArena, *C) == 0) {
+    if (push_char(GlobalTempArena, *C) == 0) {
       *Result = 0; // Null out the result in case somebody prints the result.
       Assert(0);
       break;
@@ -103,9 +104,9 @@ function char *render_PushTempString(const char *CString)
   return Result;
 }
 
-function void render_DrawText(arena *Arena, const char *Text, F32 X, F32 Y, S32 FontSize, Color C, B32 copy_string)
+function void render_DrawText(Arena *Arena, const char *Text, F32 X, F32 Y, S32 FontSize, Color C, B32 copy_string)
 {
-  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+  render_command *Command = push_struct(Arena, render_command);
   const char *RenderString;
   if (copy_string) {
     RenderString = render_PushTempString(Text);
@@ -124,9 +125,9 @@ function void render_DrawText(arena *Arena, const char *Text, F32 X, F32 Y, S32 
   }
 }
 
-function void render_DrawRectangleLinesEx(arena *Arena, Rectangle R, F32 Thickness, Color C)
+function void render_DrawRectangleLinesEx(Arena *Arena, Rectangle R, F32 Thickness, Color C)
 {
-  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+  render_command *Command = push_struct(Arena, render_command);
 
   if (Command)
   {
@@ -137,9 +138,9 @@ function void render_DrawRectangleLinesEx(arena *Arena, Rectangle R, F32 Thickne
   }
 }
 
-function void render_DrawRectangle(arena *Arena, F32 X, F32 Y, F32 W, F32 H, Color C)
+function void render_DrawRectangle(Arena *Arena, F32 X, F32 Y, F32 W, F32 H, Color C)
 {
-  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+  render_command *Command = push_struct(Arena, render_command);
 
   if (Command)
   {
@@ -152,9 +153,9 @@ function void render_DrawRectangle(arena *Arena, F32 X, F32 Y, F32 W, F32 H, Col
   }
 }
 
-function void render_DrawLine(arena *Arena, int startPosX, int startPosY, int endPosX, int endPosY, F32 thickness, Color color)
+function void render_DrawLine(Arena *Arena, int startPosX, int startPosY, int endPosX, int endPosY, F32 thickness, Color color)
 {
-  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+  render_command *Command = push_struct(Arena, render_command);
 
   if (Command)
   {
@@ -169,9 +170,9 @@ function void render_DrawLine(arena *Arena, int startPosX, int startPosY, int en
 }
 
 
-function void render_DrawLineBezierCubic(arena *Arena, Vector2 startPos, Vector2 endPos, Vector2 startControlPos, Vector2 endControlPos, float thick, Color color)
+function void render_DrawLineBezierCubic(Arena *Arena, Vector2 startPos, Vector2 endPos, Vector2 startControlPos, Vector2 endControlPos, float thick, Color color)
 {
-  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+  render_command *Command = push_struct(Arena, render_command);
 
   if (Command)
   {
@@ -187,8 +188,8 @@ function void render_DrawLineBezierCubic(arena *Arena, Vector2 startPos, Vector2
 }
 
 
-function void render_DrawPoly(arena *Arena, Vector2 center, int sides, float radius, float rotation, Color color) {
-  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+function void render_DrawPoly(Arena *Arena, Vector2 center, int sides, float radius, float rotation, Color color) {
+  render_command *Command = push_struct(Arena, render_command);
 
   if (Command)
   {
@@ -202,8 +203,8 @@ function void render_DrawPoly(arena *Arena, Vector2 center, int sides, float rad
   }
 }
 
-function void render_DrawPolyLinesEx(arena *Arena, Vector2 center, int sides, float radius, float rotation, float lineThick, Color color) {
-  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+function void render_DrawPolyLinesEx(Arena *Arena, Vector2 center, int sides, float radius, float rotation, float lineThick, Color color) {
+  render_command *Command = push_struct(Arena, render_command);
 
   if (Command)
   {
@@ -218,9 +219,9 @@ function void render_DrawPolyLinesEx(arena *Arena, Vector2 center, int sides, fl
   }
 }
 
-function void render_DrawTriangleStrip(arena *Arena, Vector2 *Points, S32 PointCount, Color Color)
+function void render_DrawTriangleStrip(Arena *Arena, Vector2 *Points, S32 PointCount, Color Color)
 {
-  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+  render_command *Command = push_struct(Arena, render_command);
 
   if (Command && PointCount <= render_Max_Points)
   {
@@ -233,9 +234,9 @@ function void render_DrawTriangleStrip(arena *Arena, Vector2 *Points, S32 PointC
   }
 }
 
-function void render_DrawTriangleFan(arena *Arena, Vector2 *Points, int PointCount, Color Color)
+function void render_DrawTriangleFan(Arena *Arena, Vector2 *Points, int PointCount, Color Color)
 {
-  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+  render_command *Command = push_struct(Arena, render_command);
 
   if (Command && PointCount <= render_Max_Points)
   {
@@ -248,9 +249,9 @@ function void render_DrawTriangleFan(arena *Arena, Vector2 *Points, int PointCou
   }
 }
 
-function void render_DrawCircle(arena *Arena, Vector2 center, F32 radius, Color color)
+function void render_DrawCircle(Arena *Arena, Vector2 center, F32 radius, Color color)
 {
-  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+  render_command *Command = push_struct(Arena, render_command);
 
   if (Command)
   {
@@ -262,9 +263,9 @@ function void render_DrawCircle(arena *Arena, Vector2 center, F32 radius, Color 
   }
 }
 
-function void render_DrawCircleSector(arena *Arena, Vector2 center, float radius, float startAngle, float endAngle, Color color)
+function void render_DrawCircleSector(Arena *Arena, Vector2 center, float radius, float startAngle, float endAngle, Color color)
 {
-  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+  render_command *Command = push_struct(Arena, render_command);
 
   if (Command)
   {
@@ -278,9 +279,9 @@ function void render_DrawCircleSector(arena *Arena, Vector2 center, float radius
   }
 }
 
-function void render_DrawCircleLines(arena *Arena, int centerX, int centerY, float radius, Color color)
+function void render_DrawCircleLines(Arena *Arena, int centerX, int centerY, float radius, Color color)
 {
-  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+  render_command *Command = push_struct(Arena, render_command);
 
   if (Command)
   {
@@ -292,9 +293,9 @@ function void render_DrawCircleLines(arena *Arena, int centerX, int centerY, flo
   }
 }
 
-function void render_DrawCircleSectorLines(arena *Arena, Vector2 center, float radius, float startAngle, float endAngle, Color color)
+function void render_DrawCircleSectorLines(Arena *Arena, Vector2 center, float radius, float startAngle, float endAngle, Color color)
 {
-  render_command *Command = ryn_memory_PushZeroStruct(Arena, render_command);
+  render_command *Command = push_struct(Arena, render_command);
 
   if (Command)
   {
@@ -310,11 +311,12 @@ function void render_DrawCircleSectorLines(arena *Arena, Vector2 center, float r
 
 
 
-function void render_Commands(arena *Arena)
+function void render_Commands(Arena *Arena)
 {
   // NOTE: Assume that the render commands get cleared every frame, so start from the start.
-  U32 CommandCount = Arena->Offset / sizeof(render_command);
-  render_command *Commands = (render_command *)Arena->Data;
+  U64 current = arena_current_pos(Arena);
+  U32 CommandCount = current / sizeof(render_command);
+  render_command *Commands = (render_command *)current;
 
   for (U32 i = 0; i < CommandCount; ++i)
   {
