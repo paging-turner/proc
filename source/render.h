@@ -84,7 +84,8 @@ function void render_DrawRectangleRec(Arena *Arena, Rectangle R, Color C)
 function char *render_PushTempString(const char *CString)
 {
   Assert(GlobalTempArena);
-  char *Result = (char *)arena_current_pos(GlobalTempArena);
+  // TODO: Assumes that this arena does not grow!!!!
+  char *Result = (char *)(GlobalTempArena + GlobalTempArena->chunk_pos);
 
   const char *C = CString;
 
@@ -325,7 +326,7 @@ function void render_Commands(Context *context, Arena *arena)
     {
     case render_command_ClearBackground: { ClearBackground(C->Color); } break;
     case render_command_DrawRectangleRec: { DrawRectangleRec(C->Rectangle, C->Color); } break;
-    case render_command_DrawText: { /*DrawText(C->Text, C->X, C->Y, C->FontSize, C->Color);*/ } break;
+    case render_command_DrawText: { DrawText(C->Text, C->X, C->Y, C->FontSize, C->Color); } break;
     case render_command_DrawRectangleLinesEx: { DrawRectangleLinesEx(C->Rectangle, C->Thickness, C->Color); } break;
     case render_command_DrawRectangle: { DrawRectangle(C->X, C->Y, C->Width, C->Height, C->Color); } break;
     case render_command_DrawLine: { DrawLineEx((Vector2){C->X, C->Y}, (Vector2){C->X2, C->Y2}, C->Thickness, C->Color); } break;
