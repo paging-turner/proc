@@ -50,13 +50,6 @@
 
 #include "../source/core.h"
 
-#if 0
-# define Ryn_Memory_Types_Only
-# define ryn_memory_(identifier) identifier
-# include "../libraries/ryn_memory.h"
-#endif
-
-
 
 
 #define Process_Id U32
@@ -158,6 +151,8 @@ typedef struct {
   B32 downward;
 } Process_Shape;
 
+global_variable F32 global_window_width;
+global_variable F32 global_window_height;
 
 global_variable F32 global_process_wire_padding = 8.0f;
 global_variable F32 global_process_wire_spacing = 22.0f;
@@ -1157,7 +1152,28 @@ function Context initialize_context(void) {
 
 
 function void initialize_globals(void) {
+  S32 monitor_id = GetCurrentMonitor();
+  S32 screen_width = GetMonitorWidth(monitor_id);
+  S32 screen_height = GetMonitorHeight(monitor_id);
+
   global_background_color = (Color){220, 220, 200, 255};
+
+  global_window_width = 0.5f*(F32)screen_width;
+  global_window_height = 0.5f*(F32)screen_height;
+
+  printf("%f %f\n", global_window_width, global_window_height);
+
+  global_shape_size = global_window_width / 20.0f;
+  global_shape_half_size = 0.5f*global_shape_size;
+
+  global_box_size = global_shape_size*0.16f;
+  global_box_half_size = 0.5f*global_box_size;
+
+  global_process_wire_padding = 0.2f*global_shape_size;
+  global_process_wire_spacing = 0.55f*global_shape_size;
+
+  global_process_font_size = 0.4f*global_shape_size;
+  global_panel_font_size = 0.35f*global_shape_size;
 }
 
 
@@ -1191,11 +1207,13 @@ int main(void) {
   Arena *ra = context.render_arena;
   Arena *ta = context.temp_arena;
 
+  InitWindow(800, 500, "proc");
+  SetTargetFPS(60);
+
   initialize_globals();
   render_Initialize(ta);
 
-  InitWindow(800, 500, "proc");
-  SetTargetFPS(60);
+  SetWindowSize(global_window_width, global_window_height);
 
   while (!WindowShouldClose()) {
     handle_user_input(&context);
