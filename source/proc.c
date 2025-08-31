@@ -1147,6 +1147,10 @@ function Context initialize_context(void) {
   context.temp_arena = arena_alloc_reserve(Megabytes(1), 0);
   global_base_process = create_process(&context); // NOTE: unused first process
 
+  context.process_zero_pos = context.process_arena->chunk_pos;
+  context.render_zero_pos = context.render_arena->chunk_pos;
+  context.temp_zero_pos = context.temp_arena->chunk_pos;
+
   return context;
 }
 
@@ -1186,31 +1190,8 @@ int main(void) {
 
   Arena *ra = context.render_arena;
   Arena *ta = context.temp_arena;
-  Arena *pa = context.process_arena;
-  context.process_zero_pos = pa->chunk_pos;
-  context.render_zero_pos = ra->chunk_pos;
-  context.temp_zero_pos = ta->chunk_pos;
-  push_struct(pa, Process); // NOTE: Null process
 
   initialize_globals();
-
-#if 0
-  // TODO: TEST THE ARENA BEFORE WORKING ON PROC ANYMORE!!!
-  //       There are a lot of assumptions made about how the arena works and we need to test them before we can be confident that the app is ready to test.
-  printf("sizeof(Arena) %lu\n", sizeof(Arena));
-  printf("sizeof(Process) %lu\n", sizeof(Process));
-  debug_print_arena(&context, context.process_arena);
-  printf("push Process\n"); push_struct(pa, Process);
-  debug_print_arena(&context, context.process_arena);
-  printf("push Process\n"); push_struct(pa, Process);
-  printf("push Process\n"); push_struct(pa, Process);
-  printf("push Process\n"); push_struct(pa, Process);
-  printf("push Process\n"); push_struct(pa, Process);
-  debug_print_arena(&context, context.process_arena);
-  printf("pop to 0\n"); arena_pop_to(pa, context.process_zero_pos);
-  debug_print_arena(&context, context.process_arena);
-  return 0;
-#else
   render_Initialize(ta);
 
   InitWindow(800, 500, "proc");
@@ -1232,5 +1213,4 @@ int main(void) {
 
   CloseWindow();
   return 0;
-#endif
 }

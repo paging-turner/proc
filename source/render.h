@@ -85,7 +85,7 @@ function char *render_PushTempString(const char *CString)
 {
   Assert(GlobalTempArena);
   // TODO: Assumes that this arena does not grow!!!!
-  char *Result = (char *)(GlobalTempArena + GlobalTempArena->chunk_pos);
+  char *Result = (char *)((U8 *)GlobalTempArena + GlobalTempArena->chunk_pos);
 
   const char *C = CString;
 
