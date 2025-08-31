@@ -847,7 +847,7 @@ function void handle_user_input(Context *context) {
       }
 
       // break if there has been an interaction
-      if (selection.type > -1) {
+      if (selection.type > 0) {
         break;
       }
     }
@@ -1167,8 +1167,6 @@ function void initialize_globals(void) {
   global_window_width = 0.5f*(F32)screen_width;
   global_window_height = 0.5f*(F32)screen_height;
 
-  printf("%f %f\n", global_window_width, global_window_height);
-
   global_shape_size = global_window_width / 20.0f;
   global_shape_half_size = 0.5f*global_shape_size;
 
@@ -1186,27 +1184,6 @@ function void initialize_globals(void) {
 }
 
 
-
-function void debug_print_arena(Context *context, Arena *arena) {
-  printf("---- Arena %p ----\n", arena);
-  printf("  current    %p\n", arena->current);
-  printf("  prev       %p\n", arena->prev);
-  printf("  alignment  %llu\n", arena->alignment);
-  printf("  growing    %d\n", arena->growing);
-
-  printf("  filler  '");
-  for (S32 i = 0; i < 7; ++i) {
-    printf("%c", arena->filler[i]);
-  }
-  printf("'\n");
-
-  printf("  base_pos   %llu\n", arena->base_pos);
-  printf("  chunk_cap  %llu\n", arena->chunk_cap);
-  printf("  chunk_pos  %llu\n", arena->chunk_pos);
-  printf("  chunk_commit_pos %llu\n", arena->chunk_commit_pos);
-  printf("**** Process Count %llu\n", Get_Process_Count(context));
-  printf("\n");
-}
 
 
 

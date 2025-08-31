@@ -158,13 +158,26 @@ function void render_DrawLine(Arena *Arena, int startPosX, int startPosY, int en
 {
   render_command *Command = push_struct(Arena, render_command);
 
+  // HACK: Fudge the line length to avoid gaps between adjoined lines.
+  // TODO: Draw lines using triangles so that we are in control of how lines get joined.
+  Vector2 start;
+  Vector2 end;
+  {
+    Vector2 normal_delta = Vector2Normalize((Vector2){endPosX-startPosX, endPosY-startPosY});
+    Vector2 offset = Vector2Scale(normal_delta, 0.4f*thickness);
+    start.x = startPosX - offset.x;
+    start.y = startPosY - offset.y;
+    end.x = endPosX + offset.x;
+    end.y = endPosY + offset.y;
+  }
+
   if (Command)
   {
     Command->Kind = render_command_DrawLine;
-    Command->X = startPosX;
-    Command->Y = startPosY;
-    Command->X2 = endPosX;
-    Command->Y2 = endPosY;
+    Command->X = start.x;
+    Command->Y = start.y;
+    Command->X2 = end.x;
+    Command->Y2 = end.y;
     Command->Thickness = thickness;
     Command->Color = color;
   }
