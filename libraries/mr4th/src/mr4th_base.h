@@ -103,6 +103,7 @@
 #  error missing OS detection
 # endif
 
+#if 0
 # if defined(_M_AMD64)
 #  define ARCH_X64 1
 # elif defined(_M_I86)
@@ -113,6 +114,7 @@
 # else
 #  error missing ARCH detection
 # endif
+#endif
 
 #elif defined(__GNUC__)
 # define COMPILER_GCC 1

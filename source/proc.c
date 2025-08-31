@@ -174,7 +174,7 @@ global_variable F32 global_shape_half_size = 0.5f*Default_Shape_Size;
 global_variable F32 global_process_font_size = 16.0f;
 global_variable F32 global_panel_font_size = 14.0f;
 
-global_variable Color global_background_color = (Color){220, 220, 200, 255};
+global_variable Color global_background_color;
 
 global_variable S32 global_shape_fan_triangle_count = 12;
 
@@ -1152,6 +1152,11 @@ function Context initialize_context(void) {
 
 
 
+function void initialize_globals(void) {
+  global_background_color = (Color){220, 220, 200, 255};
+}
+
+
 
 function void debug_print_arena(Context *context, Arena *arena) {
   printf("---- Arena %p ----\n", arena);
@@ -1186,6 +1191,8 @@ int main(void) {
   context.render_zero_pos = ra->chunk_pos;
   context.temp_zero_pos = ta->chunk_pos;
   push_struct(pa, Process); // NOTE: Null process
+
+  initialize_globals();
 
 #if 0
   // TODO: TEST THE ARENA BEFORE WORKING ON PROC ANYMORE!!!
