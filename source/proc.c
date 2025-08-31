@@ -165,6 +165,8 @@ global_variable F32 global_box_half_size = 0.5f*Default_Box_Size;
 global_variable F32 global_shape_size = Default_Shape_Size;
 global_variable F32 global_shape_half_size = 0.5f*Default_Shape_Size;
 
+global_variable F32 global_line_thickness;
+global_variable F32 global_active_line_thickness;
 
 global_variable F32 global_process_font_size = 16.0f;
 global_variable F32 global_panel_font_size = 14.0f;
@@ -688,15 +690,17 @@ process_shape_contains_point(Context *context, Process_Shape shape, Vector2 poin
       F32 side2 = which_side_of_line(shape.points[1], shape.points[2], point);
       F32 side3 = which_side_of_line(shape.points[2], shape.points[0], point);
 
+      F32 threshold = 0.1f;
+
       // test first triangle
-      if (side1 < 0.0f && side2 < 0.0f && side3 < 0.0f) {
+      if (side1 < threshold && side2 < threshold && side3 < threshold) {
         contains = 1;
       } else if (shape.point_count == 4) {
         F32 side4 = which_side_of_line(shape.points[2], shape.points[3], point);
         F32 side5 = which_side_of_line(shape.points[3], shape.points[1], point);
 
         // test second triangle
-        if (side2 > 0.0f && side4 > 0.0f && side5 > 0.0f) {
+        if (side2 > threshold && side4 > threshold && side5 > threshold) {
           contains = 1;
         }
       }
@@ -955,7 +959,7 @@ function void draw_processes(Context *context) {
 
       B32 is_hot = context->hot_id == i;
       B32 is_active = context->active_id == i;
-      F32 thickness = (is_hot||is_active) ? 3.0f : 2.0f;
+      F32 thickness = (is_hot||is_active) ? global_active_line_thickness : global_line_thickness;
       F32 cup_cap_control_offset = 10.0f;
 
       if (Get_Flag(p->flags, Process_Flag_Empty)) {
@@ -1080,7 +1084,7 @@ function void draw_processes(Context *context) {
                                  context->hot_id == p->in_id);
       B32 connected_out_active = (context->active_id == p->out_id ||
                                   context->hot_id == p->out_id);
-      F32 thickness = is_active ? 4.0f : 2.0f;
+      F32 thickness = is_active ? global_active_line_thickness : global_line_thickness;
 
       // draw wire
       render_DrawLineBezierCubic(ra, out_position, in_position, out_control, in_control, thickness, stroke_color);
@@ -1112,7 +1116,9 @@ function void draw_processes(Context *context) {
     Vector2 to_control = context->mouse_position;
     to_control.y += 30.0f;
 
-    render_DrawLineBezierCubic(ra, position, context->mouse_position, from_control, to_control, 2.0f, stroke_color);
+    F32 thickness = global_line_thickness;
+
+    render_DrawLineBezierCubic(ra, position, context->mouse_position, from_control, to_control, thickness, stroke_color);
   }
 }
 
@@ -1174,6 +1180,9 @@ function void initialize_globals(void) {
 
   global_process_font_size = 0.4f*global_shape_size;
   global_panel_font_size = 0.35f*global_shape_size;
+
+  global_line_thickness = 0.05f*global_shape_size;
+  global_active_line_thickness = 0.1f*global_shape_size;
 }
 
 
