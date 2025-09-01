@@ -261,7 +261,11 @@
 #if COMPILER_CL
 # define MR4TH_SYM_RUNTIME MR4TH_SYM_LINKTIME __declspec(dllexport)
 #elif COMPILER_CLANG
-# define MR4TH_SYM_RUNTIME MR4TH_SYM_LINKTIME __declspec(dllexport)
+# if OS_WINDOWS
+#  define MR4TH_SYM_RUNTIME MR4TH_SYM_LINKTIME __declspec(dllexport)
+# else
+#  define MR4TH_SYM_RUNTIME MR4TH_SYM_LINKTIME __attribute__((visibility("default")))
+# endif
 #elif COMPILER_GCC
 # define MR4TH_SYM_RUNTIME MR4TH_SYM_LINKTIME __attribute__((visibility("default")))
 #else

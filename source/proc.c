@@ -4,7 +4,7 @@
    The initial focus is to offer basic diagram editing features in order to communicate concepts from the book. At some point it would be nice to implement compilation features and simulation. Baby steps...
 
    TODO:
-   [ ] Fix naming collisions with Raylib and "Windows.h" !!!
+   [x] Fix naming collisions with Raylib and "Windows.h" !!!
 
    [x] Allow deleting of processes
      [ ] BUG: Connect two process with two wires. Delete one wire. Reconnect a second wire. Now when you hover, it highlights the wrong wire.
@@ -25,6 +25,9 @@
    [ ] Undo/redo
    [ ] Allow reordering of connected wires
    [ ] BUG: Connect a two processes. Make one process invisible. Delete the *other* process. The invisible process is still there but, well, you can't see it! Either delete the invisible one, or make it visible again. Probably just delete it??
+   [ ] New Arena Changes
+     [ ] Change how we loop through processes, so that we can enable growable arenas.
+     [ ] Right now we have to make sure the Process struct is a size that's a multiple of a pointer. We should fix that :(
 */
 
 #include <stdio.h>
@@ -128,6 +131,9 @@ typedef struct {
   U8 label[Process_Label_Size];
   U32 label_cursor;
 } Process;
+
+// TODO: this really sucks........ gotta change the way we handle looping over processes so we don't have to deal with this alignment stuff
+StaticAssert((sizeof(Process)%sizeof(void*))==0, Process_struct_size_must_be_multiple_of_pointer___);
 
 typedef enum {
   Process_Shape_Triangle,
@@ -1164,13 +1170,13 @@ function void initialize_globals(void) {
 
   global_background_color = (Color){220, 220, 200, 255};
 
-  global_window_width = 0.5f*(F32)screen_width;
-  global_window_height = 0.5f*(F32)screen_height;
+  global_window_width = 0.7f*(F32)screen_width;
+  global_window_height = 0.7f*(F32)screen_height;
 
   global_shape_size = global_window_width / 20.0f;
   global_shape_half_size = 0.5f*global_shape_size;
 
-  global_box_size = global_shape_size*0.16f;
+  global_box_size = global_shape_size*0.22f;
   global_box_half_size = 0.5f*global_box_size;
 
   global_process_wire_padding = 0.2f*global_shape_size;
