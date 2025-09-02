@@ -1358,7 +1358,7 @@ MR4TH_SYMBOL void        os_exit_process(U32 code);
 
 // TODO(allen): memory protection options?
 MR4TH_SYMBOL void* os_memory_reserve(U64 size);
-MR4TH_SYMBOL void* os_memory_commit(void *ptr, U64 size);
+MR4TH_SYMBOL B32   os_memory_commit(void *ptr, U64 size);
 MR4TH_SYMBOL void  os_memory_decommit(void *ptr, U64 size);
 MR4TH_SYMBOL void  os_memory_release(void *ptr, U64 size);
 

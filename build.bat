@@ -1,4 +1,4 @@
-echo off
+@echo off
 
 set Base_Source_File=source\base.c
 set App_Source_File=source\proc.c

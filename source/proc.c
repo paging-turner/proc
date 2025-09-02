@@ -194,11 +194,6 @@ global_variable S32 global_shape_fan_triangle_count = 12;
 #define Half_Circle_Fudge 1.32f
 #define Half_Circle_Radius_Fudge 1.0f
 
-global_variable Process global_zero_process;
-#define Zero_Process()\
-  ((global_zero_process=(Process){}),\
-   &global_zero_process)
-
 
 
 
@@ -1144,7 +1139,7 @@ function void draw_info_panel(Context *context) {
 
 
 function Context initialize_context(void) {
-  Context context = (Context){};
+  Context context = (Context){0};
 
   context.render_arena = arena_alloc_reserve(Megabytes(1), 0);
   context.process_arena = arena_alloc_reserve(Megabytes(1), 0);

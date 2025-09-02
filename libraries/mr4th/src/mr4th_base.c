@@ -279,14 +279,14 @@ sign_extend_S64(S64 x, U32 bitidx){
 MR4TH_SYMBOL F32
 math_gaussian(F32 sigma, F32 x){
   // 1/(sqrt(2*pi)*sigma) * e^(-x*x/(2*sigma*sigma))
-  
+
   F32 sqrt_2pi = sqrt_F32(tau_F32);
   F32 inv_sqrt_2pi_sigma = 1.f/(sqrt_2pi*sigma);
   F32 sigma_p2 = sigma*sigma;
-  
+
   F32 exponent = -x*x/(2*sigma_p2);
   F32 power = pow_F32(e_F32, exponent);
-  
+
   F32 result = inv_sqrt_2pi_sigma*power;
   return(result);
 }
@@ -294,19 +294,19 @@ math_gaussian(F32 sigma, F32 x){
 MR4TH_SYMBOL Array_F32
 math_gaussian_kernel(Arena *arena, F32 sigma, U32 extra_reach){
   Assert(sigma > 0.f);
-  
+
   // allocate
   U32 reach = (U32)ceil_F32(sigma) + extra_reach;
   U64 count = reach*2 + 1;
   F32 *vals = push_array(arena, F32, count);
-  
+
   // calculate guassian samples & sum
   F32 sum = 0;
   {
     F32 sqrt_2pi = sqrt_F32(tau_F32);
     F32 inv_sqrt_2pi_sigma = 1.f/(sqrt_2pi*sigma);
     F32 sigma_p2 = sigma*sigma;
-    
+
     F32 mid = (F32)reach;
     F32 *val_ptr = vals;
     for (U64 i = 0; i < count; i += 1, val_ptr += 1){
@@ -314,12 +314,12 @@ math_gaussian_kernel(Arena *arena, F32 sigma, U32 extra_reach){
       F32 exponent = -x*x/(2*sigma_p2);
       F32 power = pow_F32(e_F32, exponent);
       F32 g = inv_sqrt_2pi_sigma*power;
-      
+
       sum += g;
       *val_ptr = g;
     }
   }
-  
+
   // normalize kernel
   {
     F32 *val_ptr = vals;
@@ -327,7 +327,7 @@ math_gaussian_kernel(Arena *arena, F32 sigma, U32 extra_reach){
       *val_ptr = *val_ptr/sum;
     }
   }
-  
+
   // return result
   Array_F32 result = {0};
   result.vals = vals;
@@ -514,7 +514,7 @@ v3f32_spherical(F32 theta_xz, F32 theta_yz, F32 radius){
   F32 syz = sin_F32(theta_yz);
   F32 cxz = cos_F32(theta_xz);
   F32 cyz = cos_F32(theta_yz);
-  
+
   V3F32 result = {0};
   result.x = radius*sxz;
   result.y = radius*syz;
@@ -546,7 +546,7 @@ v3f32_cross(V3F32 a, V3F32 b){
 MR4TH_SYMBOL B32
 mat4x4_inv(F32 *in, F32 *out){
   /* credit: https://github.com/niswegmann/small-matrix-inverse/tree/master */
-  
+
   out[0] =
     + in[ 5]*in[10]*in[15]
     - in[ 5]*in[11]*in[14]
@@ -554,7 +554,7 @@ mat4x4_inv(F32 *in, F32 *out){
     + in[ 9]*in[ 7]*in[14]
     + in[13]*in[ 6]*in[11]
     - in[13]*in[ 7]*in[10];
-  
+
   out[1] =
     - in[ 1]*in[10]*in[15]
     + in[ 1]*in[11]*in[14]
@@ -562,7 +562,7 @@ mat4x4_inv(F32 *in, F32 *out){
     - in[ 9]*in[ 3]*in[14]
     - in[13]*in[ 2]*in[11]
     + in[13]*in[ 3]*in[10];
-  
+
   out[2] =
     + in[ 1]*in[ 6]*in[15]
     - in[ 1]*in[ 7]*in[14]
@@ -570,7 +570,7 @@ mat4x4_inv(F32 *in, F32 *out){
     + in[ 5]*in[ 3]*in[14]
     + in[13]*in[ 2]*in[ 7]
     - in[13]*in[ 3]*in[ 6];
-  
+
   out[3] =
     - in[ 1]*in[ 6]*in[11]
     + in[ 1]*in[ 7]*in[10]
@@ -578,7 +578,7 @@ mat4x4_inv(F32 *in, F32 *out){
     - in[ 5]*in[ 3]*in[10]
     - in[ 9]*in[ 2]*in[ 7]
     + in[ 9]*in[ 3]*in[ 6];
-  
+
   out[4] =
     - in[ 4]*in[10]*in[15]
     + in[ 4]*in[11]*in[14]
@@ -586,7 +586,7 @@ mat4x4_inv(F32 *in, F32 *out){
     - in[ 8]*in[ 7]*in[14]
     - in[12]*in[ 6]*in[11]
     + in[12]*in[ 7]*in[10];
-  
+
   out[5] =
     + in[ 0]*in[10]*in[15]
     - in[ 0]*in[11]*in[14]
@@ -594,7 +594,7 @@ mat4x4_inv(F32 *in, F32 *out){
     + in[ 8]*in[ 3]*in[14]
     + in[12]*in[ 2]*in[11]
     - in[12]*in[ 3]*in[10];
-  
+
   out[6] =
     - in[ 0]*in[ 6]*in[15]
     + in[ 0]*in[ 7]*in[14]
@@ -602,7 +602,7 @@ mat4x4_inv(F32 *in, F32 *out){
     - in[ 4]*in[ 3]*in[14]
     - in[12]*in[ 2]*in[ 7]
     + in[12]*in[ 3]*in[ 6];
-  
+
   out[7] =
     + in[ 0]*in[ 6]*in[11]
     - in[ 0]*in[ 7]*in[10]
@@ -610,7 +610,7 @@ mat4x4_inv(F32 *in, F32 *out){
     + in[ 4]*in[ 3]*in[10]
     + in[ 8]*in[ 2]*in[ 7]
     - in[ 8]*in[ 3]*in[ 6];
-  
+
   out[8] =
     + in[ 4]*in[ 9]*in[15]
     - in[ 4]*in[11]*in[13]
@@ -618,7 +618,7 @@ mat4x4_inv(F32 *in, F32 *out){
     + in[ 8]*in[ 7]*in[13]
     + in[12]*in[ 5]*in[11]
     - in[12]*in[ 7]*in[ 9];
-  
+
   out[9] =
     - in[ 0]*in[ 9]*in[15]
     + in[ 0]*in[11]*in[13]
@@ -626,7 +626,7 @@ mat4x4_inv(F32 *in, F32 *out){
     - in[ 8]*in[ 3]*in[13]
     - in[12]*in[ 1]*in[11]
     + in[12]*in[ 3]*in[ 9];
-  
+
   out[10] =
     + in[ 0]*in[ 5]*in[15]
     - in[ 0]*in[ 7]*in[13]
@@ -634,7 +634,7 @@ mat4x4_inv(F32 *in, F32 *out){
     + in[ 4]*in[ 3]*in[13]
     + in[12]*in[ 1]*in[ 7]
     - in[12]*in[ 3]*in[ 5];
-  
+
   out[11] =
     - in[ 0]*in[ 5]*in[11]
     + in[ 0]*in[ 7]*in[ 9]
@@ -642,7 +642,7 @@ mat4x4_inv(F32 *in, F32 *out){
     - in[ 4]*in[ 3]*in[ 9]
     - in[ 8]*in[ 1]*in[ 7]
     + in[ 8]*in[ 3]*in[ 5];
-  
+
   out[12] =
     - in[ 4]*in[ 9]*in[14]
     + in[ 4]*in[10]*in[13]
@@ -650,7 +650,7 @@ mat4x4_inv(F32 *in, F32 *out){
     - in[ 8]*in[ 6]*in[13]
     - in[12]*in[ 5]*in[10]
     + in[12]*in[ 6]*in[ 9];
-  
+
   out[13] =
     + in[ 0]*in[ 9]*in[14]
     - in[ 0]*in[10]*in[13]
@@ -658,7 +658,7 @@ mat4x4_inv(F32 *in, F32 *out){
     + in[ 8]*in[ 2]*in[13]
     + in[12]*in[ 1]*in[10]
     - in[12]*in[ 2]*in[ 9];
-  
+
   out[14] =
     - in[ 0]*in[ 5]*in[14]
     + in[ 0]*in[ 6]*in[13]
@@ -666,7 +666,7 @@ mat4x4_inv(F32 *in, F32 *out){
     - in[ 4]*in[ 2]*in[13]
     - in[12]*in[ 1]*in[ 6]
     + in[12]*in[ 2]*in[ 5];
-  
+
   out[15] =
     + in[ 0]*in[ 5]*in[10]
     - in[ 0]*in[ 6]*in[ 9]
@@ -674,9 +674,9 @@ mat4x4_inv(F32 *in, F32 *out){
     + in[ 4]*in[ 2]*in[ 9]
     + in[ 8]*in[ 1]*in[ 6]
     - in[ 8]*in[ 2]*in[ 5];
-  
+
   F32 det = in[0]*out[0] + in[1]*out[4] + in[2]*out[8] + in[3]*out[12];
-  
+
   B32 result = 0;
   if (det != 0.f){
     F32 invdet = 1.f/det;
@@ -685,7 +685,7 @@ mat4x4_inv(F32 *in, F32 *out){
     }
     result = 1;
   }
-  
+
   return(result);
 }
 
@@ -762,10 +762,10 @@ rectf32_in_rectf32_clamp(RectF32 container, V2F32 p0, V2F32 dim){
   V2F32 container_dim = dim_from_rectf32(container);
   F32 w = ClampTop(dim.x, container_dim.x);
   F32 h = ClampTop(dim.y, container_dim.y);
-  
+
   F32 x0 = Clamp(container.x0, p0.x, container.x1 - w);
   F32 y0 = Clamp(container.y0, p0.y, container.y1 - h);
-  
+
   RectF32 result = {x0, y0, x0 + w, y0 + h};
   return(result);
 }
@@ -804,7 +804,7 @@ MR4TH_SYMBOL void
 memory_zero(void *ptr, U64 size){
   U64  z64 = size/8;
   U64  z8  = size%8;
-  
+
   U64 *p64 = (U64*)ptr;
   for (;z64 > 0;){
     *p64 = 0;
@@ -827,10 +827,10 @@ memory_fill(void *ptr, U64 size, U8 fillbyte){
     fillqword |= fillqword << 16;
     fillqword |= fillqword << 32;
   }
-  
+
   U64  z64 = size/8;
   U64  z8  = size%8;
-  
+
   U64 *p64 = (U64*)ptr;
   for (;z64 > 0;){
     *p64 = fillqword;
@@ -849,7 +849,7 @@ MR4TH_SYMBOL B32
 memory_match(void *a, void *b, U64 size){
   U64  z64 = size/8;
   U64  z8  = size%8;
-  
+
   U64 *a64 = (U64*)a;
   U64 *b64 = (U64*)b;
   for (;z64 > 0;){
@@ -860,7 +860,7 @@ memory_match(void *a, void *b, U64 size){
     b64 += 1;
     z64 -= 1;
   }
-  
+
   U8 *a8 = (U8*)a64;
   U8 *b8 = (U8*)b64;
   for (;z8 > 0;){
@@ -871,7 +871,7 @@ memory_match(void *a, void *b, U64 size){
     b8 += 1;
     z8 -= 1;
   }
-  
+
   return(1);
 }
 
@@ -879,7 +879,7 @@ MR4TH_SYMBOL void*
 memory_move(void *dst, void *src, U64 size){
   U64  z64 = size/8;
   U64  z8  = size%8;
-  
+
   // backwards
   if ((U8*)src < (U8*)dst){
     U8 *dst8 = ((U8*)dst) + size;
@@ -899,7 +899,7 @@ memory_move(void *dst, void *src, U64 size){
       z64 -= 1;
     }
   }
-  
+
   // forwards
   else if ((U8*)src > (U8*)dst){
     U64 *dst64 = (U64*)dst;
@@ -919,7 +919,7 @@ memory_move(void *dst, void *src, U64 size){
       z8 -= 1;
     }
   }
-  
+
   return(dst);
 }
 
@@ -1096,7 +1096,7 @@ str8_chop_last_slash(String8 string){
         break;
       }
     }
-    
+
     // chop result string
     result.size = pos;
   }
@@ -1349,7 +1349,7 @@ StaticAssert(IsPow2OrZero(MR4TH_MEM_MAX_ALIGN) && MR4TH_MEM_MAX_ALIGN != 0,
 MR4TH_SYMBOL Arena*
 arena_alloc_reserve(U64 reserve_size, B32 growing){
   ProfBeginFunc();
-  
+
   Arena *result = 0;
   if (reserve_size >= MEM_INITIAL_COMMIT){
     void *memory = os_memory_reserve(reserve_size);
@@ -1368,7 +1368,7 @@ arena_alloc_reserve(U64 reserve_size, B32 growing){
     }
   }
   Assert(result != 0);
-  
+
   ProfEndFunc();
   return(result);
 }
@@ -1382,7 +1382,7 @@ arena_alloc(void){
 MR4TH_SYMBOL void
 arena_release(Arena *arena){
   ProfBeginFunc();
-  
+
   Arena *ptr = arena->current;
   for (;ptr != 0;){
     Arena *prev = ptr->prev;
@@ -1390,18 +1390,18 @@ arena_release(Arena *arena){
     os_memory_release(ptr, ptr->chunk_cap);
     ptr = prev;
   }
-  
+
   ProfEndFunc();
 }
 
 MR4TH_SYMBOL void*
 arena_push_no_zero(Arena *arena, U64 size){
   ProfBeginFunc();
-  
+
   void *result = 0;
-  
+
   Arena *current = arena->current;
-  
+
   // allocate new chunk if necessary
   if (arena->growing){
     U64 next_chunk_pos = AlignUpPow2(current->chunk_pos, arena->alignment);
@@ -1412,7 +1412,7 @@ arena_push_no_zero(Arena *arena, U64 size){
       if (new_reserve_size < enough_to_fit){
         new_reserve_size = AlignUpPow2(enough_to_fit, KB(4));
       }
-      
+
       void *memory = os_memory_reserve(new_reserve_size);
       if (os_memory_commit(memory, MEM_INITIAL_COMMIT)){
         AsanPoison(memory, new_reserve_size);
@@ -1427,13 +1427,13 @@ arena_push_no_zero(Arena *arena, U64 size){
       }
     }
   }
-  
+
   {
     // if there is room in this chunk's reserve ...
     U64 result_pos = AlignUpPow2(current->chunk_pos, arena->alignment);
     U64 next_chunk_pos = result_pos + size;
     if (next_chunk_pos <= current->chunk_cap){
-      
+
       // commit more memory if necessary
       if (next_chunk_pos > current->chunk_commit_pos){
         U64 next_commit_pos_aligned =
@@ -1445,7 +1445,7 @@ arena_push_no_zero(Arena *arena, U64 size){
           current->chunk_commit_pos = next_commit_pos;
         }
       }
-      
+
       // if there is room in the commit range, return memory & advance pos
       if (next_chunk_pos <= current->chunk_commit_pos){
         AsanUnpoison((U8*)current + current->chunk_pos,
@@ -1455,7 +1455,7 @@ arena_push_no_zero(Arena *arena, U64 size){
       }
     }
   }
-  
+
   ProfEndFunc();
   return(result);
 }
@@ -1463,7 +1463,7 @@ arena_push_no_zero(Arena *arena, U64 size){
 MR4TH_SYMBOL void
 arena_pop_to(Arena *arena, U64 pos){
   ProfBeginFunc();
-  
+
   Arena *current = arena->current;
   U64 total_pos = current->base_pos + current->chunk_pos;
   if (pos < total_pos){
@@ -1475,12 +1475,12 @@ arena_pop_to(Arena *arena, U64 pos){
       os_memory_release(current, current->chunk_cap);
       current = prev;
     }
-    
+
     // update arena's current
     {
       arena->current = current;
     }
-    
+
     // update the chunk position of the chunk in
     //  the chain that contains this position.
     {
@@ -1491,7 +1491,7 @@ arena_pop_to(Arena *arena, U64 pos){
       current->chunk_pos = clamped_chunk_pos;
     }
   }
-  
+
   ProfEndFunc();
 }
 
@@ -1556,7 +1556,7 @@ Arena *arena__scratch_pool[MR4TH_MEM_SCRATCH_POOL_COUNT] = {0};
 MR4TH_SYM_RUNTIME ArenaTemp
 arena_get_scratch(Arena **conflict_array, U32 count){
   ProfBeginFunc();
-  
+
   // init on first time
   if (arena__scratch_pool[0] == 0){
     Arena **scratch_slot = arena__scratch_pool;
@@ -1566,7 +1566,7 @@ arena_get_scratch(Arena **conflict_array, U32 count){
       *scratch_slot = arena_alloc();
     }
   }
-  
+
   // get non-conflicting arena
   ArenaTemp result = {0};
   Arena **scratch_slot = arena__scratch_pool;
@@ -1586,7 +1586,7 @@ arena_get_scratch(Arena **conflict_array, U32 count){
       break;
     }
   }
-  
+
   ProfEndFunc();
   return(result);
 }
@@ -1649,29 +1649,29 @@ MR4TH_SYMBOL String8
 str8_join(Arena *arena, String8List *list,
           StringJoin *join_optional){
   ProfBeginFunc();
-  
+
   // setup join parameters
   MR4TH_SYM_COMPTIME StringJoin dummy_join = {0};
   StringJoin *join = join_optional;
   if (join == 0){
     join = &dummy_join;
   }
-  
+
   // compute total size
   U64 size = (join->pre.size +
               join->post.size +
               ((list->node_count>0)?
                (join->mid.size*(list->node_count - 1)):0) +
               list->total_size);
-  
+
   // begin string build
   U8 *str = push_array(arena, U8, size + 1);
   U8 *ptr = str;
-  
+
   // write pre
   MemoryCopy(ptr, join->pre.str, join->pre.size);
   ptr += join->pre.size;
-  
+
   B32 is_mid = 0;
   for (String8Node *node = list->first;
        node != 0;
@@ -1681,21 +1681,21 @@ str8_join(Arena *arena, String8List *list,
       MemoryCopy(ptr, join->mid.str, join->mid.size);
       ptr += join->mid.size;
     }
-    
+
     // write node string
     MemoryCopy(ptr, node->string.str, node->string.size);
     ptr += node->string.size;
-    
+
     is_mid = 1;
   }
-  
+
   // write post
   MemoryCopy(ptr, join->post.str, join->post.size);
   ptr += join->post.size;
-  
+
   // write null
   *ptr = 0;
-  
+
   String8 result = str8(str, size);
   ProfEndFunc();
   return(result);
@@ -1704,9 +1704,9 @@ str8_join(Arena *arena, String8List *list,
 MR4TH_SYMBOL String8List
 str8_split(Arena *arena, String8 string, U8 *splits, U32 count){
   ProfBeginFunc();
-  
+
   String8List result = {0};
-  
+
   U8 *ptr = string.str;
   U8 *word_first = ptr;
   U8 *opl = string.str + string.size;
@@ -1720,7 +1720,7 @@ str8_split(Arena *arena, String8 string, U8 *splits, U32 count){
         break;
       }
     }
-    
+
     if (is_split_byte){
       // try to emit word, advance word first pointer
       if (word_first < ptr){
@@ -1729,12 +1729,12 @@ str8_split(Arena *arena, String8 string, U8 *splits, U32 count){
       word_first = ptr + 1;
     }
   }
-  
+
   // try to emit final word
   if (word_first < ptr){
     str8_list_push(arena, &result, str8_range(word_first, ptr));
   }
-  
+
   ProfEndFunc();
   return(result);
 }
@@ -1742,16 +1742,16 @@ str8_split(Arena *arena, String8 string, U8 *splits, U32 count){
 MR4TH_SYMBOL String8
 str8_pushfv(Arena *arena, char *fmt, va_list args){
   ProfBeginFunc();
-  
+
   // in case we need to try a second time
   va_list args2;
   va_copy(args2, args);
-  
+
   // try to build the string in 1024 bytes
   U64 buffer_size = 1024;
   U8 *buffer = push_array(arena, U8, buffer_size);
   U64 actual_size = m4_vsnprintf((char*)buffer, buffer_size, fmt, args);
-  
+
   String8 result = {0};
   if (actual_size < buffer_size){
     // if first try worked, put back what we didn't use and finish
@@ -1765,10 +1765,10 @@ str8_pushfv(Arena *arena, char *fmt, va_list args){
     U64 final_size = m4_vsnprintf((char*)fixed_buffer, actual_size + 1, fmt, args2);
     result = str8(fixed_buffer, final_size);
   }
-  
+
   // end args2
   va_end(args2);
-  
+
   ProfEndFunc();
   return(result);
 }
@@ -1806,14 +1806,14 @@ str8_push_copy(Arena *arena, String8 string){
 MR4TH_SYMBOL B32
 str8_match(String8 a, String8 b, StringMatchFlags flags){
   ProfBeginFunc();
-  
+
   B32 result = 0;
   if ((flags & StringMatchFlag_PrefixMatch) != 0 || a.size == b.size){
     U64 size = a.size;
     if ((flags & StringMatchFlag_PrefixMatch) != 0){
       size = Min(a.size, b.size);
     }
-    
+
     result = 1;
     B32 no_case = ((flags & StringMatchFlag_NoCase) != 0);
     for (U64 i = 0; i < size; i += 1){
@@ -1829,7 +1829,7 @@ str8_match(String8 a, String8 b, StringMatchFlags flags){
       }
     }
   }
-  
+
   ProfEndFunc();
   return(result);
 }
@@ -1839,7 +1839,7 @@ str8_match(String8 a, String8 b, StringMatchFlags flags){
 MR4TH_SYMBOL StringDecode
 str_decode_utf8(U8 *str, U32 cap){
   ProfBeginFunc();
-  
+
   MR4TH_SYM_COMPTIME U8 length[] = {
     1, 1, 1, 1, // 000xx
     1, 1, 1, 1,
@@ -1854,12 +1854,12 @@ str_decode_utf8(U8 *str, U32 cap){
   };
   MR4TH_SYM_COMPTIME U8 first_byte_mask[] = { 0, 0x7F, 0x1F, 0x0F, 0x07 };
   MR4TH_SYM_COMPTIME U8 final_shift[] = { 0, 18, 12, 6, 0 };
-  
+
   StringDecode result = {0};
   if (cap > 0){
     result.codepoint = '#';
     result.size = 1;
-    
+
     U8 byte = str[0];
     U8 l = length[byte >> 3];
     if (0 < l && l <= cap){
@@ -1871,12 +1871,12 @@ str_decode_utf8(U8 *str, U32 cap){
         default: break;
       }
       cp >>= final_shift[l];
-      
+
       result.codepoint = cp;
       result.size = l;
     }
   }
-  
+
   ProfEndFunc();
   return(result);
 }
@@ -1884,7 +1884,7 @@ str_decode_utf8(U8 *str, U32 cap){
 MR4TH_SYMBOL U32
 str_encode_utf8(U8 *dst, U32 codepoint){
   ProfBeginFunc();
-  
+
   U32 size = 0;
   if (codepoint < (1 << 7)){
     dst[0] = codepoint;
@@ -1912,7 +1912,7 @@ str_encode_utf8(U8 *dst, U32 codepoint){
     dst[0] = '#';
     size = 1;
   }
-  
+
   ProfEndFunc();
   return(size);
 }
@@ -1920,7 +1920,7 @@ str_encode_utf8(U8 *dst, U32 codepoint){
 MR4TH_SYMBOL StringDecode
 str_decode_utf16(U16 *str, U32 cap){
   ProfBeginFunc();
-  
+
   StringDecode result = {'#', 1};
   U16 x = str[0];
   if (x < 0xD800 || 0xDFFF < x){
@@ -1937,7 +1937,7 @@ str_decode_utf16(U16 *str, U32 cap){
       result.size = 2;
     }
   }
-  
+
   ProfEndFunc();
   return(result);
 }
@@ -1945,7 +1945,7 @@ str_decode_utf16(U16 *str, U32 cap){
 MR4TH_SYMBOL U32
 str_encode_utf16(U16 *dst, U32 codepoint){
   ProfBeginFunc();
-  
+
   U32 size = 0;
   if (codepoint < 0x10000){
     dst[0] = codepoint;
@@ -1957,7 +1957,7 @@ str_encode_utf16(U16 *dst, U32 codepoint){
     dst[1] = (cpj & 0x3FF) + 0xDC00;
     size = 2;
   }
-  
+
   ProfEndFunc();
   return(size);
 }
@@ -1965,9 +1965,9 @@ str_encode_utf16(U16 *dst, U32 codepoint){
 MR4TH_SYMBOL String32
 str32_from_str8(Arena *arena, String8 string){
   ProfBeginFunc();
-  
+
   U32 *memory = push_array(arena, U32, string.size + 1);
-  
+
   U32 *dptr = memory;
   U8 *ptr = string.str;
   U8 *opl = string.str + string.size;
@@ -1977,14 +1977,14 @@ str32_from_str8(Arena *arena, String8 string){
     ptr += decode.size;
     dptr += 1;
   }
-  
+
   *dptr = 0;
-  
+
   U64 alloc_count = string.size + 1;
   U64 string_count = (U64)(dptr - memory);
   U64 unused_count = alloc_count - string_count - 1;
   arena_pop_amount(arena, unused_count*sizeof(*memory));
-  
+
   String32 result = {memory, string_count};
   ProfEndFunc();
   return(result);
@@ -1993,9 +1993,9 @@ str32_from_str8(Arena *arena, String8 string){
 MR4TH_SYMBOL String8
 str8_from_str32(Arena *arena, String32 string){
   ProfBeginFunc();
-  
+
   U8 *memory = push_array(arena, U8, string.size*4 + 1);
-  
+
   U8 *dptr = memory;
   U32 *ptr = string.str;
   U32 *opl = string.str + string.size;
@@ -2004,14 +2004,14 @@ str8_from_str32(Arena *arena, String32 string){
     ptr += 1;
     dptr += size;
   }
-  
+
   *dptr = 0;
-  
+
   U64 alloc_count = string.size*4 + 1;
   U64 string_count = (U64)(dptr - memory);
   U64 unused_count = alloc_count - string_count - 1;
   arena_pop_amount(arena, unused_count*sizeof(*memory));
-  
+
   String8 result = {memory, string_count};
   ProfEndFunc();
   return(result);
@@ -2021,7 +2021,7 @@ MR4TH_SYMBOL String16
 str16_from_str8(Arena *arena, String8 string){
   ProfBeginFunc();
   U16 *memory = push_array(arena, U16, string.size*2 + 1);
-  
+
   U16 *dptr = memory;
   U8 *ptr = string.str;
   U8 *opl = string.str + string.size;
@@ -2031,14 +2031,14 @@ str16_from_str8(Arena *arena, String8 string){
     ptr += decode.size;
     dptr += enc_size;
   }
-  
+
   *dptr = 0;
-  
+
   U64 alloc_count = string.size*2 + 1;
   U64 string_count = (U64)(dptr - memory);
   U64 unused_count = alloc_count - string_count - 1;
   arena_pop_amount(arena, unused_count*sizeof(*memory));
-  
+
   String16 result = {memory, string_count};
   ProfEndFunc();
   return(result);
@@ -2048,7 +2048,7 @@ MR4TH_SYMBOL String8
 str8_from_str16(Arena *arena, String16 string){
   ProfBeginFunc();
   U8 *memory = push_array(arena, U8, string.size*3 + 1);
-  
+
   U8 *dptr = memory;
   U16 *ptr = string.str;
   U16 *opl = string.str + string.size;
@@ -2058,14 +2058,14 @@ str8_from_str16(Arena *arena, String16 string){
     ptr += decode.size;
     dptr += enc_size;
   }
-  
+
   *dptr = 0;
-  
+
   U64 alloc_count = string.size*3 + 1;
   U64 string_count = (U64)(dptr - memory);
   U64 unused_count = alloc_count - string_count - 1;
   arena_pop_amount(arena, unused_count*sizeof(*memory));
-  
+
   String8 result = {memory, string_count};
   ProfEndFunc();
   return(result);
@@ -2089,14 +2089,14 @@ str8_join_flags(Arena *arena, String8List *list){
 MR4TH_SYMBOL B32
 str8_is_u64(String8 string, U32 radix){
   Assert(2 <= radix && radix <= 16);
-  
+
   B32 result = 1;
   {
     U8 *ptr = string.str;
     U8 *opl = string.str + string.size;
     for (; ptr < opl; ptr += 1){
       U8 num = 0xFF;
-      
+
       // extract
       U8 s = *ptr - '0';
       if (s <= 9){
@@ -2114,7 +2114,7 @@ str8_is_u64(String8 string, U32 radix){
           }
         }
       }
-      
+
       // bad parse check
       if (num >= radix){
         result = 0;
@@ -2122,21 +2122,21 @@ str8_is_u64(String8 string, U32 radix){
       }
     }
   }
-  
+
   return(result);
 }
 
 MR4TH_SYMBOL U64
 u64_from_str8(String8 string, U32 radix){
   Assert(2 <= radix && radix <= 16);
-  
+
   U64 result = 0;
   {
     U8 *ptr = string.str;
     U8 *opl = string.str + string.size;
     for (; ptr < opl; ptr += 1){
       U8 num = 0xFF;
-      
+
       // extract
       U8 s = *ptr - '0';
       if (s <= 9){
@@ -2154,19 +2154,19 @@ u64_from_str8(String8 string, U32 radix){
           }
         }
       }
-      
+
       // bad parse check
       if (num >= radix){
         result = 0;
         break;
       }
-      
+
       // increment result
       result *= radix;
       result += num;
     }
   }
-  
+
   return(result);
 }
 
@@ -2174,7 +2174,7 @@ MR4TH_SYMBOL U64
 u64_from_str8_c_syntax(String8 string){
   U8 *ptr = string.str;
   U8 *opl = string.str + string.size;
-  
+
   U32 radix = 10;
   if (ptr < opl && *ptr == '0'){
     radix = 010;
@@ -2188,7 +2188,7 @@ u64_from_str8_c_syntax(String8 string){
       ptr += 1;
     }
   }
-  
+
   U64 result = u64_from_str8(str8_range(ptr, opl), radix);
   return(result);
 }
@@ -2197,7 +2197,7 @@ MR4TH_SYMBOL S64
 s64_from_str8_c_syntax(String8 string){
   U8 *ptr = string.str;
   U8 *opl = string.str + string.size;
-  
+
   B32 negative = 0;
   if (ptr < opl){
     if (*ptr == '-'){
@@ -2208,22 +2208,22 @@ s64_from_str8_c_syntax(String8 string){
       ptr += 1;
     }
   }
-  
+
   S64 result = u64_from_str8_c_syntax(str8_range(ptr, opl));
   if (negative){
     result = -result;
   }
-  
+
   return(result);
 }
 
 MR4TH_SYMBOL F64
 f64_from_str8(String8 string){
   F64 result = 0.f;
-  
+
   U8 *ptr = string.str;
   U8 *opl = string.str + string.size;
-  
+
   B32 negative = 0;
   if (ptr < opl){
     if (*ptr == '-'){
@@ -2234,7 +2234,7 @@ f64_from_str8(String8 string){
       ptr += 1;
     }
   }
-  
+
   for (; ptr < opl; ptr += 1){
     if (*ptr == '.'){
       ptr += 1;
@@ -2247,7 +2247,7 @@ f64_from_str8(String8 string){
     result *= 10.f;
     result += x;
   }
-  
+
   F32 mul = 0.1f;
   for (; ptr < opl; ptr += 1){
     U32 x = 0;
@@ -2257,11 +2257,11 @@ f64_from_str8(String8 string){
     result += x*mul;
     mul /= 10.f;
   }
-  
+
   if (negative){
     result = -result;
   }
-  
+
   return(result);
 }
 
@@ -2311,44 +2311,44 @@ MR4TH_SYMBOL CMDLN*
 cmdln_from_args(Arena *arena, String8List *args){
   CMDLN *cmdln = push_array(arena, CMDLN, 1);
   cmdln->raw = str8_list_copy(arena, args);
-  
+
   String8Node *node = cmdln->raw.first;
-  
+
   // first string is 'program'
   if (node != 0){
     cmdln->program = node->string;
     node = node->next;
   }
-  
+
   // consume string nodes
   B32 forced_input = 0;
   for (;node != 0;){
     String8 string = str8_skip_chop_whitespace(node->string);
     node = node->next;
-    
+
     // check if argument is a flag
     B32 is_flag = 0;
     if (!forced_input){
       is_flag = (string.size != 0 && string.str[0] == '-');
     }
-    
+
     // parse flag
     if (is_flag){
-      
+
       // long flag
       B32 is_long_flag = (string.size > 1 && string.str[1] == '-');
       if (is_long_flag){
-        
+
         // end 'normal' mode
         B32 double_dash = (string.size == 2);
         if (double_dash){
           forced_input = 1;
         }
-        
+
         // parse long flag
         if (!double_dash){
           String8 flag_whole = str8_skip(string, 2);
-          
+
           // parameter delimter
           U64 delim = flag_whole.size;
           for (U8 *ptr = flag_whole.str, *opl = flag_whole.str + flag_whole.size;
@@ -2358,11 +2358,11 @@ cmdln_from_args(Arena *arena, String8List *args){
               break;
             }
           }
-          
+
           // split flag at delimiter
           String8 flag_name = str8_prefix(flag_whole, delim);
           String8 flag_param = str8_skip(flag_whole, delim + 1);
-          
+
           // if have a param delimiter at end
           // then use the next argument as the flag_param
           if (delim == flag_whole.size - 1){
@@ -2371,10 +2371,10 @@ cmdln_from_args(Arena *arena, String8List *args){
               node = node->next;
             }
           }
-          
+
           // parse parameters
           CMDLN_Params *params = cmdln_params_from_string(arena, flag_param);
-          
+
           // store flag node
           {
             CMDLN_Node *cmdlnnode = push_array(arena, CMDLN_Node, 1);
@@ -2385,16 +2385,16 @@ cmdln_from_args(Arena *arena, String8List *args){
           }
         }
       }
-      
+
       // short flags
       if (!is_long_flag){
         String8 short_flags = str8_skip(string, 1);
-        
+
         U8 *flag = short_flags.str;
         U8 *flagopl = short_flags.str + short_flags.size;
         for (; flag < flagopl; flag += 1){
           U8 *flagptr = flag;
-          
+
           // check for parameters
           String8 flag_param = {0};
           if (flag + 1 < flagopl &&
@@ -2406,14 +2406,14 @@ cmdln_from_args(Arena *arena, String8List *args){
                 node = node->next;
               }
             }
-            
+
             // kill the flag loop after finding parameters
             flag = flagopl;
           }
-          
+
           // parse parameters
           CMDLN_Params *params = cmdln_params_from_string(arena, flag_param);
-          
+
           // store flag node
           {
             CMDLN_Node *cmdlnnode = push_array(arena, CMDLN_Node, 1);
@@ -2425,11 +2425,11 @@ cmdln_from_args(Arena *arena, String8List *args){
         }
       }
     }
-    
+
     // parse input
     if (!is_flag){
       String8 input_string = string;
-      
+
       // store input node
       {
         CMDLN_Node *cmdlnnode = push_array(arena, CMDLN_Node, 1);
@@ -2439,7 +2439,7 @@ cmdln_from_args(Arena *arena, String8List *args){
       }
     }
   }
-  
+
   // pointer arrays
   cmdln->inputs = push_array(arena, CMDLN_Node*, cmdln->input_count);
   cmdln->flags  = push_array(arena, CMDLN_Node*, cmdln->flag_count);
@@ -2459,7 +2459,7 @@ cmdln_from_args(Arena *arena, String8List *args){
       }
     }
   }
-  
+
   return(cmdln);
 }
 
@@ -2571,10 +2571,10 @@ cmdln_dump(Arena *arena, String8List *out, CMDLN *cmdln, U32 indent){
        node = node->next){
     str8_list_pushf(arena, out, "%N%S\n", indent + 1, node->string);
   }
-  
+
   // program
   str8_list_pushf(arena, out, "%Nprogram: %S\n", indent, cmdln->program);
-  
+
   // input nodes
   str8_list_pushf(arena, out, "%Nnodes:\n", indent);
   for (CMDLN_Node *cmdlnnode = cmdln->first;
@@ -2601,15 +2601,15 @@ MR4TH_SYMBOL void
 sort_merge(void *data_raw, U32 itemsize, U32 count,
            SORT_Compare *compare, void *udata){
   ArenaTemp scratch = arena_get_scratch(0, 0);
-  
+
   typedef struct SortRange{
     struct SortRange *next;
     U32 first;
     U32 opl;
   } SortRange;
-  
+
   U8 *data = (U8*)data_raw;
-  
+
   // identify already-sorted ranges
   SortRange *first_range = 0;
   SortRange *last_range = 0;
@@ -2624,17 +2624,17 @@ sort_merge(void *data_raw, U32 itemsize, U32 count,
         }
       }
       U64 opl = i;
-      
+
       SortRange *range = push_array(scratch.arena, SortRange, 1);
       SLLQueuePush(first_range, last_range, range);
       range->first = first;
       range->opl = opl;
     }
   }
-  
+
   // setup a swap buffer
   U8 *swap_data = push_array(scratch.arena, U8, count*itemsize);
-  
+
   // sort from src to dst by merging
   U8 *src_data = data;
   U8  *dst_data = swap_data;
@@ -2643,12 +2643,12 @@ sort_merge(void *data_raw, U32 itemsize, U32 count,
     if (first_range == last_range){
       break;
     }
-    
+
     // transfer ranges to a stack and reset the queue
     SortRange *range_stack = first_range;
     first_range = 0;
     last_range = 0;
-    
+
     // merge neighboring ranges
     for (;;){
       // range popping
@@ -2666,16 +2666,16 @@ sort_merge(void *data_raw, U32 itemsize, U32 count,
         break;
       }
       SLLStackPop(range_stack);
-      
+
       Assert(range1->opl == range2->first);
-      
+
       // array merge
       U64 i      = range1->first;
       U64 j1     = range1->first;
       U64 j1_opl = range1->opl;
       U64 j2     = range2->first;
       U64 j2_opl = range2->opl;
-      
+
       for (;j1 < j1_opl && j2 < j2_opl;){
         U8* o1 = src_data + j1*itemsize;
         U8* o2 = src_data + j2*itemsize;
@@ -2699,21 +2699,21 @@ sort_merge(void *data_raw, U32 itemsize, U32 count,
         j2 += 1;
         i += 1;
       }
-      
+
       // combine into a single range on range queue
       range1->opl = range2->opl;
       SLLQueuePush(first_range, last_range, range1);
     }
-    
+
     // after a pass swap src & dst
     Swap(U8*, src_data, dst_data);
   }
-  
+
   // transfer data if it's in the wrong buffer
   if (src_data != data){
     MemoryCopy(data, src_data, itemsize*count);
   }
-  
+
   arena_release_scratch(&scratch);
 }
 
@@ -2733,7 +2733,7 @@ log_accum_begin(LOG_LogToProc *proc, void *uptr){
     vars = log_vars = push_array(arena, LOG_ThreadVars, 1);
     vars->arena = arena;
   }
-  
+
   U64 pos = arena_current_pos(vars->arena);
   LOG_Node *node = push_array(vars->arena, LOG_Node, 1);
   node->pos = pos;
@@ -2823,7 +2823,7 @@ er_accum_begin(void){
     vars = er_vars = push_array(arena, ER_ThreadVars, 1);
     vars->arena = arena;
   }
-  
+
   U64 pos = arena_current_pos(vars->arena);
   ER_Node *node = push_array(vars->arena, ER_Node, 1);
   if (node == 0){
@@ -2997,26 +2997,26 @@ MR4TH_SYM_COMPTIME String8List w32_cmd_line = {0};
 MR4TH_SYMBOL void
 os_main_init(int argc, char **argv){
   ProfBeginFunc();
-  
+
   // setup precision time
   LARGE_INTEGER perf_freq = {0};
   if (QueryPerformanceFrequency(&perf_freq)){
     w32_ticks_per_second = ((U64)perf_freq.HighPart << 32) | perf_freq.LowPart;
   }
   timeBeginPeriod(1);
-  
+
   // arena
   w32_perm_arena = arena_alloc();
-  
+
   // command line arguments
   for (int i = 0; i < argc; i += 1){
     String8 arg = str8_cstring((U8*)argv[i]);
     str8_list_push(w32_perm_arena, &w32_cmd_line, arg);
   }
-  
+
   // paths
   ArenaTemp scratch = arena_get_scratch(0, 0);
-  
+
   // binary path
   {
     DWORD cap = 2048;
@@ -3034,12 +3034,12 @@ os_main_init(int argc, char **argv){
         break;
       }
     }
-    
+
     String8 full_path = str8_from_str16(scratch.arena, str16(buffer, size));
     String8 binary_path = str8_chop_last_slash(full_path);
     w32_binary_path = str8_push_copy(w32_perm_arena, binary_path);
   }
-  
+
   // user data
   {
     HANDLE token = GetCurrentProcessToken();
@@ -3052,7 +3052,7 @@ os_main_init(int argc, char **argv){
         buffer = 0;
       }
     }
-    
+
     if (buffer != 0){
       // the docs make it sound like we can only count on
       // cap getting the size on failure; so we're just going to cstring
@@ -3060,7 +3060,7 @@ os_main_init(int argc, char **argv){
       w32_user_path = str8_from_str16(w32_perm_arena, str16_cstring(buffer));
     }
   }
-  
+
   // temp data
   {
     DWORD cap = 2048;
@@ -3071,15 +3071,15 @@ os_main_init(int argc, char **argv){
       buffer = push_array(scratch.arena, U16, size + 1);
       size = GetTempPathW(size + 1, (WCHAR*)buffer);
     }
-    
+
     // size - 1, because this particular string function
     // in the Win32 API is different from the others and it includes
     // the trailing backslash. We want consistency, so the "- 1" removes it.
     w32_temp_path = str8_from_str16(w32_perm_arena, str16(buffer, size - 1));
   }
-  
+
   arena_release_scratch(&scratch);
-  
+
   ProfEndFunc();
 }
 
@@ -3104,9 +3104,9 @@ os_memory_reserve(U64 size){
   return(result);
 }
 
-MR4TH_SYMBOL void*
+MR4TH_SYMBOL B32
 os_memory_commit(void *ptr, U64 size){
-  void *result = (VirtualAlloc(ptr, size, MEM_COMMIT, PAGE_READWRITE) != 0);
+  B32 result = (VirtualAlloc(ptr, size, MEM_COMMIT, PAGE_READWRITE) != 0);
   return(result);
 }
 
@@ -3126,7 +3126,7 @@ os_memory_release(void *ptr, U64 size){
 MR4TH_SYMBOL String8
 os_file_read(Arena *arena, String8 file_name){
   ProfBeginFunc();
-  
+
   // get handle
   ArenaTemp scratch = arena_get_scratch(&arena, 1);
   String16 file_name16 = str16_from_str8(scratch.arena, file_name);
@@ -3134,18 +3134,18 @@ os_file_read(Arena *arena, String8 file_name){
                             GENERIC_READ, 0, 0,
                             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
                             0);
-  
+
   String8 result = {0};
   if (file != INVALID_HANDLE_VALUE){
     // get size
     DWORD hi_size = 0;
     DWORD lo_size = GetFileSize(file, &hi_size);
     U64 total_size = (((U64)hi_size) << 32) | (U64)lo_size;
-    
+
     // allocate buffer
     ArenaTemp restore_point = arena_begin_temp(arena);
     U8 *buffer = push_array_no_zero(arena, U8, total_size + 1);
-    
+
     // read
     U8 *ptr = buffer;
     U8 *opl = buffer + total_size;
@@ -3163,7 +3163,7 @@ os_file_read(Arena *arena, String8 file_name){
       }
       ptr += actual_read;
     }
-    
+
     // set result or reset memory
     if (success){
       buffer[total_size] = 0;
@@ -3173,12 +3173,12 @@ os_file_read(Arena *arena, String8 file_name){
     else{
       arena_end_temp(&restore_point);
     }
-    
+
     CloseHandle(file);
   }
-  
+
   arena_release_scratch(&scratch);
-  
+
   ProfEndFunc();
   return(result);
 }
@@ -3186,7 +3186,7 @@ os_file_read(Arena *arena, String8 file_name){
 MR4TH_SYMBOL B32
 os_file_write_list(String8 file_name, String8Node *first_node){
   ProfBeginFunc();
-  
+
   // get handle
   ArenaTemp scratch = arena_get_scratch(0, 0);
   String16 file_name16 = str16_from_str8(scratch.arena, file_name);
@@ -3194,11 +3194,11 @@ os_file_write_list(String8 file_name, String8Node *first_node){
                             GENERIC_WRITE, 0, 0,
                             CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL,
                             0);
-  
+
   B32 result = 0;
   if (file != INVALID_HANDLE_VALUE){
     result = 1;
-    
+
     for (String8Node *node = first_node;
          node != 0;
          node = node->next){
@@ -3219,12 +3219,12 @@ os_file_write_list(String8 file_name, String8Node *first_node){
       }
     }
     dblbreak:;
-    
+
     CloseHandle(file);
   }
-  
+
   arena_release_scratch(&scratch);
-  
+
   ProfEndFunc();
   return(result);
 }
@@ -3232,11 +3232,11 @@ os_file_write_list(String8 file_name, String8Node *first_node){
 MR4TH_SYMBOL FileProperties
 os_file_properties(String8 file_name){
   ProfBeginFunc();
-  
+
   // convert name
   ArenaTemp scratch = arena_get_scratch(0, 0);
   String16 file_name16 = str16_from_str8(scratch.arena, file_name);
-  
+
   // get attribs and convert to properties
   FileProperties result = {0};
   WIN32_FILE_ATTRIBUTE_DATA attribs = {0};
@@ -3248,9 +3248,9 @@ os_file_properties(String8 file_name){
     result.modify_time = w32_dense_time_from_file_time(&attribs.ftLastWriteTime);
     result.access = w32_access_from_attributes(attribs.dwFileAttributes);
   }
-  
+
   arena_release_scratch(&scratch);
-  
+
   ProfEndFunc();
   return(result);
 }
@@ -3258,14 +3258,14 @@ os_file_properties(String8 file_name){
 MR4TH_SYMBOL B32
 os_file_delete(String8 file_name){
   ProfBeginFunc();
-  
+
   // convert name
   ArenaTemp scratch = arena_get_scratch(0, 0);
   String16 file_name16 = str16_from_str8(scratch.arena, file_name);
   // delete file
   B32 result = DeleteFileW((WCHAR*)file_name16.str);
   arena_release_scratch(&scratch);
-  
+
   ProfEndFunc();
   return(result);
 }
@@ -3273,7 +3273,7 @@ os_file_delete(String8 file_name){
 MR4TH_SYMBOL B32
 os_file_rename(String8 og_name, String8 new_name){
   ProfBeginFunc();
-  
+
   // convert name
   ArenaTemp scratch = arena_get_scratch(0, 0);
   String16 og_name16 = str16_from_str8(scratch.arena, og_name);
@@ -3281,7 +3281,7 @@ os_file_rename(String8 og_name, String8 new_name){
   // rename file
   B32 result = MoveFileW((WCHAR*)og_name16.str, (WCHAR*)new_name16.str);
   arena_release_scratch(&scratch);
-  
+
   ProfEndFunc();
   return(result);
 }
@@ -3289,14 +3289,14 @@ os_file_rename(String8 og_name, String8 new_name){
 MR4TH_SYMBOL B32
 os_file_make_directory(String8 path){
   ProfBeginFunc();
-  
+
   // convert name
   ArenaTemp scratch = arena_get_scratch(0, 0);
   String16 path16 = str16_from_str8(scratch.arena, path);
   // make directory
   B32 result = CreateDirectoryW((WCHAR*)path16.str, 0);
   arena_release_scratch(&scratch);
-  
+
   ProfEndFunc();
   return(result);
 }
@@ -3304,14 +3304,14 @@ os_file_make_directory(String8 path){
 MR4TH_SYMBOL B32
 os_file_delete_directory(String8 path){
   ProfBeginFunc();
-  
+
   // convert name
   ArenaTemp scratch = arena_get_scratch(0, 0);
   String16 path16 = str16_from_str8(scratch.arena, path);
   // make directory
   B32 result = RemoveDirectoryW((WCHAR*)path16.str);
   arena_release_scratch(&scratch);
-  
+
   ProfEndFunc();
   return(result);
 }
@@ -3319,7 +3319,7 @@ os_file_delete_directory(String8 path){
 MR4TH_SYMBOL OS_FileIter
 os_file_iter_init(String8 path){
   ProfBeginFunc();
-  
+
   // convert name
   String8Node nodes[2];
   String8List list = {0};
@@ -3329,13 +3329,13 @@ os_file_iter_init(String8 path){
   String8 path_star = str8_join(scratch.arena, &list, 0);
   // TODO(allen): Better unicode conversions here
   String16 path16 = str16_from_str8(scratch.arena, path_star);
-  
+
   // store into iter
   OS_FileIter result = {0};
   W32_FileIter *w32_iter = (W32_FileIter*)&result;
   w32_iter->handle = FindFirstFileW((WCHAR*)path16.str, &w32_iter->find_data);
   arena_release_scratch(&scratch);
-  
+
   ProfEndFunc();
   return(result);
 }
@@ -3344,9 +3344,9 @@ MR4TH_SYMBOL B32
 os_file_iter_next(Arena *arena, OS_FileIter *iter,
                   String8 *name, FileProperties *props){
   ProfBeginFunc();
-  
+
   B32 result = 0;
-  
+
   W32_FileIter *w32_iter = (W32_FileIter*)iter;
   if (w32_iter->handle != 0 &&
       w32_iter->handle != INVALID_HANDLE_VALUE){
@@ -3356,19 +3356,19 @@ os_file_iter_next(Arena *arena, OS_FileIter *iter,
       B32 is_dot = (file_name[0] == '.' && file_name[1] == 0);
       B32 is_dotdot = (file_name[0] == '.' && file_name[1] == '.' &&
                        file_name[2] == 0);
-      
+
       // setup to emit
       B32 emit = (!is_dot && !is_dotdot);
       WIN32_FIND_DATAW data = {0};
       if (emit){
         MemoryCopyStruct(&data, &w32_iter->find_data);
       }
-      
+
       // increment the iterator
       if (!FindNextFileW(w32_iter->handle, &w32_iter->find_data)){
         w32_iter->done = 1;
       }
-      
+
       // do the emit if we saved one earlier
       if (emit){
         *name = str8_from_str16(arena, str16_cstring((U16*)data.cFileName));
@@ -3382,7 +3382,7 @@ os_file_iter_next(Arena *arena, OS_FileIter *iter,
       }
     }
   }
-  
+
   ProfEndFunc();
   return(result);
 }
@@ -3390,22 +3390,22 @@ os_file_iter_next(Arena *arena, OS_FileIter *iter,
 MR4TH_SYMBOL void
 os_file_iter_end(OS_FileIter *iter){
   ProfBeginFunc();
-  
+
   W32_FileIter *w32_iter = (W32_FileIter*)iter;
   if (w32_iter->handle != 0 &&
       w32_iter->handle != INVALID_HANDLE_VALUE){
     FindClose(w32_iter->handle);
   }
-  
+
   ProfEndFunc();
 }
 
 MR4TH_SYMBOL String8
 os_file_path(Arena *arena, OS_SystemPath path){
   ProfBeginFunc();
-  
+
   String8 result = {0};
-  
+
   switch (path){
     case OS_SystemPath_CurrentDirectory:
     {
@@ -3421,23 +3421,23 @@ os_file_path(Arena *arena, OS_SystemPath path){
       result = str8_from_str16(arena, str16(buffer, size));
       arena_release_scratch(&scratch);
     }break;
-    
+
     case OS_SystemPath_Binary:
     {
       result = str8_push_copy(arena, w32_binary_path);
     }break;
-    
+
     case OS_SystemPath_UserData:
     {
       result = str8_push_copy(arena, w32_user_path);
     }break;
-    
+
     case OS_SystemPath_TempData:
     {
       result = str8_push_copy(arena, w32_temp_path);
     }break;
   }
-  
+
   ProfEndFunc();
   return(result);
 }
@@ -3445,10 +3445,10 @@ os_file_path(Arena *arena, OS_SystemPath path){
 MR4TH_SYMBOL void
 os_set_current_directory(String8 path){
   ArenaTemp scratch = arena_get_scratch(0, 0);
-  
+
   String16 path16 = str16_from_str8(scratch.arena, path);
   SetCurrentDirectoryW((WCHAR*)path16.str);
-  
+
   arena_release_scratch(&scratch);
 }
 
@@ -3724,10 +3724,9 @@ os_memory_reserve(U64 size){
   return result;
 }
 
-MR4TH_SYMBOL void*
+MR4TH_SYMBOL B32
 os_memory_commit(void *ptr, U64 size){
-  // NOTE: We return the ptr to mimic what VirtualAlloc does.
-  void *result = ptr;
+  B32 result = (ptr != 0);
   // TODO: Should we call madvise here to let the OS know we are about to use the memory?
   return result;
 }
@@ -3912,19 +3911,19 @@ static void stbsp__lead_sign(stbsp__uint32 fl, char *sign)
 static STBSP__ASAN stbsp__uint32 stbsp__strlen_limited(char const *s, stbsp__uint32 limit)
 {
   char const * sn = s;
-  
+
   // get up to 4-byte alignment
   for (;;) {
     if (((stbsp__uintptr)sn & 3) == 0)
       break;
-    
+
     if (!limit || *sn == 0)
       return (stbsp__uint32)(sn - s);
-    
+
     ++sn;
     --limit;
   }
-  
+
   // scan over 4 bytes at a time to find terminating 0
   // this will intentionally scan up to 3 bytes past the end of buffers,
   // but becase it works 4B aligned, it will never cross page boundaries
@@ -3935,17 +3934,17 @@ static STBSP__ASAN stbsp__uint32 stbsp__strlen_limited(char const *s, stbsp__uin
     // bit hack to find if there's a 0 byte in there
     if ((v - 0x01010101) & (~v) & 0x80808080UL)
       break;
-    
+
     sn += 4;
     limit -= 4;
   }
-  
+
   // handle the last few characters to find actual size
   while (limit && *sn) {
     ++sn;
     --limit;
   }
-  
+
   return (stbsp__uint32)(sn - s);
 }
 
@@ -3961,13 +3960,13 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
   char *bf;
   char const *f;
   int tlen = 0;
-  
+
   bf = buf;
   f = fmt;
   for (;;) {
     stbsp__int32 fw, pr, tz;
     stbsp__uint32 fl;
-    
+
     // macros for the callback buffer stuff
 #define stbsp__chk_cb_bufL(bytes)                        \
 {                                                     \
@@ -3995,7 +3994,7 @@ int lg = STB_SPRINTF_MIN - (int)(bf - buf); \
 if (cl > lg)                                \
 cl = lg;                                 \
 }
-    
+
     // fast copy everything up to the next % (or end of string)
     for (;;) {
       while (((stbsp__uintptr)f) & 3) {
@@ -4039,15 +4038,15 @@ cl = lg;                                 \
       }
     }
     scandd:
-    
+
     ++f;
-    
+
     // ok, we have a percent, read the modifiers first
     fw = 0;
     pr = -1;
     fl = 0;
     tz = 0;
-    
+
     // flags
     for (;;) {
       switch (f[0]) {
@@ -4090,7 +4089,7 @@ cl = lg;                                 \
       }
     }
     flags_done:
-    
+
     // get the field width
     if (f[0] == '*') {
       fw = va_arg(va, stbsp__uint32);
@@ -4115,7 +4114,7 @@ cl = lg;                                 \
         }
       }
     }
-    
+
     // handle integer size overrides
     switch (f[0]) {
       // are we halfwidth?
@@ -4162,7 +4161,7 @@ cl = lg;                                 \
       break;
       default: break;
     }
-    
+
     // handle each replacement
     switch (f[0]) {
 #define STBSP__NUMSZ 512 // big enough for e308 (with commas) or e-307
@@ -4176,7 +4175,7 @@ cl = lg;                                 \
       double fv;
       stbsp__int32 dp;
       char const *sn;
-      
+
       // NOTE(allen): MODIFICATION
       // %S prints str (parameter: String8 str)
       case 'S':
@@ -4191,7 +4190,7 @@ cl = lg;                                 \
         cs = 0;
         goto scopy;
       }
-      
+
       // NOTE(allen): MODIFICATION
       // %N prints n spaces (parameter: int n)
       case 'N':
@@ -4210,7 +4209,7 @@ cl = lg;                                 \
         cs = 0;
         goto scopy;
       }
-      
+
       case 's':
       {
         // get the string
@@ -4228,7 +4227,7 @@ cl = lg;                                 \
         // copy the string in
         goto scopy;
       }
-      
+
       case 'c': // char
       {
         // get the character
@@ -4242,13 +4241,13 @@ cl = lg;                                 \
         cs = 0;
         goto scopy;
       }
-      
+
       case 'n': // weird write-bytes specifier
       {
         int *d = va_arg(va, int *);
         *d = tlen + (int)(bf - buf);
       } break;
-      
+
       case 'A': // hex float
       case 'a': // hex float
       {
@@ -4259,11 +4258,11 @@ cl = lg;                                 \
         // read the double into a string
         if (stbsp__real_to_parts((stbsp__int64 *)&n64, &dp, fv))
           fl |= STBSP__NEGATIVE;
-        
+
         s = num + 64;
-        
+
         stbsp__lead_sign(fl, lead);
-        
+
         if (dp == -1023)
           dp = (n64) ? -1022 : 0;
         else
@@ -4272,7 +4271,7 @@ cl = lg;                                 \
         if (pr < 15)
           n64 += ((((stbsp__uint64)8) << 56) >> (pr * 4));
         // add leading chars
-        
+
 #ifdef STB_SPRINTF_MSVC_MODE
         *s++ = '0';
         *s++ = 'x';
@@ -4286,7 +4285,7 @@ cl = lg;                                 \
         if (pr)
           *s++ = stbsp__period;
         sn = s;
-        
+
         // print the bits
         n = pr;
         if (n > 13)
@@ -4298,7 +4297,7 @@ cl = lg;                                 \
           *s++ = h[(n64 >> 60) & 15];
           n64 <<= 4;
         }
-        
+
         // print the expo
         tail[1] = h[17];
         if (dp < 0) {
@@ -4315,14 +4314,14 @@ cl = lg;                                 \
           --n;
           dp /= 10;
         }
-        
+
         dp = (int)(s - sn);
         l = (int)(s - (num + 64));
         s = num + 64;
         cs = 1 + (3 << 24);
         goto scopy;
       }
-      
+
       case 'G': // float
       case 'g': // float
       {
@@ -4335,7 +4334,7 @@ cl = lg;                                 \
         // read the double into a string
         if (stbsp__real_to_str(&sn, &l, num, &dp, fv, (pr - 1) | 0x80000000))
           fl |= STBSP__NEGATIVE;
-        
+
         // clamp the precision and delete extra zeros after clamp
         n = pr;
         if (l > (stbsp__uint32)pr)
@@ -4344,7 +4343,7 @@ cl = lg;                                 \
           --pr;
           --l;
         }
-        
+
         // should we use %e
         if ((dp <= -4) || (dp > (stbsp__int32)n)) {
           if (pr > (stbsp__int32)l)
@@ -4361,7 +4360,7 @@ cl = lg;                                 \
         }
         goto dofloatfromg;
       }
-      
+
       case 'E': // float
       case 'e': // float
       {
@@ -4374,7 +4373,7 @@ cl = lg;                                 \
           fl |= STBSP__NEGATIVE;
         goto doexpfromg;
       }
-      
+
       doexpfromg:
       {
         tail[0] = 0;
@@ -4388,10 +4387,10 @@ cl = lg;                                 \
         s = num + 64;
         // handle leading chars
         *s++ = sn[0];
-        
+
         if (pr)
           *s++ = stbsp__period;
-        
+
         // handle after decimal
         if ((l - 1) > (stbsp__uint32)pr)
           l = pr + 1;
@@ -4424,13 +4423,13 @@ cl = lg;                                 \
         cs = 1 + (3 << 24); // how many tens
         goto flt_lead;
       }
-      
+
       case 'f': // float
       {
         fv = va_arg(va, double);
         goto doafloat;
       }
-      
+
       doafloat:
       {
         // do kilos
@@ -4449,7 +4448,7 @@ cl = lg;                                 \
         if (stbsp__real_to_str(&sn, &l, num, &dp, fv, pr))
           fl |= STBSP__NEGATIVE;
       }
-      
+
       dofloatfromg:
       {
         tail[0] = 0;
@@ -4461,7 +4460,7 @@ cl = lg;                                 \
           goto scopy;
         }
         s = num + 64;
-        
+
         // handle the three decimal varieties
         if (dp <= 0) {
           stbsp__int32 i;
@@ -4570,7 +4569,7 @@ cl = lg;                                 \
           }
         }
         pr = 0;
-        
+
         // handle k,m,g,t
         if (fl & STBSP__MEMORY_SIZES) {
           tail[0] = 0;
@@ -4586,7 +4585,7 @@ cl = lg;                                 \
         }
         goto flt_lead;
       }
-      
+
       flt_lead:
       {
         // get the length that we copied
@@ -4594,7 +4593,7 @@ cl = lg;                                 \
         s = num + 64;
         goto scopy;
       }
-      
+
       case 'B': // upper binary
       case 'b': // lower binary
       {
@@ -4608,7 +4607,7 @@ cl = lg;                                 \
         l = (8 << 4) | (1 << 8);
         goto radixnum;
       }
-      
+
       case 'o': // octal
       {
         h = hexu;
@@ -4620,7 +4619,7 @@ cl = lg;                                 \
         l = (3 << 4) | (3 << 8);
         goto radixnum;
       }
-      
+
       case 'p': // pointer
       {
         fl |= (sizeof(void *) == 8) ? STBSP__INTMAX : 0;
@@ -4628,7 +4627,7 @@ cl = lg;                                 \
         fl &= ~STBSP__LEADINGZERO; // 'p' only prints the pointer with zeros
         // fall through - to X
       }
-      
+
       case 'X': // upper hex
       case 'x': // lower hex
       {
@@ -4642,7 +4641,7 @@ cl = lg;                                 \
         }
         goto radixnum;
       }
-      
+
       radixnum:
       {
         // get the number
@@ -4650,7 +4649,7 @@ cl = lg;                                 \
           n64 = va_arg(va, stbsp__uint64);
         else
           n64 = va_arg(va, stbsp__uint32);
-        
+
         s = num + STBSP__NUMSZ;
         dp = 0;
         // clear tail, and clear leading if value is zero
@@ -4684,7 +4683,7 @@ cl = lg;                                 \
         // copy it
         goto scopy;
       }
-      
+
       case 'u': // unsigned
       case 'i':
       case 'd': // integer
@@ -4705,7 +4704,7 @@ cl = lg;                                 \
             fl |= STBSP__NEGATIVE;
           }
         }
-        
+
         if (fl & STBSP__MEMORY_SIZES) {
           if (n64 < 1024)
             pr = 0;
@@ -4714,11 +4713,11 @@ cl = lg;                                 \
           fv = (double)(stbsp__int64)n64;
           goto doafloat;
         }
-        
+
         // convert to string
         s = num + STBSP__NUMSZ;
         l = 0;
-        
+
         for (;;) {
           // do in 32-bit chunks (avoid lots of 64-bit divides even with constant denominators)
           char *o = s - 8;
@@ -4760,10 +4759,10 @@ cl = lg;                                 \
             *--s = '0';
           }
         }
-        
+
         tail[0] = 0;
         stbsp__lead_sign(fl, lead);
-        
+
         // get the length that we copied
         l = (stbsp__uint32)((num + STBSP__NUMSZ) - s);
         if (l == 0) {
@@ -4775,7 +4774,7 @@ cl = lg;                                 \
           pr = 0;
         goto scopy;
       }
-      
+
       default: // unknown, just copy code
       {
         s = num + STBSP__NUMSZ - 1;
@@ -4789,7 +4788,7 @@ cl = lg;                                 \
         cs = 0;
         goto scopy;
       }
-      
+
       scopy:
       // get fw=leading/trailing space, pr=leading zeros
       if (pr < (stbsp__int32)l)
@@ -4799,7 +4798,7 @@ cl = lg;                                 \
         fw = n;
       fw -= n;
       pr -= l;
-      
+
       // handle right justify and leading zeros
       if ((fl & STBSP__LEFTJUST) == 0) {
         if (fl & STBSP__LEADINGZERO) // if leading zeros, everything is in pr
@@ -4810,12 +4809,12 @@ cl = lg;                                 \
           fl &= ~STBSP__TRIPLET_COMMA; // if no leading zeros, then no commas
         }
       }
-      
+
       // copy the spaces and/or zeros
       if (fw + pr) {
         stbsp__int32 i;
         stbsp__uint32 c;
-        
+
         // copy leading spaces (or when doing %8.4d stuff)
         if ((fl & STBSP__LEFTJUST) == 0)
           while (fw > 0) {
@@ -4838,7 +4837,7 @@ cl = lg;                                 \
           }
           stbsp__chk_cb_buf(1);
         }
-        
+
         // copy leader
         sn = lead + 1;
         while (lead[0]) {
@@ -4850,7 +4849,7 @@ cl = lg;                                 \
           }
           stbsp__chk_cb_buf(1);
         }
-        
+
         // copy leading zeros
         c = cs >> 24;
         cs &= 0xffffff;
@@ -4882,7 +4881,7 @@ cl = lg;                                 \
           stbsp__chk_cb_buf(1);
         }
       }
-      
+
       // copy leader if there is still one
       sn = lead + 1;
       while (lead[0]) {
@@ -4895,7 +4894,7 @@ cl = lg;                                 \
         }
         stbsp__chk_cb_buf(1);
       }
-      
+
       // copy the string
       n = l;
       while (n) {
@@ -4914,7 +4913,7 @@ cl = lg;                                 \
         }
         stbsp__chk_cb_buf(1);
       }
-      
+
       // copy trailing zeros
       while (tz) {
         stbsp__int32 i;
@@ -4937,7 +4936,7 @@ cl = lg;                                 \
         }
         stbsp__chk_cb_buf(1);
       }
-      
+
       // copy tail if there is one
       sn = tail + 1;
       while (tail[0]) {
@@ -4950,7 +4949,7 @@ cl = lg;                                 \
         }
         stbsp__chk_cb_buf(1);
       }
-      
+
       // handle the left justify
       if (fl & STBSP__LEFTJUST)
         if (fw > 0) {
@@ -4979,12 +4978,12 @@ cl = lg;                                 \
     ++f;
   }
   endfmt:
-  
+
   if (!callback)
     *bf = 0;
   else
     stbsp__flush_cb();
-  
+
   done:
   return tlen + (int)(bf - buf);
 }
@@ -5029,10 +5028,10 @@ static char *stbsp__clamp_callback(const char *buf, void *user, int len)
 {
   stbsp__context *c = (stbsp__context *)user;
   c->length += len;
-  
+
   if (len > c->count)
     len = c->count;
-  
+
   if (len) {
     if (buf != c->buf) {
       const char *s, *se;
@@ -5047,7 +5046,7 @@ static char *stbsp__clamp_callback(const char *buf, void *user, int len)
     c->buf += len;
     c->count -= len;
   }
-  
+
   if (c->count <= 0)
     return c->tmp;
   return (c->count >= STB_SPRINTF_MIN) ? c->buf : c->tmp; // go direct into buffer if you can
@@ -5057,7 +5056,7 @@ static char * stbsp__count_clamp_callback( const char * buf, void * user, int le
 {
   stbsp__context * c = (stbsp__context*)user;
   (void) sizeof(buf);
-  
+
   c->length += len;
   return c->tmp; // go direct into buffer if you can
 }
@@ -5065,30 +5064,30 @@ static char * stbsp__count_clamp_callback( const char * buf, void * user, int le
 STBSP__PUBLICDEF int STB_SPRINTF_DECORATE( vsnprintf )( char * buf, int count, char const * fmt, va_list va )
 {
   stbsp__context c;
-  
+
   if ( (count == 0) && !buf )
   {
     c.length = 0;
-    
+
     STB_SPRINTF_DECORATE( vsprintfcb )( stbsp__count_clamp_callback, &c, c.tmp, fmt, va );
   }
   else
   {
     int l;
-    
+
     c.buf = buf;
     c.count = count;
     c.length = 0;
-    
+
     STB_SPRINTF_DECORATE( vsprintfcb )( stbsp__clamp_callback, &c, stbsp__clamp_callback(0,&c,0), fmt, va );
-    
+
     // zero-terminate
     l = (int)( c.buf - buf );
     if ( l >= count ) // should never be greater, only equal (or less) than count
       l = count - 1;
     buf[l] = 0;
   }
-  
+
   return c.length;
 }
 
@@ -5097,10 +5096,10 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(snprintf)(char *buf, int count, char c
   int result;
   va_list va;
   va_start(va, fmt);
-  
+
   result = STB_SPRINTF_DECORATE(vsnprintf)(buf, count, fmt, va);
   va_end(va);
-  
+
   return result;
 }
 
@@ -5125,15 +5124,15 @@ static stbsp__int32 stbsp__real_to_parts(stbsp__int64 *bits, stbsp__int32 *expo,
 {
   double d;
   stbsp__int64 b = 0;
-  
+
   // load value and round at the frac_digits
   d = value;
-  
+
   STBSP__COPYFP(b, d);
-  
+
   *bits = b & ((((stbsp__uint64)1) << 52) - 1);
   *expo = (stbsp__int32)(((b >> 52) & 2047) - 1023);
-  
+
   return (stbsp__int32)((stbsp__uint64) b >> 63);
 }
 
@@ -5276,7 +5275,7 @@ static void stbsp__raise_to_power10(double *ohi, double *olo, double d, stbsp__i
   } else {
     stbsp__int32 e, et, eb;
     double p2h, p2l;
-    
+
     e = power;
     if (power < 0)
       e = -e;
@@ -5284,7 +5283,7 @@ static void stbsp__raise_to_power10(double *ohi, double *olo, double d, stbsp__i
     if (et > 13)
       et = 13;
     eb = e - (et * 23);
-    
+
     ph = d;
     pl = 0.0;
     if (power < 0) {
@@ -5340,14 +5339,14 @@ static stbsp__int32 stbsp__real_to_str(char const **start, stbsp__uint32 *len, c
   double d;
   stbsp__int64 bits = 0;
   stbsp__int32 expo, e, ng, tens;
-  
+
   d = value;
   STBSP__COPYFP(bits, d);
   expo = (stbsp__int32)((bits >> 52) & 2047);
   ng = (stbsp__int32)((stbsp__uint64) bits >> 63);
   if (ng)
     d = -d;
-  
+
   if (expo == 2047) // is nan or inf?
   {
     *start = (bits & ((((stbsp__uint64)1) << 52) - 1)) ? "NaN" : "Inf";
@@ -5355,7 +5354,7 @@ static stbsp__int32 stbsp__real_to_str(char const **start, stbsp__uint32 *len, c
     *len = 3;
     return ng;
   }
-  
+
   if (expo == 0) // is zero or denormal
   {
     if (((stbsp__uint64) bits << 1) == 0) // do zero
@@ -5375,26 +5374,26 @@ static stbsp__int32 stbsp__real_to_str(char const **start, stbsp__uint32 *len, c
       }
     }
   }
-  
+
   // find the decimal exponent as well as the decimal bits of the value
   {
     double ph, pl;
-    
+
     // log10 estimate - very specifically tweaked to hit or undershoot by no more than 1 of log10 of all expos 1..2046
     tens = expo - 1023;
     tens = (tens < 0) ? ((tens * 617) / 2048) : (((tens * 1233) / 4096) + 1);
-    
+
     // move the significant bits into position and stick them into an int
     stbsp__raise_to_power10(&ph, &pl, d, 18 - tens);
-    
+
     // get full as much precision from double-double as possible
     stbsp__ddtoS64(bits, ph, pl);
-    
+
     // check if we undershot
     if (((stbsp__uint64)bits) >= stbsp__tento19th)
       ++tens;
   }
-  
+
   // now do the rounding in integer land
   frac_digits = (frac_digits & 0x80000000) ? ((frac_digits & 0x7ffffff) + 1) : (tens + frac_digits);
   if ((frac_digits < 24)) {
@@ -5420,7 +5419,7 @@ static stbsp__int32 stbsp__real_to_str(char const **start, stbsp__uint32 *len, c
     }
     noround:;
   }
-  
+
   // kill long trailing runs of zeros
   if (bits) {
     stbsp__uint32 n;
@@ -5437,7 +5436,7 @@ static stbsp__int32 stbsp__real_to_str(char const **start, stbsp__uint32 *len, c
     bits = n;
     donez:;
   }
-  
+
   // convert to string
   out += 64;
   e = 0;
@@ -5470,7 +5469,7 @@ static stbsp__int32 stbsp__real_to_str(char const **start, stbsp__uint32 *len, c
       ++e;
     }
   }
-  
+
   *decimal_pos = tens;
   *start = out;
   *len = e;
@@ -5502,7 +5501,7 @@ static stbsp__int32 stbsp__real_to_str(char const **start, stbsp__uint32 *len, c
 #if !MR4TH_DEFINE_RUNTIME_SYMBOLS
 
 MR4TH_BEFORE_MAIN(base_before_main){
-  
+
   // load module
 #if OS_WINDOWS
   HMODULE module = LoadLibraryA("mr4th_base.dll");
@@ -5516,9 +5515,9 @@ MR4TH_BEFORE_MAIN(base_before_main){
 #else
 # error Missing runtime symbol loading for this OS
 #endif
-  
+
   if (good){
-    
+
     // define (OS_)LOAD_SYMBOL
 #if OS_WINDOWS
 # define OS_LOAD_SYMBOL(n) *(VoidFunc**)(&n) = (VoidFunc*)GetProcAddress(module, #n)
@@ -5529,29 +5528,29 @@ MR4TH_BEFORE_MAIN(base_before_main){
 #else
 # error Missing OS_LOAD_SYMBOL macro for runtime symbol loading on this OS
 #endif
-    
+
 #define LOAD_SYMBOL(n) (OS_LOAD_SYMBOL(n), ((n)==0)?(good=0):1)
-    
+
     // Load: Arena
     LOAD_SYMBOL(arena_get_scratch);
-    
+
     // Load: Log
     LOAD_SYMBOL(log_accum_begin);
     LOAD_SYMBOL(log_gathering);
     LOAD_SYMBOL(log_emit);
     LOAD_SYMBOL(log_emitf);
     LOAD_SYMBOL(log_accum_end);
-    
+
     // Load: Errors
     LOAD_SYMBOL(er_accum_begin);
     LOAD_SYMBOL(er_emit);
     LOAD_SYMBOL(er_emitf);
     LOAD_SYMBOL(er_accum_end);
-    
+
 #undef OS_LOAD_SYMBOL
 #undef LOAD_SYMBOL
   }
-  
+
   // TODO(allen): if (!good) OS specific fatal error message handling
 }
 
