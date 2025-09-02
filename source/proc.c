@@ -10,6 +10,7 @@
      === Deleting Wires ===
      [x] BUG: Connect two processes with two wires. Delete the last wire. The processes do not update their in/out counts and look too wide.
      [ ] BUG: Connect two process with two wires. Delete one wire. Reconnect a second wire. Now when you hover, it highlights the wrong wire.
+   [ ] BUG: Wires seems to have invisible, interactive parts. Since wires aren't given a position, you can click the top-left of the screen and select wires. This should not be allowed.
    [ ] File save and load
    [ ] Processes should expand to contain their label
    [ ] Allow multi-selection of processes
