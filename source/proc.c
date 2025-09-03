@@ -41,7 +41,6 @@
 #include "../libraries/mr4th/src/mr4th_base.h"
 
 #define push_struct(a, s) arena_push((a), sizeof(s))
-#define push_char(a, c) arena_push((a), 1)
 
 
 

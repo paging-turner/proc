@@ -84,22 +84,21 @@ function void render_DrawRectangleRec(Arena *Arena, Rectangle R, Color C)
 function char *render_PushTempString(const char *CString)
 {
   Assert(GlobalTempArena);
-  // TODO: Assumes that this arena does not grow!!!!
-  char *Result = (char *)((U8 *)GlobalTempArena + GlobalTempArena->chunk_pos);
 
-  const char *C = CString;
-
-  for (;; ++C)
-  {
-    if (push_char(GlobalTempArena, *C) == 0) {
-      *Result = 0; // Null out the result in case somebody prints the result.
-      Assert(0);
+  // get CString length
+  U32 string_length = 0;
+  for (const char *c = CString;; ++c) {
+    string_length += 1;
+    if (*c == 0) {
       break;
     }
+  }
 
-    if ((*C) == 0) {
-      break;
-    }
+  char *Result = arena_push_no_zero(GlobalTempArena, string_length);
+
+  // copy string
+  for (U32 i = 0; i < string_length; ++i) {
+    Result[i] = CString[i];
   }
 
   return Result;
