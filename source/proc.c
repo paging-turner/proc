@@ -118,9 +118,10 @@ typedef struct {
 // TODO: maybe this should be a mode and not flags?
 typedef enum {
   Context_Flag_Dragging       = 1 << 0,
-  Context_Flag_NewWire        = 1 << 1,
-  Context_Flag_EditText       = 1 << 2,
-  Context_Flag_RoundedShapes  = 1 << 3,
+  Context_Flag_DragRectangle  = 1 << 1,
+  Context_Flag_NewWire        = 1 << 2,
+  Context_Flag_EditText       = 1 << 3,
+  Context_Flag_RoundedShapes  = 1 << 4,
 } Context_Flag;
 
 typedef struct {
@@ -355,6 +356,16 @@ function Rectangle get_new_wire_box(Context *context, Process *p, Process_Shape 
   return new_wire_box;
 }
 
+
+function Rectangle get_selection_rectangle(Context *context) {
+  F32 x = fmin(context->active_position.x, context->mouse_position.x);
+  F32 y = fmin(context->active_position.y, context->mouse_position.y);
+  F32 x1 = fmax(context->active_position.x, context->mouse_position.x);
+  F32 y1 = fmax(context->active_position.y, context->mouse_position.y);
+  Rectangle selection_rect = (Rectangle){x, y, x1-x, y1-y};
+
+  return selection_rect;
+}
 
 
 
@@ -874,6 +885,17 @@ function void handle_user_input(Context *context) {
   B32 process_clicked = 0;
   B32 hot_id_assigned = 0;
 
+  Rectangle selection_rectangle = get_selection_rectangle(context);
+
+  // initial rectangle selection handling
+  if (Get_Flag(context->flags, Context_Flag_DragRectangle)) {
+    if (!mouse_down) {
+      Unset_Flag(context->flags, Context_Flag_DragRectangle);
+    } else {
+      clear_active_process(context);
+    }
+  }
+
   // process interaction
   for (Process *p = context->processes.first; p != 0; p = p->next) {
     Process_Selection selection = get_process_selection(context, p);
@@ -914,9 +936,25 @@ function void handle_user_input(Context *context) {
       context->hot_process = p;
     }
 
-    // break if there has been an interaction
-    if (selection.type > 0) {
-      break;
+    // rectangle selection
+    if (Get_Flag(context->flags, Context_Flag_DragRectangle)) {
+      if (Get_Flag(p->flags, Process_Flag_Wire)) {
+        Process_Shape out_shape = get_process_shape(context, p->out_id);
+        Process_Shape in_shape = get_process_shape(context, p->in_id);
+        Vector2 out_position = get_process_wire_out_position(context, p->out_id, out_shape, p->which_out);
+        Vector2 in_position = get_process_wire_in_position(context, p->in_id, in_shape, p->which_in);
+
+        if (rectangle_contains_point(selection_rectangle, out_position) ||
+            rectangle_contains_point(selection_rectangle, in_position)) {
+          SLLQueuePush_NZ(context->active_process.first, context->active_process.last, p, next_active, 0);
+        }
+      } else {
+        Process_Shape shape = get_process_shape(context, p);
+
+        if (rectangle_contains_point(selection_rectangle, shape.center)) {
+          SLLQueuePush_NZ(context->active_process.first, context->active_process.last, p, next_active, 0);
+        }
+      }
     }
   }
 
@@ -983,20 +1021,36 @@ function void handle_user_input(Context *context) {
     }
   }
 
+  // more rectangle selection handling
+  if (Get_Flag(context->flags, Context_Flag_DragRectangle)) {
+    // add hot process to active processes
+    if (context->hot_process) {
+      B32 hot_is_active = is_active_process(context, context->hot_process);
+      if (!hot_is_active) {
+        SLLQueuePush_NZ(context->active_process.first, context->active_process.last, context->hot_process, next_active, 0);
+      }
+    }
+  }
+
   // non-process clicks
   if (mouse_pressed && !process_clicked) {
+    B32 ctrl_down = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+
     if (context->active_process.first) {
       // un-select process
       clear_active_process(context);
-      U32 flags_to_unset = (Context_Flag_NewWire|
-                            Context_Flag_EditText);
-      Unset_Flag(context->flags, flags_to_unset);
-    } else if (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) {
+      Unset_Flag(context->flags, (Context_Flag_NewWire|Context_Flag_EditText));
+    } else if (ctrl_down) {
       // new process
       Process *new_p = create_process(context);
       if (new_p) {
         new_p->position = context->mouse_position;
       }
+    }
+
+    if (!ctrl_down) {
+      Set_Flag(context->flags, Context_Flag_DragRectangle);
+      context->active_position = context->mouse_position;
     }
   }
 
@@ -1191,6 +1245,14 @@ function void draw_processes(Context *context) {
     F32 thickness = global_line_thickness;
 
     render_DrawLineBezierCubic(ra, position, context->mouse_position, from_control, to_control, thickness, stroke_color);
+  }
+
+  // draw selection rectangle
+  if (Get_Flag(context->flags, Context_Flag_DragRectangle)) {
+    Rectangle selection_rect = get_selection_rectangle(context);
+    Color selection_color = (Color){10, 30, 200, 50};
+
+    render_DrawRectangleRec(ra, selection_rect, selection_color);
   }
 }
 
