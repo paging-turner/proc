@@ -10,7 +10,7 @@
      === Deleting Wires ===
      [x] BUG: Connect two processes with two wires. Delete the last wire. The processes do not update their in/out counts and look too wide.
      [ ] BUG: Connect two process with two wires. Delete one wire. Reconnect a second wire. Now when you hover, it highlights the wrong wire.
-   [ ] BUG: Wires seems to have invisible, interactive parts. Since wires aren't given a position, you can click the top-left of the screen and select wires. This should not be allowed.
+   [x] BUG: Wires seems to have invisible, interactive parts. Since wires aren't given a position, you can click the top-left of the screen and select wires. This should not be allowed.
    [ ] File save and load
    [ ] Processes should expand to contain their label
    [ ] Allow multi-selection of processes
@@ -784,7 +784,7 @@ handle_process_selection(Context *context, Process *p) {
       }
     }
 
-    if (selection.type == 0) {
+    if (selection.type == 0 && !Get_Flag(p->flags, Process_Flag_Wire)) {
       if (process_shape_contains_point(context, shape, context->mouse_position)) {
         // process selection
         selection.type = Process_Selection_Process;
@@ -810,7 +810,7 @@ function void handle_user_input(Context *context) {
   B32 hot_id_assigned = 0;
 
   // process interaction
-  for(Process *p = context->processes.first; p != 0; p = p->next) {
+  for (Process *p = context->processes.first; p != 0; p = p->next) {
     Process_Selection selection = handle_process_selection(context, p);
     hot_id_assigned = selection.hot_id_assigned || hot_id_assigned;
 
