@@ -13,10 +13,10 @@
    [x] BUG: Wires seems to have invisible, interactive parts. Since wires aren't given a position, you can click the top-left of the screen and select wires. This should not be allowed.
    [ ] File save and load
    [ ] Processes should expand to contain their label
-   [ ] Allow multi-selection of processes
+   [x] Allow multi-selection of processes
    [ ] Copy-paste of selected processes
    [ ] Click-and-drag selection rectangle
-   [ ] Allow dragging all selected processes
+   [x] Allow dragging all selected processes
    [ ] Use a font other than the raylib default
    [ ] Expand base-layer and let it consume core.h and ryn_memory.h
    [ ] Make some sliders/fields for global settings like process-size and font-size.
@@ -83,6 +83,7 @@ struct Process {
   U32 which_out;
 
   Process *next;
+  Process *next_active;
 
   // TODO: Use a growable structure for strings.
 #define Process_Label_Size 64
@@ -134,7 +135,7 @@ typedef struct {
   Process_List free_processes;
 
   Process *hot_process;
-  Process *active_process;
+  Process_List active_process;
 
   Vector2 mouse_position;
   Vector2 active_position;
@@ -208,10 +209,37 @@ function Vector2 get_percentage_between_points(Vector2 p0, Vector2 p1, F32 perce
 
 
 
+function B32 is_active_process(Context *context, Process *p) {
+  B32 is_active = 0;
+
+  for (Process *test_p = context->active_process.first; test_p != 0; test_p = test_p->next_active) {
+    if (test_p == p) {
+      is_active = 1;
+      break;
+    }
+  }
+
+  return is_active;
+}
+
+
+function void clear_active_process(Context *context) {
+  for (Process *p = context->active_process.first; p != 0;) {
+    Process *next_active = p->next_active;
+    p->next_active = 0;
+    p = next_active;
+  }
+
+  context->active_process.first = 0;
+  context->active_process.last = 0;
+}
+
+
+
 function Vector2 get_process_position(Context *context, Process *process) {
   Arena *pa = context->process_arena;
 
-  B32 is_active = context->active_process == process;
+  B32 is_active = is_active_process(context, process);
   B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging);
 
   Vector2 position = process->position;
@@ -394,127 +422,137 @@ function Process *create_process(Context *context) {
 
 
 function void delete_process(Context *context, Process *p) {
-  // if deleting a wire, adjust connected processes
-  if (Get_Flag(p->flags, Process_Flag_Wire)) {
-    B32 in_matched = 0;
-    B32 out_matched = 0;
-
-    for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
-      // adjust in-connections that come after deleted wire
-      if (test_wire->in_id == p->in_id) {
-        if (test_wire->which_in > p->which_in) {
-          test_wire->which_in -= 1;
-        }
-        in_matched = 1;
-      }
-
-      // adjust out-connections that come after deleted wire
-      if (test_wire->out_id == p->out_id) {
-        if (test_wire->which_out > p->which_out) {
-          test_wire->which_out -= 1;
-        }
-        out_matched = 1;
-      }
-    }
-
-    B32 only_in_conn = p->in_id != 0 && p->which_in == 0;
-    B32 only_out_conn = p->out_id != 0 && p->which_out == 0;
-
-    // decrement process' in-count
-    if (in_matched || only_in_conn) {
-      if (p->in_id) {
-        p->in_id->in_count -= 1;
-      }
-    }
-
-    // decrement process' out-count
-    if (out_matched || only_out_conn) {
-      if (p->out_id) {
-        p->out_id->out_count -= 1;
-      }
+  B32 is_live_process = 0;
+  for (Process *test_p = context->processes.first; test_p != 0; test_p = test_p->next) {
+    if (test_p == p) {
+      is_live_process = 1;
+      break;
     }
   }
 
-  // @Copypasta --------------------v
-  // remove p from processes
-  if (context->processes.first == p) {
-    SLLQueuePop(context->processes.first, context->processes.last);
-  } else {
-    for (Process *test_p = context->processes.first; test_p != 0; test_p = test_p->next) {
-      if (test_p->next == p) {
-        test_p->next = p->next;
-        if (p == context->processes.last) {
-          context->processes.last = test_p;
-        }
-        break;
-      }
-    }
-  }
-  // add p to the free-list
-  SLLQueuePush(context->free_processes.first, context->free_processes.last, p);
+  if (is_live_process) {
+    // if deleting a wire, adjust connected processes
+    if (Get_Flag(p->flags, Process_Flag_Wire)) {
+      B32 in_matched = 0;
+      B32 out_matched = 0;
 
-  context->active_process = 0;
-
-  // check for wires connected to the deleted process, and delete those also
-  for (Process *wire = context->processes.first; wire != 0;) {
-    B32 in_match = wire->in_id == p;
-    B32 out_match = wire->out_id == p;
-    B32 should_delete = 0;
-
-    if (in_match || out_match) {
-      if (!in_match) {
-        // adjust in-connections to deleted wire
-        for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
-          if (test_wire->in_id == wire->in_id &&
-              test_wire->which_in > wire->which_in) {
+      for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
+        // adjust in-connections that come after deleted wire
+        if (test_wire->in_id == p->in_id) {
+          if (test_wire->which_in > p->which_in) {
             test_wire->which_in -= 1;
           }
+          in_matched = 1;
         }
 
-        if (wire->in_id) {
-          wire->in_id->in_count -= 1;
-        }
-      }
-
-      if (!out_match) {
-        // adjust out-connections to deleted wire
-        for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
-          if (test_wire->out_id == wire->out_id &&
-              test_wire->which_out > wire->which_out) {
+        // adjust out-connections that come after deleted wire
+        if (test_wire->out_id == p->out_id) {
+          if (test_wire->which_out > p->which_out) {
             test_wire->which_out -= 1;
           }
-        }
-
-        if (wire->out_id) {
-          wire->out_id->out_count -= 1;
+          out_matched = 1;
         }
       }
 
-      should_delete = 1;
+      B32 only_in_conn = p->in_id != 0 && p->which_in == 0;
+      B32 only_out_conn = p->out_id != 0 && p->which_out == 0;
+
+      // decrement process' in-count
+      if (in_matched || only_in_conn) {
+        if (p->in_id) {
+          p->in_id->in_count -= 1;
+        }
+      }
+
+      // decrement process' out-count
+      if (out_matched || only_out_conn) {
+        if (p->out_id) {
+          p->out_id->out_count -= 1;
+        }
+      }
     }
 
-    if (should_delete) {
-      Process *next_process = wire->next;
-      // @Copypasta --------------^
-      // remove wire from processes
-      if (context->processes.first == wire) {
-        SLLQueuePop(context->processes.first, context->processes.last);
-      } else {
-        for (Process *test_p = context->processes.first; test_p != 0; test_p = test_p->next) {
-          if (test_p->next == wire) {
-            test_p->next = wire->next;
-            if (wire == context->processes.last) {
-              context->processes.last = test_p;
-            }
-            break;
+    // @Copypasta --------------------v
+    // remove p from processes
+    if (context->processes.first == p) {
+      SLLQueuePop(context->processes.first, context->processes.last);
+    } else {
+      for (Process *test_p = context->processes.first; test_p != 0; test_p = test_p->next) {
+        if (test_p->next == p) {
+          test_p->next = p->next;
+          if (p == context->processes.last) {
+            context->processes.last = test_p;
           }
+          break;
         }
       }
-      // add wire to the free-list
-      SLLQueuePush(context->free_processes.first,context->free_processes.last, wire);
-      wire = next_process;
-    } else {
-      wire = wire->next;
+    }
+    // add p to the free-list
+    SLLQueuePush(context->free_processes.first, context->free_processes.last, p);
+
+    /* clear_active_process(context); */
+
+    // check for wires connected to the deleted process, and delete those also
+    for (Process *wire = context->processes.first; wire != 0;) {
+      B32 in_match = wire->in_id == p;
+      B32 out_match = wire->out_id == p;
+      B32 should_delete = 0;
+
+      if (in_match || out_match) {
+        if (!in_match) {
+          // adjust in-connections to deleted wire
+          for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
+            if (test_wire->in_id == wire->in_id &&
+                test_wire->which_in > wire->which_in) {
+              test_wire->which_in -= 1;
+            }
+          }
+
+          if (wire->in_id) {
+            wire->in_id->in_count -= 1;
+          }
+        }
+
+        if (!out_match) {
+          // adjust out-connections to deleted wire
+          for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
+            if (test_wire->out_id == wire->out_id &&
+                test_wire->which_out > wire->which_out) {
+              test_wire->which_out -= 1;
+            }
+          }
+
+          if (wire->out_id) {
+            wire->out_id->out_count -= 1;
+          }
+        }
+
+        should_delete = 1;
+      }
+
+      if (should_delete) {
+        Process *next_process = wire->next;
+        // @Copypasta --------------^
+        // remove wire from processes
+        if (context->processes.first == wire) {
+          SLLQueuePop(context->processes.first, context->processes.last);
+        } else {
+          for (Process *test_p = context->processes.first; test_p != 0; test_p = test_p->next) {
+            if (test_p->next == wire) {
+              test_p->next = wire->next;
+              if (wire == context->processes.last) {
+                context->processes.last = test_p;
+              }
+              break;
+            }
+          }
+        }
+        // add wire to the free-list
+        SLLQueuePush(context->free_processes.first,context->free_processes.last, wire);
+        wire = next_process;
+      } else {
+        wire = wire->next;
+      }
     }
   }
 }
@@ -807,43 +845,49 @@ function void handle_user_input(Context *context) {
   B32 mouse_down = IsMouseButtonDown(0);
   B32 process_clicked = 0;
   B32 hot_id_assigned = 0;
+  B32 ctrl_down = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
 
   // process interaction
   for (Process *p = context->processes.first; p != 0; p = p->next) {
     Process_Selection selection = handle_process_selection(context, p);
     hot_id_assigned = selection.hot_id_assigned || hot_id_assigned;
+    B32 is_active = is_active_process(context, p);
 
     if (mouse_pressed) {
-      if (selection.type == Process_Selection_In ||
-          selection.type == Process_Selection_Out) {
+      if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
         // select wire
         Process *wire = get_process_wire_by_selection(context, selection);
         if (wire) {
-          context->active_process = wire;
-          if (selection.type == Process_Selection_In) {
-            context->hot_process = wire->in_id;
-          } else if (selection.type == Process_Selection_Out) {
-            context->hot_process = wire->out_id;
+          B32 wire_is_active = is_active_process(context, wire);
+          if (!wire_is_active) {
+            if (!ctrl_down) {
+              clear_active_process(context);
+            }
+            SLLQueuePush_NZ(context->active_process.first, context->active_process.last, wire, next_active, 0);
           }
           process_clicked = 1;
         }
-      } else if ((context->active_process == p || context->hot_process == p) &&
+      } else if ((is_active || context->hot_process == p) &&
                  selection.type == Process_Selection_NewWire) {
         // begin new-wire
         Set_Flag(context->flags, Context_Flag_NewWire);
-        context->active_process = p;
+        clear_active_process(context);
+        SLLQueuePush_NZ(context->active_process.first, context->active_process.last, p, next_active, 0);
         process_clicked = 1;
       } else if (selection.type == Process_Selection_Process) {
         if (Get_Flag(context->flags, Context_Flag_NewWire)) {
           // connect processes
-          connect_processes(context, context->active_process, p);
+          connect_processes(context, context->active_process.first, p);
         } else {
           // select process
           context->hot_process = p;
-          context->active_process = p;
-          U32 unset_flags = (Context_Flag_NewWire |
-                             Context_Flag_EditText);
-          Unset_Flag(context->flags, unset_flags);
+          if (!is_active) {
+            if (!ctrl_down) {
+              clear_active_process(context);
+            }
+            SLLQueuePush_NZ(context->active_process.first, context->active_process.last, p, next_active, 0);
+          }
+          Unset_Flag(context->flags, (Context_Flag_NewWire | Context_Flag_EditText));
           Set_Flag(context->flags, Context_Flag_Dragging);
           context->active_position = context->mouse_position;
           process_clicked = 1;
@@ -866,28 +910,32 @@ function void handle_user_input(Context *context) {
   }
 
   // handle active-id
-  if (context->active_process) {
+  if (context->active_process.first) {
     B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging);
     if (is_dragging && !mouse_down) {
       // stop dragging
-      Vector2 new_position = get_process_position(context, context->active_process);
-      context->active_process->position = new_position;
+      for (Process *a = context->active_process.first; a != 0; a = a->next_active) {
+        Vector2 new_position = get_process_position(context, a);
+        a->position = new_position;
+      }
       Unset_Flag(context->flags, Context_Flag_Dragging);
     } else if (Get_Flag(context->flags, Context_Flag_EditText)) {
       // process label editing
       U32 c = 0;
       B32 shift_down = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
       while ((c = GetKeyPressed())) {
-        if (Is_Editable_Char(c) && context->active_process->label_cursor < Process_Label_Size-1) {
-          B32 is_alpha = c >= 'A' && c <= 'Z';
-          if (is_alpha && !shift_down) {
-            c += 32;
+        for (Process *a = context->active_process.first; a != 0; a = a->next_active) {
+          if (Is_Editable_Char(c) && a->label_cursor < Process_Label_Size-1) {
+            B32 is_alpha = c >= 'A' && c <= 'Z';
+            if (is_alpha && !shift_down) {
+              c += 32;
+            }
+            a->label[a->label_cursor] = c&0xff;
+            a->label_cursor += 1;
+          } else if (c == KEY_BACKSPACE && a->label_cursor > 0) {
+            a->label_cursor -= 1;
+            a->label[a->label_cursor] = 0;
           }
-          context->active_process->label[context->active_process->label_cursor] = c&0xff;
-          context->active_process->label_cursor += 1;
-        } else if (c == KEY_BACKSPACE && context->active_process->label_cursor > 0) {
-          context->active_process->label_cursor -= 1;
-          context->active_process->label[context->active_process->label_cursor] = 0;
         }
       }
     } else if (IsKeyPressed(KEY_I)) {
@@ -895,28 +943,35 @@ function void handle_user_input(Context *context) {
       Set_Flag(context->flags, Context_Flag_EditText);
     } else if (IsKeyPressed(KEY_TAB)) {
       // cycle through special process types (cups/caps/empty)
-      if (!Get_Flag(context->active_process->flags, Process_Flag_Wire)) {
-        if ((context->active_process->in_count == 0 && context->active_process->out_count == 0) ||
-            (context->active_process->in_count == 1 && context->active_process->out_count == 0) ||
-            (context->active_process->in_count == 0 && context->active_process->out_count == 1)) {
-          Toggle_Flag(context->active_process->flags, Process_Flag_Empty);
-        } else if (context->active_process->in_count == 0 && context->active_process->out_count == 2) {
-          Toggle_Flag(context->active_process->flags, Process_Flag_Cup);
-        } else if (context->active_process->in_count == 2 && context->active_process->out_count == 0) {
-          Toggle_Flag(context->active_process->flags, Process_Flag_Cap);
+      for (Process *a = context->active_process.first; a != 0; a = a->next_active) {
+        if (!Get_Flag(a->flags, Process_Flag_Wire)) {
+          if ((a->in_count == 0 && a->out_count == 0) ||
+              (a->in_count == 1 && a->out_count == 0) ||
+              (a->in_count == 0 && a->out_count == 1)) {
+            Toggle_Flag(a->flags, Process_Flag_Empty);
+          } else if (a->in_count == 0 && a->out_count == 2) {
+            Toggle_Flag(a->flags, Process_Flag_Cup);
+          } else if (a->in_count == 2 && a->out_count == 0) {
+            Toggle_Flag(a->flags, Process_Flag_Cap);
+          }
         }
       }
     } else if (IsKeyPressed(KEY_BACKSPACE)) {
-      // delete process
-      delete_process(context, context->active_process);
+      // delete processes
+      for (Process *a = context->active_process.first; a != 0;) {
+        Process *next_active = a->next_active;
+        delete_process(context, a);
+        a = next_active;
+      }
+      clear_active_process(context);
     }
   }
 
   // non-process clicks
   if (mouse_pressed && !process_clicked) {
-    if (context->active_process) {
+    if (context->active_process.first) {
       // un-select process
-      context->active_process = 0;
+      clear_active_process(context);
       U32 flags_to_unset = (Context_Flag_NewWire|
                             Context_Flag_EditText);
       Unset_Flag(context->flags, flags_to_unset);
@@ -961,7 +1016,7 @@ function void draw_processes(Context *context) {
       Process_Shape shape = get_process_shape(context, p);
 
       B32 is_hot = context->hot_process == p;
-      B32 is_active = context->active_process == p;
+      B32 is_active = is_active_process(context, p);
       F32 thickness = (is_hot||is_active) ? global_active_line_thickness : global_line_thickness;
       F32 cup_cap_control_offset = 10.0f;
 
@@ -1078,10 +1133,10 @@ function void draw_processes(Context *context) {
       Vector2 in_control = in_position;
       in_control.y += 30.0f;
 
-      B32 is_active = context->active_process == p || context->hot_process == p;
-      B32 connected_in_active = (context->active_process == p->in_id ||
+      B32 is_active = is_active_process(context, p) || context->hot_process == p;
+      B32 connected_in_active = (is_active_process(context, p->in_id) ||
                                  context->hot_process == p->in_id);
-      B32 connected_out_active = (context->active_process == p->out_id ||
+      B32 connected_out_active = (is_active_process(context, p->out_id) ||
                                   context->hot_process == p->out_id);
       F32 thickness = is_active ? global_active_line_thickness : global_line_thickness;
 
@@ -1105,9 +1160,9 @@ function void draw_processes(Context *context) {
   }
 
   // draw new wire
-  if (Get_Flag(context->flags, Context_Flag_NewWire) && context->active_process) {
-    Process_Shape shape = get_process_shape(context, context->active_process);
-    Vector2 position = get_new_wire_position(context, context->active_process, shape);
+  if (Get_Flag(context->flags, Context_Flag_NewWire) && context->active_process.first) {
+    Process_Shape shape = get_process_shape(context, context->active_process.first);
+    Vector2 position = get_new_wire_position(context, context->active_process.first, shape);
 
     Vector2 from_control = position;
     from_control.y -= 30.f;
@@ -1127,10 +1182,16 @@ function void draw_processes(Context *context) {
 function void draw_info_panel(Context *context) {
   Arena *ra = context->render_arena;
   Color text_color = (Color){0, 0, 0, 255};
+  F32 y = 5.0f;
+  F32 padding = 2.0f;
 
-  if (context->active_process) {
-    const char *text = TextFormat("active-id = %d", context->active_process);
-    render_DrawText(ra, text, 5.0f, 5.0f, global_panel_font_size, text_color, 1);
+  if (context->active_process.first) {
+    for (Process *a = context->active_process.first; a != 0; a = a->next_active) {
+      char *format = a == context->active_process.first ? "active-id = %p" : "            %p";
+      const char *text = TextFormat(format, a);
+      render_DrawText(ra, text, 5.0f, y, global_panel_font_size, text_color, 1);
+      y += global_panel_font_size + padding;
+    }
   }
 }
 

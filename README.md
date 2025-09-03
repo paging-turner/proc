@@ -10,6 +10,7 @@ The main interactive unit in the app is a "process", which will make a lot of se
 - Click and drag processes to move them around.
 - Each process has a green box than can be clicked to create a new wire. Click on another process (or the same process) to connect the two with a wire.
 - Processes can be selected by being clicked, and wires can be selected by clicking one of the green boxes at the endpoints.
+    - Select multiple processes and wire by ctrl-clicking.
 - Clicking any part of the background will de-select any selected processes/wires.
 - With a process selected, press the "I" key to start "text insertion mode", which allows you to type text that appears inside the process. Exit text-insert mode by clicking somewhere on the background.
 - Pressing the "backspace" key deletes any selected process/wire (beware, this is still buggy).
