@@ -17,7 +17,8 @@
      [x] Allow multi-selection of processes
      [x] Allow dragging all selected processes
      [x] Allow de-selectin of processes
-     [ ] Click-and-drag selection rectangle
+     [x] Click-and-drag selection rectangle
+     [ ] Ctrl-click-and-drag to include more processes
    [ ] Copy-paste of selected processes
    [ ] Use a font other than the raylib default
    [ ] Expand base-layer and let it consume core.h and ryn_memory.h
@@ -118,10 +119,11 @@ typedef struct {
 // TODO: maybe this should be a mode and not flags?
 typedef enum {
   Context_Flag_Dragging       = 1 << 0,
-  Context_Flag_DragRectangle  = 1 << 1,
-  Context_Flag_NewWire        = 1 << 2,
-  Context_Flag_EditText       = 1 << 3,
-  Context_Flag_RoundedShapes  = 1 << 4,
+  Context_Flag_Bounding       = 1 << 1,
+  Context_Flag_Panning        = 1 << 2,
+  Context_Flag_NewWire        = 1 << 3,
+  Context_Flag_EditText       = 1 << 4,
+  Context_Flag_RoundedShapes  = 1 << 5,
 } Context_Flag;
 
 typedef struct {
@@ -142,6 +144,9 @@ typedef struct {
 
   Vector2 mouse_position;
   Vector2 active_position;
+
+  Vector2 camera;
+  F32 zoom;
 } Context;
 
 
@@ -212,6 +217,17 @@ function Vector2 get_percentage_between_points(Vector2 p0, Vector2 p1, F32 perce
 
 
 
+function Vector2 world_to_screen_position(Context *context, Vector2 pos) {
+  Vector2 result = Vector2Subtract(pos, context->camera);
+  if (Get_Flag(context->flags, Context_Flag_Panning)) {
+    Vector2 delta = Vector2Subtract(context->mouse_position, context->active_position);
+    result = Vector2Add(result, delta);
+  }
+  return result;
+}
+
+
+
 function B32 is_active_process(Context *context, Process *p) {
   B32 is_active = 0;
 
@@ -240,16 +256,17 @@ function void clear_active_process(Context *context) {
 
 
 function Vector2 get_process_position(Context *context, Process *process) {
-  Arena *pa = context->process_arena;
-
+  Vector2 position = process->position;
   B32 is_active = is_active_process(context, process);
   B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging);
 
-  Vector2 position = process->position;
+
   if (is_active && is_dragging) {
     Vector2 delta = Vector2Subtract(context->mouse_position, context->active_position);
     position = Vector2Add(position, delta);
   }
+
+  position = world_to_screen_position(context, position);
 
   return position;
 }
@@ -380,7 +397,6 @@ function B32 rectangle_contains_point(Rectangle r, Vector2 p) {
 
 
 function Process *get_process_wire_by_selection(Context *context, Process_Selection selection) {
-  Arena *pa = context->process_arena;
   Process *wire = 0;
   S32 match_count = 0;
 
@@ -880,19 +896,37 @@ function void handle_user_input(Context *context) {
   Arena *pa = context->process_arena;
 
   context->mouse_position = GetMousePosition();
-  B32 mouse_pressed = IsMouseButtonPressed(0);
-  B32 mouse_down = IsMouseButtonDown(0);
+  B32 mouse0_pressed = IsMouseButtonPressed(0);
+  B32 mouse1_pressed = IsMouseButtonPressed(1);
+  B32 mouse0_down = IsMouseButtonDown(0);
+  B32 mouse1_down = IsMouseButtonDown(1);
   B32 process_clicked = 0;
   B32 hot_id_assigned = 0;
 
   Rectangle selection_rectangle = get_selection_rectangle(context);
 
-  // initial rectangle selection handling
-  if (Get_Flag(context->flags, Context_Flag_DragRectangle)) {
-    if (!mouse_down) {
-      Unset_Flag(context->flags, Context_Flag_DragRectangle);
+  // initial bounding handling
+  if (Get_Flag(context->flags, Context_Flag_Bounding)) {
+    if (!mouse0_down) {
+      Unset_Flag(context->flags, Context_Flag_Bounding);
     } else {
       clear_active_process(context);
+    }
+  }
+
+  // panning
+  {
+    if (mouse1_pressed) {
+      Set_Flag(context->flags, Context_Flag_Panning);
+      context->active_position = context->mouse_position;
+    }
+
+    if (Get_Flag(context->flags, Context_Flag_Panning)) {
+      if (!mouse1_down) {
+        Unset_Flag(context->flags, Context_Flag_Panning);
+        Vector2 delta = Vector2Subtract(context->mouse_position, context->active_position);
+        context->camera = Vector2Subtract(context->camera, delta);
+      }
     }
   }
 
@@ -902,7 +936,7 @@ function void handle_user_input(Context *context) {
     hot_id_assigned = selection.hot_id_assigned || hot_id_assigned;
     B32 is_active = is_active_process(context, p);
 
-    if (mouse_pressed) {
+    if (mouse0_pressed) {
       if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
         // select wire
         Process *wire = get_process_wire_by_selection(context, selection);
@@ -936,8 +970,8 @@ function void handle_user_input(Context *context) {
       context->hot_process = p;
     }
 
-    // rectangle selection
-    if (Get_Flag(context->flags, Context_Flag_DragRectangle)) {
+    // bounding
+    if (Get_Flag(context->flags, Context_Flag_Bounding)) {
       if (Get_Flag(p->flags, Process_Flag_Wire)) {
         Process_Shape out_shape = get_process_shape(context, p->out_id);
         Process_Shape in_shape = get_process_shape(context, p->in_id);
@@ -966,7 +1000,7 @@ function void handle_user_input(Context *context) {
   // handle active-process
   if (context->active_process.first) {
     B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging);
-    if (is_dragging && !mouse_down) {
+    if (is_dragging && !mouse0_down) {
       // stop dragging
       for (Process *a = context->active_process.first; a != 0; a = a->next_active) {
         Vector2 new_position = get_process_position(context, a);
@@ -1022,7 +1056,7 @@ function void handle_user_input(Context *context) {
   }
 
   // more rectangle selection handling
-  if (Get_Flag(context->flags, Context_Flag_DragRectangle)) {
+  if (Get_Flag(context->flags, Context_Flag_Bounding)) {
     // add hot process to active processes
     if (context->hot_process) {
       B32 hot_is_active = is_active_process(context, context->hot_process);
@@ -1033,7 +1067,7 @@ function void handle_user_input(Context *context) {
   }
 
   // non-process clicks
-  if (mouse_pressed && !process_clicked) {
+  if (mouse0_pressed && !process_clicked) {
     B32 ctrl_down = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
 
     if (context->active_process.first) {
@@ -1049,7 +1083,7 @@ function void handle_user_input(Context *context) {
     }
 
     if (!ctrl_down) {
-      Set_Flag(context->flags, Context_Flag_DragRectangle);
+      Set_Flag(context->flags, Context_Flag_Bounding);
       context->active_position = context->mouse_position;
     }
   }
@@ -1248,7 +1282,7 @@ function void draw_processes(Context *context) {
   }
 
   // draw selection rectangle
-  if (Get_Flag(context->flags, Context_Flag_DragRectangle)) {
+  if (Get_Flag(context->flags, Context_Flag_Bounding)) {
     Rectangle selection_rect = get_selection_rectangle(context);
     Color selection_color = (Color){10, 30, 200, 50};
 
