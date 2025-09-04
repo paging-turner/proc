@@ -217,8 +217,19 @@ function Vector2 get_percentage_between_points(Vector2 p0, Vector2 p1, F32 perce
 
 
 
-function Vector2 world_to_screen_position(Context *context, Vector2 pos) {
-  Vector2 result = Vector2Subtract(pos, context->camera);
+function Vector2 screen_position_from_world_position(Context *context, Vector2 world_pos) {
+  Vector2 result = Vector2Subtract(world_pos, context->camera);
+  // TODO: should we do this panning offset here???
+  if (Get_Flag(context->flags, Context_Flag_Panning)) {
+    Vector2 delta = Vector2Subtract(context->mouse_position, context->active_position);
+    result = Vector2Add(result, delta);
+  }
+  return result;
+}
+
+function Vector2 world_position_from_screen_position(Context *context, Vector2 screen_pos) {
+  Vector2 result = Vector2Add(screen_pos, context->camera);
+  // TODO: should we do this panning offset here???
   if (Get_Flag(context->flags, Context_Flag_Panning)) {
     Vector2 delta = Vector2Subtract(context->mouse_position, context->active_position);
     result = Vector2Add(result, delta);
@@ -265,8 +276,6 @@ function Vector2 get_process_position(Context *context, Process *process) {
     Vector2 delta = Vector2Subtract(context->mouse_position, context->active_position);
     position = Vector2Add(position, delta);
   }
-
-  position = world_to_screen_position(context, position);
 
   return position;
 }
@@ -659,6 +668,7 @@ get_process_shape(Context *context, Process *p) {
   Process_Shape shape = {0};
 
   Vector2 position = get_process_position(context, p);
+  position = screen_position_from_world_position(context, position);
 
   F32 quarter_size = global_shape_size / 4.0f;
   F32 padding = global_process_wire_padding;
@@ -1078,7 +1088,7 @@ function void handle_user_input(Context *context) {
       // new process
       Process *new_p = create_process(context);
       if (new_p) {
-        new_p->position = context->mouse_position;
+        new_p->position = world_position_from_screen_position(context, context->mouse_position);
       }
     }
 
