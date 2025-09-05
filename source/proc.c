@@ -1272,11 +1272,11 @@ function void draw_processes(Context *context) {
     Vector2 position = get_new_wire_position(context, context->active_process.first, shape);
 
     Vector2 from_control = position;
-    from_control.y -= 30.f;
+    from_control.y -= context->camera.zoom * 30.f;
     Vector2 to_control = context->mouse_position;
-    to_control.y += 30.0f;
+    to_control.y += context->camera.zoom * 30.0f;
 
-    F32 thickness = global_line_thickness;
+    F32 thickness = context->camera.zoom * global_line_thickness;
 
     render_DrawLineBezierCubic(ra, position, context->mouse_position, from_control, to_control, thickness, stroke_color);
   }
