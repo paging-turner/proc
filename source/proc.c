@@ -145,8 +145,7 @@ typedef struct {
   Vector2 mouse_position;
   Vector2 active_position;
 
-  Vector2 camera;
-  F32 zoom;
+  Camera2D camera;
 } Context;
 
 
@@ -217,27 +216,6 @@ function Vector2 get_percentage_between_points(Vector2 p0, Vector2 p1, F32 perce
 
 
 
-function Vector2 screen_position_from_world_position(Context *context, Vector2 world_pos) {
-  Vector2 result = Vector2Subtract(world_pos, context->camera);
-  // TODO: should we do this panning offset here???
-  if (Get_Flag(context->flags, Context_Flag_Panning)) {
-    Vector2 delta = Vector2Subtract(context->mouse_position, context->active_position);
-    result = Vector2Add(result, delta);
-  }
-  return result;
-}
-
-function Vector2 world_position_from_screen_position(Context *context, Vector2 screen_pos) {
-  Vector2 result = Vector2Add(screen_pos, context->camera);
-  // TODO: should we do this panning offset here???
-  if (Get_Flag(context->flags, Context_Flag_Panning)) {
-    Vector2 delta = Vector2Subtract(context->mouse_position, context->active_position);
-    result = Vector2Add(result, delta);
-  }
-  return result;
-}
-
-
 
 function B32 is_active_process(Context *context, Process *p) {
   B32 is_active = 0;
@@ -274,7 +252,7 @@ function Vector2 get_process_position(Context *context, Process *process) {
 
   if (is_active && is_dragging) {
     Vector2 delta = Vector2Subtract(context->mouse_position, context->active_position);
-    position = Vector2Add(position, delta);
+    position = Vector2Add(position, Vector2Scale(delta, 1.0f/context->camera.zoom));
   }
 
   return position;
@@ -438,13 +416,12 @@ function Process *get_process_wire_by_selection(Context *context, Process_Select
 
 
 function Process *create_process(Context *context) {
-  Arena *pa = context->process_arena;
   Process *p = context->free_processes.first;
 
   if (p) {
     SLLQueuePop(context->free_processes.first, context->free_processes.last);
   } else {
-    p = push_struct(pa, Process);
+    p = push_struct(context->process_arena, Process);
   }
 
   *p = (Process){0};
@@ -606,7 +583,6 @@ function void delete_process(Context *context, Process *p) {
 
 
 function void connect_processes(Context *context, Process *out, Process *in) {
-  Arena *pa = context->process_arena;
   Process *new_wire = create_process(context);
 
   if (new_wire) {
@@ -668,7 +644,7 @@ get_process_shape(Context *context, Process *p) {
   Process_Shape shape = {0};
 
   Vector2 position = get_process_position(context, p);
-  position = screen_position_from_world_position(context, position);
+  position = GetWorldToScreen2D(position, context->camera);
 
   F32 quarter_size = global_shape_size / 4.0f;
   F32 padding = global_process_wire_padding;
@@ -827,7 +803,6 @@ process_shape_contains_point(Context *context, Process_Shape shape, Vector2 poin
 
 function Process_Selection
 get_process_selection(Context *context, Process *p) {
-  Arena *pa = context->process_arena;
   Process_Selection selection = {0};
   selection.index = -1;
   selection.process = p;
@@ -903,8 +878,6 @@ function void handle_process_selection(Context *context, Process *p) {
 
 
 function void handle_user_input(Context *context) {
-  Arena *pa = context->process_arena;
-
   context->mouse_position = GetMousePosition();
   B32 mouse0_pressed = IsMouseButtonPressed(0);
   B32 mouse1_pressed = IsMouseButtonPressed(1);
@@ -912,8 +885,7 @@ function void handle_user_input(Context *context) {
   B32 mouse1_down = IsMouseButtonDown(1);
   B32 process_clicked = 0;
   B32 hot_id_assigned = 0;
-
-  Rectangle selection_rectangle = get_selection_rectangle(context);
+  Vector2 mouse_wheel_movement = GetMouseWheelMoveV();
 
   // initial bounding handling
   if (Get_Flag(context->flags, Context_Flag_Bounding)) {
@@ -934,11 +906,25 @@ function void handle_user_input(Context *context) {
     if (Get_Flag(context->flags, Context_Flag_Panning)) {
       if (!mouse1_down) {
         Unset_Flag(context->flags, Context_Flag_Panning);
-        Vector2 delta = Vector2Subtract(context->mouse_position, context->active_position);
-        context->camera = Vector2Subtract(context->camera, delta);
+      } else {
+        // Update camera position
+        Vector2 delta = GetMouseDelta();
+        delta = Vector2Scale(delta, -1.0f/context->camera.zoom);
+        context->camera.target = Vector2Add(context->camera.target, delta);
       }
     }
   }
+
+  // zooming
+  if (mouse_wheel_movement.y != 0.0f) {
+    Vector2 mouse_world_position = GetScreenToWorld2D(context->mouse_position, context->camera);
+    context->camera.offset = context->mouse_position;
+    context->camera.target = mouse_world_position;
+    F32 zoom_delta = 0.1f * mouse_wheel_movement.y;
+    context->camera.zoom += zoom_delta;
+    context->camera.zoom = Max(0.1f, context->camera.zoom);
+  }
+
 
   // process interaction
   for (Process *p = context->processes.first; p != 0; p = p->next) {
@@ -982,6 +968,8 @@ function void handle_user_input(Context *context) {
 
     // bounding
     if (Get_Flag(context->flags, Context_Flag_Bounding)) {
+      Rectangle selection_rectangle = get_selection_rectangle(context);
+
       if (Get_Flag(p->flags, Process_Flag_Wire)) {
         Process_Shape out_shape = get_process_shape(context, p->out_id);
         Process_Shape in_shape = get_process_shape(context, p->in_id);
@@ -1088,7 +1076,7 @@ function void handle_user_input(Context *context) {
       // new process
       Process *new_p = create_process(context);
       if (new_p) {
-        new_p->position = world_position_from_screen_position(context, context->mouse_position);
+        new_p->position = GetScreenToWorld2D(context->mouse_position, context->camera);
       }
     }
 
@@ -1113,7 +1101,6 @@ function void handle_user_input(Context *context) {
 
 
 function void draw_processes(Context *context) {
-  Arena *pa = context->process_arena;
   Arena *ra = context->render_arena;
 
   Color bg_color = (Color){255, 255, 255, 255};
@@ -1335,6 +1322,8 @@ function Context initialize_context(void) {
   context.render_zero_pos = context.render_arena->chunk_pos;
   context.temp_zero_pos = context.temp_arena->chunk_pos;
 
+  context.camera.zoom = 1.0f;
+
   return context;
 }
 
@@ -1371,15 +1360,15 @@ function void initialize_globals(void) {
 
 
 int main(void) {
+  InitWindow(800, 500, "proc");
+  SetTargetFPS(60);
+
+  initialize_globals();
   Context context = initialize_context();
 
   Arena *ra = context.render_arena;
   Arena *ta = context.temp_arena;
 
-  InitWindow(800, 500, "proc");
-  SetTargetFPS(60);
-
-  initialize_globals();
   render_Initialize(ta);
 
   SetWindowSize(global_window_width, global_window_height);
