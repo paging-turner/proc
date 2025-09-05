@@ -7,12 +7,13 @@
    [x] Fix naming collisions with Raylib and "Windows.h" !!!
 
    [x] Allow deleting of processes
-     === Deleting Wires ===
      [x] BUG: Connect two processes with two wires. Delete the last wire. The processes do not update their in/out counts and look too wide.
-     [ ] BUG: Connect two process with two wires. Delete one wire. Reconnect a second wire. Now when you hover, it highlights the wrong wire.
    [x] BUG: Wires seems to have invisible, interactive parts. Since wires aren't given a position, you can click the top-left of the screen and select wires. This should not be allowed.
    [ ] File save and load
    [ ] Processes should expand to contain their label
+   === Wires ===
+     [ ] Allow reordering of connected wires
+     [ ] BUG: While making a new wire-connection, if you click on another wire-box, the new-wire jumps to a place off the screen. Clicking on a process while in this busted state makes a new wire that leads to some invisible process.
    === Multi-select ===
      [x] Allow multi-selection of processes
      [x] Allow dragging all selected processes
@@ -20,7 +21,9 @@
      [x] Click-and-drag selection rectangle
      [ ] Ctrl-click-and-drag to include more processes
    === Zooming and Panning ===
-     [ ] BUG: When zoomed way out, the wire positioning gets messed up.
+     [x] BUG: When zoomed way out, the wire positioning gets messed up.
+   === Graphics ===
+     [ ] Replace line-drawing calls with a call that draws triangle-strips/fans. This should help deal with how to cleanly connect the ends of lines together.
    [ ] Copy-paste of selected processes
    [ ] Use a font other than the raylib default
    [ ] Expand base-layer and let it consume core.h and ryn_memory.h
@@ -29,9 +32,8 @@
    [x] Allow toggling on/off "mr4th style" process drawing, which is a variation on the visual style of diragrams in the book.
      [x] Move towards defining shapes using triangle strips/fans. We used some raylib funcs for circles and stuff just because it was easy, but now we need more control.
      [x] Implement collision detection for triangle strip/fan so we can just define a shape with triangles and be able to interact and draw with the same shape.
-   [ ] If you toggle a process to be a special display (cup/cap/invisible), and then connect a new wire to it, the special visual still applies and you cannot toggle away. When connecting wires, we need to check if the special display flag should be unset.
+   [ ] BUG: If you toggle a process to be a special display (cup/cap/invisible), and then connect a new wire to it, the special visual still applies and you cannot toggle away. When connecting wires, we need to check if the special display flag should be unset.
    [ ] Undo/redo
-   [ ] Allow reordering of connected wires
    [ ] BUG: Connect a two processes. Make one process invisible. Delete the *other* process. The invisible process is still there but, well, you can't see it! Either delete the invisible one, or make it visible again. Probably just delete it??
    [ ] New Arena Changes
      [x] Change how we loop through processes, so that we can enable growable arenas.

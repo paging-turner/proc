@@ -158,7 +158,6 @@ function void render_DrawLine(Arena *Arena, int startPosX, int startPosY, int en
   render_command *Command = push_struct(Arena, render_command);
 
   // HACK: Fudge the line length to avoid gaps between adjoined lines.
-  // TODO: Draw lines using triangles so that we are in control of how lines get joined.
   Vector2 start;
   Vector2 end;
   {
