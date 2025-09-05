@@ -19,6 +19,8 @@
      [x] Allow de-selectin of processes
      [x] Click-and-drag selection rectangle
      [ ] Ctrl-click-and-drag to include more processes
+   === Zooming and Panning ===
+     [ ] BUG: When zoomed way out, the wire positioning gets messed up.
    [ ] Copy-paste of selected processes
    [ ] Use a font other than the raylib default
    [ ] Expand base-layer and let it consume core.h and ryn_memory.h
@@ -312,9 +314,9 @@ get_process_wire_in_position(Context *context, Process *p, Process_Shape shape, 
 
 
 function Rectangle get_wire_box(Context *context, Vector2 position) {
-  Rectangle box = (Rectangle){position.x-global_box_half_size,
-                              position.y-global_box_half_size,
-                              global_box_size, global_box_size};
+  F32 size = context->camera.zoom * global_box_size;
+  F32 half_size = context->camera.zoom * global_box_half_size;
+  Rectangle box = (Rectangle){position.x-half_size, position.y-half_size, size, size};
   return box;
 }
 
@@ -347,15 +349,13 @@ function Rectangle get_new_wire_box(Context *context, Process *p, Process_Shape 
   // NOTE: Currently, the first point of any process-shape is always the corner where the new-wire-box wants to be.
   F32 x = shape.points[0].x;
   F32 y = shape.points[0].y;
-
   Vector2 position = get_new_wire_position(context, p, shape);
+  F32 size = context->camera.zoom * global_box_size;
+  F32 half_size = context->camera.zoom * global_box_half_size;
 
-  Rectangle new_wire_box = (Rectangle){
-    position.x - global_box_half_size,
-    position.y - global_box_half_size,
-    global_box_size, global_box_size
-  };
-
+  Rectangle new_wire_box = (Rectangle){position.x - half_size,
+                                       position.y - half_size,
+                                       size, size};
 
   return new_wire_box;
 }
@@ -602,15 +602,15 @@ function void connect_processes(Context *context, Process *out, Process *in) {
 
 function void
 fill_out_half_circle_shape(Context *context, Process_Shape *shape, Process *p, Vector2 position, B32 downward) {
-  F32 padding = global_process_wire_padding;
-  F32 spacing = global_process_wire_spacing;
+  F32 padding = context->camera.zoom * global_process_wire_padding;
+  F32 spacing = context->camera.zoom * global_process_wire_spacing;
 
   F32 conn_count = (F32)(downward ? p->out_count : p->in_count);
   F32 width = (2.0f*padding + conn_count*spacing);
   F32 half_width = 0.5f*(width);
 
-  F32 height = global_shape_size;
-  F32 half_height = global_shape_half_size;
+  F32 height = context->camera.zoom * global_shape_size;
+  F32 half_height = context->camera.zoom * global_shape_half_size;
   shape->kind = Process_Shape_HalfCircle;
   shape->triangle_count = global_shape_fan_triangle_count;
   shape->downward = downward;
@@ -646,9 +646,10 @@ get_process_shape(Context *context, Process *p) {
   Vector2 position = get_process_position(context, p);
   position = GetWorldToScreen2D(position, context->camera);
 
-  F32 quarter_size = global_shape_size / 4.0f;
-  F32 padding = global_process_wire_padding;
-  F32 spacing = global_process_wire_spacing;
+  F32 half_size = context->camera.zoom * global_shape_half_size;
+  F32 quarter_size = context->camera.zoom * global_shape_size / 4.0f;
+  F32 padding = context->camera.zoom * global_process_wire_padding;
+  F32 spacing = context->camera.zoom * global_process_wire_spacing;
 
   S32 has_in = p->in_count > 0;
   S32 has_out = p->out_count > 0;
@@ -662,13 +663,13 @@ get_process_shape(Context *context, Process *p) {
     shape.kind = Process_Shape_Rectangle;
     shape.point_count = 4;
     shape.points[0].x = position.x + half_width;
-    shape.points[0].y = position.y - global_shape_half_size;
+    shape.points[0].y = position.y - half_size;
     shape.points[1].x = position.x - half_width;
-    shape.points[1].y = position.y - global_shape_half_size;
+    shape.points[1].y = position.y - half_size;
     shape.points[2].x = position.x + half_width;
-    shape.points[2].y = position.y + global_shape_half_size;
+    shape.points[2].y = position.y + half_size;
     shape.points[3].x = position.x - half_width;
-    shape.points[3].y = position.y + global_shape_half_size;
+    shape.points[3].y = position.y + half_size;
     shape.center = get_percentage_between_points(shape.points[0], shape.points[3], 0.5f);
   } else if (has_in) {
     F32 width = (2.0f*padding + p->in_count*spacing);
@@ -683,9 +684,9 @@ get_process_shape(Context *context, Process *p) {
       shape.points[0].x = position.x;
       shape.points[0].y = position.y - quarter_size;
       shape.points[1].x = position.x - half_width;
-      shape.points[1].y = position.y + global_shape_half_size;
+      shape.points[1].y = position.y + half_size;
       shape.points[2].x = position.x + half_width;
-      shape.points[2].y = position.y + global_shape_half_size;
+      shape.points[2].y = position.y + half_size;
       Vector2 outer_mid = get_percentage_between_points(shape.points[1], shape.points[2], 0.5f);
       shape.center = get_percentage_between_points(shape.points[0], outer_mid, 0.66f);
     }
@@ -700,9 +701,9 @@ get_process_shape(Context *context, Process *p) {
       shape.kind = Process_Shape_Triangle;
       shape.point_count = 3;
       shape.points[0].x = position.x + half_width;
-      shape.points[0].y = position.y - global_shape_half_size;
+      shape.points[0].y = position.y - half_size;
       shape.points[1].x = position.x - half_width;
-      shape.points[1].y = position.y - global_shape_half_size;
+      shape.points[1].y = position.y - half_size;
       shape.points[2].x = position.x;
       shape.points[2].y = position.y + quarter_size;
       Vector2 outer_mid = get_percentage_between_points(shape.points[0], shape.points[1], 0.5f);
@@ -713,19 +714,19 @@ get_process_shape(Context *context, Process *p) {
       // circle
       shape.kind = Process_Shape_Circle;
       shape.center = position;
-      shape.radius = global_shape_half_size*0.7f;
+      shape.radius = half_size*0.7f;
     } else {
       // diamond
       shape.kind = Process_Shape_Quadrangle;
       shape.point_count = 4;
       shape.points[0].x = position.x;
-      shape.points[0].y = position.y - global_shape_half_size;
-      shape.points[1].x = position.x - global_shape_half_size;
+      shape.points[0].y = position.y - half_size;
+      shape.points[1].x = position.x - half_size;
       shape.points[1].y = position.y;
-      shape.points[2].x = position.x + global_shape_half_size;
+      shape.points[2].x = position.x + half_size;
       shape.points[2].y = position.y;
       shape.points[3].x = position.x;
-      shape.points[3].y = position.y + global_shape_half_size;
+      shape.points[3].y = position.y + half_size;
       shape.center = get_percentage_between_points(shape.points[0], shape.points[3], 0.5f);
     }
   }
@@ -1122,6 +1123,7 @@ function void draw_processes(Context *context) {
       B32 is_hot = context->hot_process == p;
       B32 is_active = is_active_process(context, p);
       F32 thickness = (is_hot||is_active) ? global_active_line_thickness : global_line_thickness;
+      thickness *= context->camera.zoom;
       F32 cup_cap_control_offset = 10.0f;
 
       if (Get_Flag(p->flags, Process_Flag_Empty)) {
@@ -1233,9 +1235,9 @@ function void draw_processes(Context *context) {
       Vector2 in_position = get_process_wire_in_position(context, p->in_id, in_shape, p->which_in);
 
       Vector2 out_control = out_position;
-      out_control.y -= 30.0f;
+      out_control.y -= context->camera.zoom * 30.0f;
       Vector2 in_control = in_position;
-      in_control.y += 30.0f;
+      in_control.y += context->camera.zoom * 30.0f;
 
       B32 is_active = is_active_process(context, p) || context->hot_process == p;
       B32 connected_in_active = (is_active_process(context, p->in_id) ||
@@ -1243,6 +1245,7 @@ function void draw_processes(Context *context) {
       B32 connected_out_active = (is_active_process(context, p->out_id) ||
                                   context->hot_process == p->out_id);
       F32 thickness = is_active ? global_active_line_thickness : global_line_thickness;
+      thickness *= context->camera.zoom;
 
       // draw wire
       render_DrawLineBezierCubic(ra, out_position, in_position, out_control, in_control, thickness, stroke_color);
