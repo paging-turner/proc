@@ -266,6 +266,7 @@ function Vector2 get_process_position(Context *context, Process *process) {
 
 function Vector2
 get_process_wire_out_position(Context *context, Process *p, Process_Shape shape, U32 wire_index) {
+  F32 padding = context->camera.zoom * global_process_wire_padding;
   Vector2 p0 = shape.points[0];
   Vector2 p1 = shape.points[1];
 
@@ -276,9 +277,9 @@ get_process_wire_out_position(Context *context, Process *p, Process_Shape shape,
 
   Vector2 delta = Vector2Subtract(p0, p1);
   Vector2 delta_norm = Vector2Normalize(delta);
-  F32 inner_distance = fmax(0.0f, Vector2Distance(p0, p1) - 2.0f*global_process_wire_padding);
+  F32 inner_distance = fmax(0.0f, Vector2Distance(p0, p1) - 2.0f*padding);
   F32 chunk_size = inner_distance / (F32)(p->out_count+1);
-  F32 distance_from_point = global_process_wire_padding + chunk_size*(F32)(wire_index+1);
+  F32 distance_from_point = padding + chunk_size*(F32)(wire_index+1);
 
   Vector2 out_position = Vector2Add(p1, Vector2Scale(delta_norm, distance_from_point));
 
@@ -288,6 +289,7 @@ get_process_wire_out_position(Context *context, Process *p, Process_Shape shape,
 
 function Vector2
 get_process_wire_in_position(Context *context, Process *p, Process_Shape shape, U32 wire_index) {
+  F32 padding = context->camera.zoom * global_process_wire_padding;
   Vector2 p0 = shape.points[2];
   Vector2 p1 = shape.points[1];
 
@@ -302,9 +304,9 @@ get_process_wire_in_position(Context *context, Process *p, Process_Shape shape, 
 
   Vector2 delta = Vector2Subtract(p0, p1);
   Vector2 delta_norm = Vector2Normalize(delta);
-  F32 inner_distance = fmax(0.0f, Vector2Distance(p0, p1) - 2.0f*global_process_wire_padding);
+  F32 inner_distance = fmax(0.0f, Vector2Distance(p0, p1) - 2.0f*padding);
   F32 chunk_size = inner_distance / (F32)(p->in_count+1);
-  F32 distance_from_point = global_process_wire_padding + chunk_size*(F32)(wire_index+1);
+  F32 distance_from_point = padding + chunk_size*(F32)(wire_index+1);
 
   Vector2 in_position = Vector2Add(p1, Vector2Scale(delta_norm, distance_from_point));
 
