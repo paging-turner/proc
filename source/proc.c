@@ -249,9 +249,11 @@ typedef enum {
 
 typedef enum {
   Ui_Constraint__Null               = 0,
-  Ui_Constraint_SelectedProcess     = (1 << 0),
-  Ui_Constraint_NoSelectedProcess   = (1 << 1),
-  Ui_Constraint_ExitOnKeyup         = (1 << 2),
+  Ui_Constraint_ClickedProcess      = (1 << 0),
+  Ui_Constraint_NoClickedProcess    = (1 << 1),
+  Ui_Constraint_HoverProcess        = (1 << 2),
+  Ui_Constraint_NoHotProcess        = (1 << 3),
+  Ui_Constraint_ExitOnKeyup         = (1 << 4),
 } Ui_Constraint;
 
 // NOTE: These enum values start with values higher than raylib's highest KEY_* value, which is in the 300s
@@ -285,7 +287,7 @@ typedef enum {
 
 #define Keybind_Xlist\
   X(Bound, Key_Kind_Mouse0, 0,\
-    Ui_Constraint_NoSelectedProcess|Ui_Constraint_ExitOnKeyup,\
+    Ui_Constraint_NoHotProcess|Ui_Constraint_ExitOnKeyup,\
     "Select multiple processes by drawing a rectangle with your mouse.")\
 \
   X(Pan, Key_Kind_Mouse1, 0,\
@@ -299,18 +301,18 @@ typedef enum {
     "Zoom your field of view out to make objects appear further.")\
 \
   X(SelectSingleProcess, Key_Kind_Mouse0, 0,\
-    Ui_Constraint_SelectedProcess,\
+    Ui_Constraint_HoverProcess,\
     "Select a single process.")\
 \
   X(SelectAnotherProcess, Key_Kind_Mouse0, Modifier_Key_Control,\
-    Ui_Constraint_SelectedProcess,\
+    Ui_Constraint_ClickedProcess,\
     "Add a process to the selected processes.")\
 \
   X(CancelSelection, Key_Kind_Mouse0, 0, 0,\
     "Clear out the selected processes.")\
 \
   X(CreateProcess, Key_Kind_Mouse0, Modifier_Key_Control,\
-    Ui_Constraint_NoSelectedProcess,\
+    Ui_Constraint_NoHotProcess,\
     "Create a new process.")\
 \
   X(DeleteProcess, KEY_BACKSPACE, 0, 0,\
@@ -1038,7 +1040,7 @@ function void handle_process_selection(Context *context, Process *p) {
 }
 
 
-function Keybind_Result get_keybind(Context *context, Ui_Feature feature) {
+function Keybind_Result get_keybind(Context *context, Ui_Feature feature, Process_Selection selection) {
   Keybind keybind = global_keybind_lookup[feature];
   Ui_State *ui_state = &context->ui_state;
   Keybind_Result result = 0;
@@ -1075,14 +1077,28 @@ function Keybind_Result get_keybind(Context *context, Ui_Feature feature) {
                           (!(modifier_shift ^ ui_state->shift_down)) &&
                           (!(modifier_alt ^ ui_state->alt_down)));
 
-  B32 constraint_selected_process = (Get_Flag(keybind.constraint, Ui_Constraint_SelectedProcess)
-                                     ? ui_state->process_clicked
-                                     : 1);
-  B32 constraint_no_selected_process = (Get_Flag(keybind.constraint, Ui_Constraint_NoSelectedProcess)
-                                        ? !ui_state->process_clicked
-                                        : 1);
+  B32 constraint_clicked_process =
+    (Get_Flag(keybind.constraint, Ui_Constraint_ClickedProcess)
+     ? ui_state->process_clicked
+     : 1);
+  B32 constraint_no_clicked_process =
+    (Get_Flag(keybind.constraint, Ui_Constraint_NoClickedProcess)
+     ? !ui_state->process_clicked
+     : 1);
 
-  B32 constraints_met = constraint_selected_process && constraint_no_selected_process;
+  B32 constraint_hover_process =
+    (Get_Flag(keybind.constraint, Ui_Constraint_HoverProcess)
+     ? selection.type != 0
+     : 1);
+  B32 constraint_no_hover =
+    (Get_Flag(keybind.constraint, Ui_Constraint_NoHotProcess)
+     ? (context->hot_process == 0)
+     : 1);
+
+  B32 constraints_met = (constraint_clicked_process &&
+                         constraint_no_clicked_process &&
+                         constraint_hover_process &&
+                         constraint_no_hover);
 
   if (key_is_pressed && modifier_matches && constraints_met) {
     result = Keybind_Result_Enter;
@@ -1101,6 +1117,7 @@ function Keybind_Result get_keybind(Context *context, Ui_Feature feature) {
 function void handle_user_input(Context *context) {
   context->mouse_position = GetMousePosition();
   Ui_State *ui_state = &context->ui_state;
+  Process_Selection selection = (Process_Selection){0};
 
   ui_state->mouse0_pressed = IsMouseButtonPressed(0);
   ui_state->mouse1_pressed = IsMouseButtonPressed(1);
@@ -1115,7 +1132,7 @@ function void handle_user_input(Context *context) {
 
   // initial bounding handling
   if (Get_Flag(context->flags, Context_Flag_Bounding)) {
-    if (get_keybind(context, Ui_Feature_Bound) == Keybind_Result_Exit) {
+    if (get_keybind(context, Ui_Feature_Bound, selection) == Keybind_Result_Exit) {
       Unset_Flag(context->flags, Context_Flag_Bounding);
     } else {
       clear_active_process(context);
@@ -1124,13 +1141,13 @@ function void handle_user_input(Context *context) {
 
   // panning
   {
-    if (get_keybind(context, Ui_Feature_Pan) == Keybind_Result_Enter) {
+    if (get_keybind(context, Ui_Feature_Pan, selection) == Keybind_Result_Enter) {
       Set_Flag(context->flags, Context_Flag_Panning);
       context->active_position = context->mouse_position;
     }
 
     if (Get_Flag(context->flags, Context_Flag_Panning)) {
-      if (get_keybind(context, Ui_Feature_Pan) == Keybind_Result_Exit) {
+      if (get_keybind(context, Ui_Feature_Pan, selection) == Keybind_Result_Exit) {
         Unset_Flag(context->flags, Context_Flag_Panning);
       } else {
         // Update camera position
@@ -1143,8 +1160,8 @@ function void handle_user_input(Context *context) {
 
   // zooming
   {
-    B32 zoom_in = get_keybind(context, Ui_Feature_ZoomIn) == Keybind_Result_Enter;
-    B32 zoom_out = get_keybind(context, Ui_Feature_ZoomOut) == Keybind_Result_Enter;
+    B32 zoom_in = get_keybind(context, Ui_Feature_ZoomIn, selection) == Keybind_Result_Enter;
+    B32 zoom_out = get_keybind(context, Ui_Feature_ZoomOut, selection) == Keybind_Result_Enter;
 
     if (zoom_in || zoom_out) {
       Keybind keybind_in = global_keybind_lookup[Ui_Feature_ZoomIn];
@@ -1175,11 +1192,11 @@ function void handle_user_input(Context *context) {
 
   // process interaction
   for (Process *p = context->processes.first; p != 0; p = p->next) {
-    Process_Selection selection = get_process_selection(context, p);
+    selection = get_process_selection(context, p);
     ui_state->hot_id_assigned = selection.hot_id_assigned || ui_state->hot_id_assigned;
     B32 is_active = is_active_process(context, p);
 
-    if (ui_state->mouse0_pressed) {
+    if (get_keybind(context, Ui_Feature_SelectSingleProcess, selection) == Keybind_Result_Enter) {
       if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
         // select wire
         Process *wire = get_process_wire_by_selection(context, selection);
@@ -1237,6 +1254,8 @@ function void handle_user_input(Context *context) {
     }
   }
 
+  // zero out selection
+  selection = (Process_Selection){0};
   // zero the old hot-id
   if (!ui_state->hot_id_assigned) {
     context->hot_process = 0;
@@ -1309,17 +1328,19 @@ function void handle_user_input(Context *context) {
     }
   }
 
+  // create process
+  if (get_keybind(context, Ui_Feature_CreateProcess, selection)) {
+    Process *new_p = create_process(context);
+    if (new_p) {
+      new_p->position = GetScreenToWorld2D(context->mouse_position, context->camera);
+      clear_active_process(context);
+      SLLQueuePush_NZ(context->active_process.first, context->active_process.last, new_p, next_active, 0);
+    }
+  }
+
   // non-process clicks
   if (ui_state->mouse0_pressed && !ui_state->process_clicked) {
-    if (ui_state->control_down) {
-      // new process
-      Process *new_p = create_process(context);
-      if (new_p) {
-        new_p->position = GetScreenToWorld2D(context->mouse_position, context->camera);
-        clear_active_process(context);
-        SLLQueuePush_NZ(context->active_process.first, context->active_process.last, new_p, next_active, 0);
-      }
-    } else if (context->active_process.first) {
+    if (context->active_process.first) {
       // un-select process
       clear_active_process(context);
       Unset_Flag(context->flags, (Context_Flag_NewWire|Context_Flag_EditText));
@@ -1327,7 +1348,7 @@ function void handle_user_input(Context *context) {
   }
 
   // enter bounding
-  if (get_keybind(context, Ui_Feature_Bound) == Keybind_Result_Enter) {
+  if (get_keybind(context, Ui_Feature_Bound, selection) == Keybind_Result_Enter) {
     Set_Flag(context->flags, Context_Flag_Bounding);
     context->active_position = context->mouse_position;
   }
