@@ -1124,13 +1124,13 @@ function void handle_user_input(Context *context) {
 
   // panning
   {
-    if (ui_state->mouse1_pressed) {
+    if (get_keybind(context, Ui_Feature_Pan) == Keybind_Result_Enter) {
       Set_Flag(context->flags, Context_Flag_Panning);
       context->active_position = context->mouse_position;
     }
 
     if (Get_Flag(context->flags, Context_Flag_Panning)) {
-      if (!ui_state->mouse1_down) {
+      if (get_keybind(context, Ui_Feature_Pan) == Keybind_Result_Exit) {
         Unset_Flag(context->flags, Context_Flag_Panning);
       } else {
         // Update camera position
@@ -1142,13 +1142,34 @@ function void handle_user_input(Context *context) {
   }
 
   // zooming
-  if (ui_state->mouse_wheel_movement.y != 0.0f) {
-    Vector2 mouse_world_position = GetScreenToWorld2D(context->mouse_position, context->camera);
-    context->camera.offset = context->mouse_position;
-    context->camera.target = mouse_world_position;
-    F32 zoom_delta = 0.1f * ui_state->mouse_wheel_movement.y;
-    context->camera.zoom += zoom_delta;
-    context->camera.zoom = Max(0.1f, context->camera.zoom);
+  {
+    B32 zoom_in = get_keybind(context, Ui_Feature_ZoomIn) == Keybind_Result_Enter;
+    B32 zoom_out = get_keybind(context, Ui_Feature_ZoomOut) == Keybind_Result_Enter;
+
+    if (zoom_in || zoom_out) {
+      Keybind keybind_in = global_keybind_lookup[Ui_Feature_ZoomIn];
+      Keybind keybind_out = global_keybind_lookup[Ui_Feature_ZoomOut];
+      B32 in_wheel = (keybind_in.key_kind == Key_Kind_MouseWheelUp ||
+                      keybind_in.key_kind == Key_Kind_MouseWheelDown);
+      B32 out_wheel = (keybind_out.key_kind == Key_Kind_MouseWheelUp ||
+                       keybind_out.key_kind == Key_Kind_MouseWheelDown);
+      Vector2 mouse_world_position = GetScreenToWorld2D(context->mouse_position, context->camera);
+      context->camera.offset = context->mouse_position;
+      context->camera.target = mouse_world_position;
+      F32 zoom_delta;
+
+      // HACK: is it hacky that when check the mouse wheel and handle it differently like this? maybe not.
+      if ((zoom_in && in_wheel) || (zoom_out && out_wheel)) {
+        zoom_delta = -0.1f * ui_state->mouse_wheel_movement.y;
+      } else if (zoom_in) {
+        zoom_delta = 0.2f;
+      } else {
+        zoom_delta = -0.2f;
+      }
+
+      context->camera.zoom += zoom_delta;
+      context->camera.zoom = Max(0.1f, context->camera.zoom);
+    }
   }
 
 
