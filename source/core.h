@@ -20,22 +20,28 @@
 //  NOT REAL UTF-8
 //    TODO: implement utf-8 editing
 ////////////////
-#define Editable_Character_Xlist\
-  X('a') X('b') X('c') X('d') X('e') X('f') X('g') X('h') X('i') X('j')\
-  X('k') X('l') X('m') X('n') X('o') X('p') X('q') X('r') X('s') X('t')\
-  X('u') X('v') X('w') X('x') X('y') X('z')\
-  X('A') X('B') X('C') X('D') X('E') X('F') X('G') X('H') X('I') X('J') \
-  X('K') X('L') X('M') X('N') X('O') X('P') X('Q') X('R') X('S') X('T')\
-  X('U') X('V') X('W') X('X') X('Y') X('Z')\
-  X('0') X('1') X('2') X('3') X('4') X('5') X('6') X('7') X('8') X('9')\
-  X('`') X('~') X('!') X('@') X('#') X('$') X('%') X('^') X('&') X('*')\
-  X('(') X(')') X('-') X('_') X('=') X('+') X(';') X(':') X(' ')\
-  X('\'') X('"') X(',') X('<') X('.') X('>') X('/') X('?') X('\\') X('|')
+#define Ascii_Alpha_Xlist\
+  X('A', 'a') X('B', 'b') X('C', 'c') X('D', 'd') X('E', 'e') X('F', 'f') X('G', 'g') X('H', 'h') X('I', 'i') X('J', 'j')\
+  X('K', 'k') X('L', 'l') X('M', 'm') X('N', 'n') X('O', 'o') X('P', 'p') X('Q', 'q') X('R', 'r') X('S', 's') X('T', 't')\
+  X('U', 'u') X('V', 'v') X('W', 'w') X('X', 'x') X('Y', 'y') X('Z', 'z')
 
-U8 is_editable_char_lookup[256] = {
-#define X(c)\
-  [c] = 1,
-  Editable_Character_Xlist
+#define Ascii_Symbol_Xlist\
+  X('0', ')') X('1', '!') X('2', '@') X('3', '#') X('4', '$') X('5', '%') X('6', '^') X('7', '&') X('8', '*') X('9', '(')\
+  X('`', '~') X('-', '_') X('=', '+') X('[', '{') X(']', '}') X('\\', '|')\
+  X(',', '<') X('.', '>') X('/', '?') X(' ', ' ') X(';', ':') X('\'', '"')
+
+
+U8 ascii_char_lookup[256][2] = {
+#define X(upper, lower)\
+  [upper][0] = lower,\
+  [upper][1] = upper,
+  Ascii_Alpha_Xlist
+#undef X
+
+#define X(no_shift_char, shift_char)\
+  [no_shift_char][0] = no_shift_char,\
+  [no_shift_char][1] = shift_char,
+  Ascii_Symbol_Xlist
 #undef X
 };
 

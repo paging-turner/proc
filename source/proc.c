@@ -1012,18 +1012,16 @@ function void handle_user_input(Context *context) {
       Unset_Flag(context->flags, Context_Flag_Dragging);
     } else if (Get_Flag(context->flags, Context_Flag_EditText)) {
       // process label editing
-      U32 c = 0;
+      U32 key = 0;
       B32 shift_down = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
-      while ((c = GetKeyPressed())) {
+      while ((key = GetKeyPressed())) {
         for (Process *a = context->active_process.first; a != 0; a = a->next_active) {
-          if (Is_Editable_Char(c) && a->label_cursor < Process_Label_Size-1) {
-            B32 is_alpha = c >= 'A' && c <= 'Z';
-            if (is_alpha && !shift_down) {
-              c += 32;
-            }
-            a->label[a->label_cursor] = c&0xff;
+          B32 is_ascii = key > 0 && key < 256;
+          U8 c = ascii_char_lookup[key&0xff][shift_down];
+          if (is_ascii && c != 0 && a->label_cursor < Process_Label_Size-1) {
+            a->label[a->label_cursor] = c;
             a->label_cursor += 1;
-          } else if (c == KEY_BACKSPACE && a->label_cursor > 0) {
+          } else if (key == KEY_BACKSPACE && a->label_cursor > 0) {
             a->label_cursor -= 1;
             a->label[a->label_cursor] = 0;
           }
@@ -1203,16 +1201,17 @@ function void draw_processes(Context *context) {
       // draw label
       if (p->label[0]) {
         const char *text = (char *)p->label;
-        F32 text_width = (F32)MeasureText(text, global_process_font_size);
+        F32 font_size = context->camera.zoom * global_process_font_size;
+        F32 text_width = (F32)MeasureText(text, font_size);
         F32 text_x = shape.center.x-0.5f*text_width;
-        F32 text_y = shape.center.y-0.5f*global_process_font_size;
+        F32 text_y = shape.center.y-0.5f*font_size;
         if (shape.kind == Process_Shape_HalfCircle) {
           F32 flip = shape.downward ? -1.0f : 1.0f;
           F32 fudge = 0.9f;
           F32 offset = fudge * flip * (0.5f * shape.radius);
           text_y -= offset;
         }
-        render_DrawText(ra, text, text_x, text_y, global_process_font_size, text_color, 0);
+        render_DrawText(ra, text, text_x, text_y, font_size, text_color, 0);
       }
 
       // draw new-wire-box
@@ -1368,17 +1367,16 @@ function void initialize_globals(void) {
 
 int main(void) {
   InitWindow(800, 500, "proc");
+  SetWindowState(FLAG_WINDOW_RESIZABLE);
   SetTargetFPS(60);
 
   initialize_globals();
-  Context context = initialize_context();
+  SetWindowSize(global_window_width, global_window_height);
 
+  Context context = initialize_context();
   Arena *ra = context.render_arena;
   Arena *ta = context.temp_arena;
-
   render_Initialize(ta);
-
-  SetWindowSize(global_window_width, global_window_height);
 
   while (!WindowShouldClose()) {
     handle_user_input(&context);
