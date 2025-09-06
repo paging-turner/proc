@@ -24,6 +24,9 @@
      [x] BUG: When zoomed way out, the wire positioning gets messed up.
    === Graphics ===
      [ ] Replace line-drawing calls with a call that draws triangle-strips/fans. This should help deal with how to cleanly connect the ends of lines together.
+   === Testing ===
+     [ ] Enumerate some test cases, to at least be able to manually check that things are working.
+     [ ] Automated test??
    [ ] Copy-paste of selected processes
    [ ] Use a font other than the raylib default
    [ ] Expand base-layer and let it consume core.h and ryn_memory.h
@@ -41,12 +44,15 @@
      [ ] Enable growable arenas
 */
 
+
+
+
+
 #include <stdio.h>
 
 #define MR4TH_NO_INCLUDES 1
 #define MR4TH_NO_CLAMP 1
 #include "../libraries/mr4th/src/mr4th_base.h"
-
 #define push_struct(a, s) arena_push((a), sizeof(s))
 
 
@@ -65,6 +71,10 @@
 
 
 
+
+//////////////////////////////////////
+// Process
+//////////////////////////////////////
 
 // TODO: Should Process_Flag just be a non-flag enum?
 typedef enum {
@@ -120,6 +130,13 @@ typedef struct {
 } Process_List;
 
 
+
+
+//////////////////////////////////////
+// Context
+//////////////////////////////////////
+
+
 // TODO: maybe this should be a mode and not flags?
 typedef enum {
   Context_Flag_Dragging       = 1 << 0,
@@ -129,6 +146,20 @@ typedef enum {
   Context_Flag_EditText       = 1 << 4,
   Context_Flag_RoundedShapes  = 1 << 5,
 } Context_Flag;
+
+typedef struct {
+  Vector2 mouse_position;
+  B32 mouse0_pressed;
+  B32 mouse1_pressed;
+  B32 mouse0_down;
+  B32 mouse1_down;
+  B32 process_clicked;
+  B32 hot_id_assigned;
+  Vector2 mouse_wheel_movement;
+  B32 control_down;
+  B32 shift_down;
+  B32 alt_down;
+} Ui_State;
 
 typedef struct {
   Arena *render_arena;
@@ -146,16 +177,23 @@ typedef struct {
   Process *hot_process;
   Process_List active_process;
 
-  Vector2 mouse_position;
+  Vector2 mouse_position; // TODO: move this to ui_state
   Vector2 active_position;
 
   Camera2D camera;
+
+  Ui_State ui_state;
 } Context;
+
 
 
 #include "../source/render.h"
 
 
+
+//////////////////////////////////////
+// Process Shape
+//////////////////////////////////////
 
 typedef enum {
   Process_Shape_Triangle,
@@ -178,6 +216,122 @@ typedef struct {
   Vector2 second_control;
   B32 downward;
 } Process_Shape;
+
+
+
+
+//////////////////////////////////////
+// Keybinds
+//////////////////////////////////////
+
+#define Ui_Feature_Xlist\
+  X(Bound)\
+  X(Pan)\
+  X(ZoomIn)\
+  X(ZoomOut)\
+  X(SelectSingleProcess)\
+  X(SelectAnotherProcess)\
+  X(CancelSelection)\
+  X(CreateProcess)\
+  X(DeleteProcess)\
+  X(BeginEditText)\
+  X(CycleProcessDisplay)\
+  X(ToggleDisplayMode)
+
+typedef enum {
+  Ui_Feature__Null,
+#define X(feature)\
+  Ui_Feature_##feature,
+  Ui_Feature_Xlist
+#undef X
+  Ui_Feature__Count,
+} Ui_Feature;
+
+typedef enum {
+  Ui_Constraint__Null               = 0,
+  Ui_Constraint_SelectedProcess     = (1 << 0),
+  Ui_Constraint_NoSelectedProcess   = (1 << 1),
+  Ui_Constraint_ExitOnKeyup         = (1 << 2),
+} Ui_Constraint;
+
+// NOTE: These enum values start with values higher than raylib's highest KEY_* value, which is in the 300s
+typedef enum {
+  Key_Kind_Mouse0 = 1000,
+  Key_Kind_Mouse1,
+  Key_Kind_MouseWheelUp,
+  Key_Kind_MouseWheelDown,
+} Key_Kind;
+
+typedef enum {
+  Modifier_Key__Null    = 0,
+  Modifier_Key_Control  = (1 << 0),
+  Modifier_Key_Shift    = (1 << 2),
+  Modifier_Key_Alt      = (1 << 3),
+} Modifier_Key;
+
+typedef struct {
+  Ui_Feature feature;
+  U32 key_kind; // Uses raylib's KEY_* enum and some special ones for mouse-keys
+  U32 modifiers;
+  Ui_Constraint constraint;
+  char *description;
+} Keybind;
+
+typedef enum {
+  Keybind_Result__Null,
+  Keybind_Result_Enter,
+  Keybind_Result_Exit,
+} Keybind_Result;
+
+#define Keybind_Xlist\
+  X(Bound, Key_Kind_Mouse0, 0,\
+    Ui_Constraint_NoSelectedProcess|Ui_Constraint_ExitOnKeyup,\
+    "Select multiple processes by drawing a rectangle with your mouse.")\
+\
+  X(Pan, Key_Kind_Mouse1, 0,\
+    Ui_Constraint_ExitOnKeyup,\
+    "Slide your field of view by moving your mouse.")\
+\
+  X(ZoomIn, Key_Kind_MouseWheelUp, 0, 0,\
+    "Zoom your field of view in to make objects appear closer.")\
+\
+  X(ZoomOut, Key_Kind_MouseWheelDown, 0, 0,\
+    "Zoom your field of view out to make objects appear further.")\
+\
+  X(SelectSingleProcess, Key_Kind_Mouse0, 0,\
+    Ui_Constraint_SelectedProcess,\
+    "Select a single process.")\
+\
+  X(SelectAnotherProcess, Key_Kind_Mouse0, Modifier_Key_Control,\
+    Ui_Constraint_SelectedProcess,\
+    "Add a process to the selected processes.")\
+\
+  X(CancelSelection, Key_Kind_Mouse0, 0, 0,\
+    "Clear out the selected processes.")\
+\
+  X(CreateProcess, Key_Kind_Mouse0, Modifier_Key_Control,\
+    Ui_Constraint_NoSelectedProcess,\
+    "Create a new process.")\
+\
+  X(DeleteProcess, KEY_BACKSPACE, 0, 0,\
+    "Delete the selected processes.")\
+\
+  X(BeginEditText, KEY_I, 0, 0,\
+    "Begin text-insertion mode.")\
+\
+  X(CycleProcessDisplay, KEY_TAB, 0, 0,\
+    "Cycle through special displays for selected processes.")\
+\
+  X(ToggleDisplayMode, KEY_M, 0, 0,\
+    "Toggle between 'classic' and 'rounded' display modes.")
+
+
+
+
+
+//////////////////////////////////////
+// Globals
+//////////////////////////////////////
 
 global_variable F32 global_window_width;
 global_variable F32 global_window_height;
@@ -202,6 +356,8 @@ global_variable F32 global_panel_font_size = 14.0f;
 global_variable Color global_background_color;
 
 global_variable S32 global_shape_fan_triangle_count = 12;
+
+global_variable Keybind global_keybind_lookup[Ui_Feature__Count];
 
 #define Half_Circle_Fudge 1.32f
 #define Half_Circle_Radius_Fudge 1.0f
@@ -882,19 +1038,84 @@ function void handle_process_selection(Context *context, Process *p) {
 }
 
 
+function Keybind_Result get_keybind(Context *context, Ui_Feature feature) {
+  Keybind keybind = global_keybind_lookup[feature];
+  Ui_State *ui_state = &context->ui_state;
+  Keybind_Result result = 0;
+
+  B32 key_is_pressed = 0;
+  B32 key_is_down = 0;
+
+  switch(keybind.key_kind) {
+  case Key_Kind_Mouse0: {
+    key_is_pressed = ui_state->mouse0_pressed;
+    key_is_down = ui_state->mouse0_down;
+  } break;
+  case Key_Kind_Mouse1: {
+    key_is_pressed = ui_state->mouse1_pressed;
+    key_is_down = ui_state->mouse1_down;
+  } break;
+  case Key_Kind_MouseWheelUp: {
+    key_is_pressed = ui_state->mouse_wheel_movement.y > 0.0f;
+  } break;
+  case Key_Kind_MouseWheelDown: {
+    key_is_pressed = ui_state->mouse_wheel_movement.y < 0.0f;
+  } break;
+  default: {
+    key_is_pressed = IsKeyPressed(keybind.key_kind);
+    key_is_down = IsKeyDown(keybind.key_kind);
+  } break;
+  }
+
+  B32 modifier_control = Get_Flag(keybind.modifiers, Modifier_Key_Control) ? 1 : 0;
+  B32 modifier_shift = Get_Flag(keybind.modifiers, Modifier_Key_Shift) ? 1 : 0;
+  B32 modifier_alt = Get_Flag(keybind.modifiers, Modifier_Key_Alt) ? 1 : 0;
+
+  B32 modifier_matches = ((!(modifier_control ^ ui_state->control_down)) &&
+                          (!(modifier_shift ^ ui_state->shift_down)) &&
+                          (!(modifier_alt ^ ui_state->alt_down)));
+
+  B32 constraint_selected_process = (Get_Flag(keybind.constraint, Ui_Constraint_SelectedProcess)
+                                     ? ui_state->process_clicked
+                                     : 1);
+  B32 constraint_no_selected_process = (Get_Flag(keybind.constraint, Ui_Constraint_NoSelectedProcess)
+                                        ? !ui_state->process_clicked
+                                        : 1);
+
+  B32 constraints_met = constraint_selected_process && constraint_no_selected_process;
+
+  if (key_is_pressed && modifier_matches && constraints_met) {
+    result = Keybind_Result_Enter;
+  }
+
+  if (Get_Flag(keybind.constraint, Ui_Constraint_ExitOnKeyup)) {
+    if (!key_is_down) {
+      result = Keybind_Result_Exit;
+    }
+  }
+
+  return result;
+}
+
+
 function void handle_user_input(Context *context) {
   context->mouse_position = GetMousePosition();
-  B32 mouse0_pressed = IsMouseButtonPressed(0);
-  B32 mouse1_pressed = IsMouseButtonPressed(1);
-  B32 mouse0_down = IsMouseButtonDown(0);
-  B32 mouse1_down = IsMouseButtonDown(1);
-  B32 process_clicked = 0;
-  B32 hot_id_assigned = 0;
-  Vector2 mouse_wheel_movement = GetMouseWheelMoveV();
+  Ui_State *ui_state = &context->ui_state;
+
+  ui_state->mouse0_pressed = IsMouseButtonPressed(0);
+  ui_state->mouse1_pressed = IsMouseButtonPressed(1);
+  ui_state->mouse0_down = IsMouseButtonDown(0);
+  ui_state->mouse1_down = IsMouseButtonDown(1);
+  ui_state->process_clicked = 0;
+  ui_state->hot_id_assigned = 0;
+  ui_state->mouse_wheel_movement = GetMouseWheelMoveV();
+  ui_state->control_down = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_LEFT_CONTROL);
+  ui_state->shift_down = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_LEFT_SHIFT);
+  ui_state->alt_down = IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_LEFT_ALT);
 
   // initial bounding handling
   if (Get_Flag(context->flags, Context_Flag_Bounding)) {
-    if (!mouse0_down) {
+    if (get_keybind(context, Ui_Feature_Bound) == Keybind_Result_Exit) {
       Unset_Flag(context->flags, Context_Flag_Bounding);
     } else {
       clear_active_process(context);
@@ -903,13 +1124,13 @@ function void handle_user_input(Context *context) {
 
   // panning
   {
-    if (mouse1_pressed) {
+    if (ui_state->mouse1_pressed) {
       Set_Flag(context->flags, Context_Flag_Panning);
       context->active_position = context->mouse_position;
     }
 
     if (Get_Flag(context->flags, Context_Flag_Panning)) {
-      if (!mouse1_down) {
+      if (!ui_state->mouse1_down) {
         Unset_Flag(context->flags, Context_Flag_Panning);
       } else {
         // Update camera position
@@ -921,11 +1142,11 @@ function void handle_user_input(Context *context) {
   }
 
   // zooming
-  if (mouse_wheel_movement.y != 0.0f) {
+  if (ui_state->mouse_wheel_movement.y != 0.0f) {
     Vector2 mouse_world_position = GetScreenToWorld2D(context->mouse_position, context->camera);
     context->camera.offset = context->mouse_position;
     context->camera.target = mouse_world_position;
-    F32 zoom_delta = 0.1f * mouse_wheel_movement.y;
+    F32 zoom_delta = 0.1f * ui_state->mouse_wheel_movement.y;
     context->camera.zoom += zoom_delta;
     context->camera.zoom = Max(0.1f, context->camera.zoom);
   }
@@ -934,16 +1155,16 @@ function void handle_user_input(Context *context) {
   // process interaction
   for (Process *p = context->processes.first; p != 0; p = p->next) {
     Process_Selection selection = get_process_selection(context, p);
-    hot_id_assigned = selection.hot_id_assigned || hot_id_assigned;
+    ui_state->hot_id_assigned = selection.hot_id_assigned || ui_state->hot_id_assigned;
     B32 is_active = is_active_process(context, p);
 
-    if (mouse0_pressed) {
+    if (ui_state->mouse0_pressed) {
       if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
         // select wire
         Process *wire = get_process_wire_by_selection(context, selection);
         if (wire) {
           handle_process_selection(context, wire);
-          process_clicked = 1;
+          ui_state->process_clicked = 1;
         }
       } else if ((is_active || context->hot_process == p) &&
                  selection.type == Process_Selection_NewWire) {
@@ -951,7 +1172,7 @@ function void handle_user_input(Context *context) {
         Set_Flag(context->flags, Context_Flag_NewWire);
         clear_active_process(context);
         SLLQueuePush_NZ(context->active_process.first, context->active_process.last, p, next_active, 0);
-        process_clicked = 1;
+        ui_state->process_clicked = 1;
       } else if (selection.type == Process_Selection_Process) {
         if (Get_Flag(context->flags, Context_Flag_NewWire)) {
           // connect processes
@@ -963,7 +1184,7 @@ function void handle_user_input(Context *context) {
           Unset_Flag(context->flags, (Context_Flag_NewWire | Context_Flag_EditText));
           Set_Flag(context->flags, Context_Flag_Dragging);
           context->active_position = context->mouse_position;
-          process_clicked = 1;
+          ui_state->process_clicked = 1;
         }
       }
     } else if (selection.type == Process_Selection_Process) {
@@ -996,14 +1217,14 @@ function void handle_user_input(Context *context) {
   }
 
   // zero the old hot-id
-  if (!hot_id_assigned) {
+  if (!ui_state->hot_id_assigned) {
     context->hot_process = 0;
   }
 
   // handle active-process
   if (context->active_process.first) {
     B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging);
-    if (is_dragging && !mouse0_down) {
+    if (is_dragging && !ui_state->mouse0_down) {
       // stop dragging
       for (Process *a = context->active_process.first; a != 0; a = a->next_active) {
         Vector2 new_position = get_process_position(context, a);
@@ -1068,25 +1289,26 @@ function void handle_user_input(Context *context) {
   }
 
   // non-process clicks
-  if (mouse0_pressed && !process_clicked) {
-    B32 ctrl_down = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
-
-    if (context->active_process.first) {
-      // un-select process
-      clear_active_process(context);
-      Unset_Flag(context->flags, (Context_Flag_NewWire|Context_Flag_EditText));
-    } else if (ctrl_down) {
+  if (ui_state->mouse0_pressed && !ui_state->process_clicked) {
+    if (ui_state->control_down) {
       // new process
       Process *new_p = create_process(context);
       if (new_p) {
         new_p->position = GetScreenToWorld2D(context->mouse_position, context->camera);
+        clear_active_process(context);
+        SLLQueuePush_NZ(context->active_process.first, context->active_process.last, new_p, next_active, 0);
       }
+    } else if (context->active_process.first) {
+      // un-select process
+      clear_active_process(context);
+      Unset_Flag(context->flags, (Context_Flag_NewWire|Context_Flag_EditText));
     }
+  }
 
-    if (!ctrl_down) {
-      Set_Flag(context->flags, Context_Flag_Bounding);
-      context->active_position = context->mouse_position;
-    }
+  // enter bounding
+  if (get_keybind(context, Ui_Feature_Bound) == Keybind_Result_Enter) {
+    Set_Flag(context->flags, Context_Flag_Bounding);
+    context->active_position = context->mouse_position;
   }
 
   // top-level actions
@@ -1359,6 +1581,11 @@ function void initialize_globals(void) {
 
   global_line_thickness = 0.05f*global_shape_size;
   global_active_line_thickness = 0.1f*global_shape_size;
+
+#define X(feature, key_kind, modifiers, constraint, description)\
+  global_keybind_lookup[Ui_Feature_##feature] = (Keybind){Ui_Feature_##feature, key_kind, modifiers, constraint, description};
+  Keybind_Xlist;
+#undef X
 }
 
 
