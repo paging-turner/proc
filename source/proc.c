@@ -24,6 +24,15 @@
      [x] BUG: When zoomed way out, the wire positioning gets messed up.
    === Graphics ===
      [ ] Replace line-drawing calls with a call that draws triangle-strips/fans. This should help deal with how to cleanly connect the ends of lines together.
+   === Keybind Config ===
+     [ ] Test some features of the new keybind-config file
+       [ ] Comments
+       [ ] Line without semi-color
+       [ ] Line without equals
+       [ ] Multiple definitions for same feature (should overwrite)
+       [ ] Mutiple key-kind definitions for single feature (should error)
+     [ ] Rewrite example-config to have good-instructions to help users write their own config.
+     [ ] Add ability to define bindings for mouse buttons and mouse-wheels
    === Testing ===
      [ ] Enumerate some test cases, to at least be able to manually check that things are working.
      [ ] Automated test??
@@ -48,7 +57,7 @@
 
 
 
-#include <stdio.h>
+#include <stdio.h> // printf, fopen
 
 #define MR4TH_NO_INCLUDES 1
 #define MR4TH_NO_CLAMP 1
@@ -68,6 +77,18 @@
 #endif
 
 #include "../source/core.h"
+
+
+
+//////////////////////////////////////
+// Paths
+//////////////////////////////////////
+#if OS_WINDOWS
+# define Keybind_Config_Filepath "..\\config\\keybind.txt"
+#else
+# define Keybind_Config_Filepath "../config/keybind.txt"
+#endif
+
 
 
 
@@ -186,7 +207,14 @@ typedef struct {
 
 
 
+
+
+//////////////////////////////////////
+// Includes relying on Context
+//////////////////////////////////////
+
 #include "../source/render.h"
+#include "../source/keybind.h"
 
 
 
@@ -219,113 +247,6 @@ typedef struct {
 
 
 
-//////////////////////////////////////
-// Keybinds
-//////////////////////////////////////
-
-#define Ui_Feature_Xlist\
-  X(Bound)\
-  X(Pan)\
-  X(ZoomIn)\
-  X(ZoomOut)\
-  X(SelectSingleProcess)\
-  X(SelectAnotherProcess)\
-  X(CancelSelection)\
-  X(CreateProcess)\
-  X(DeleteProcess)\
-  X(BeginEditText)\
-  X(CycleProcessDisplay)\
-  X(ToggleDisplayMode)
-
-typedef enum {
-  Ui_Feature__Null,
-#define X(feature)\
-  Ui_Feature_##feature,
-  Ui_Feature_Xlist
-#undef X
-  Ui_Feature__Count,
-} Ui_Feature;
-
-typedef enum {
-  Ui_Constraint__Null         = 0,
-  Ui_Constraint_HoverProcess  = (1 << 1),
-  Ui_Constraint_NoHotProcess  = (1 << 2),
-  Ui_Constraint_ExitOnKeyup   = (1 << 3),
-} Ui_Constraint;
-
-// NOTE: These enum values start with values higher than raylib's highest KEY_* value, which is in the 300s
-typedef enum {
-  Key_Kind_Mouse0 = 1000,
-  Key_Kind_Mouse1,
-  Key_Kind_MouseWheelUp,
-  Key_Kind_MouseWheelDown,
-} Key_Kind;
-
-typedef enum {
-  Modifier_Key__Null    = 0,
-  Modifier_Key_Control  = (1 << 0),
-  Modifier_Key_Shift    = (1 << 2),
-  Modifier_Key_Alt      = (1 << 3),
-} Modifier_Key;
-
-typedef struct {
-  Ui_Feature feature;
-  U32 key_kind; // Uses raylib's KEY_* enum and some special ones for mouse-keys
-  U32 modifiers;
-  Ui_Constraint constraint;
-  char *description;
-} Keybind;
-
-typedef enum {
-  Keybind_Result__Null,
-  Keybind_Result_Enter,
-  Keybind_Result_Exit,
-} Keybind_Result;
-
-#define Keybind_Xlist\
-  X(Bound, Key_Kind_Mouse0, 0,\
-    Ui_Constraint_NoHotProcess|Ui_Constraint_ExitOnKeyup,\
-    "Select multiple processes by drawing a rectangle with your mouse.")\
-\
-  X(Pan, Key_Kind_Mouse1, 0,\
-    Ui_Constraint_ExitOnKeyup,\
-    "Slide your field of view by moving your mouse.")\
-\
-  X(ZoomIn, Key_Kind_MouseWheelUp, 0, 0,\
-    "Zoom your field of view in to make objects appear closer.")\
-\
-  X(ZoomOut, Key_Kind_MouseWheelDown, 0, 0,\
-    "Zoom your field of view out to make objects appear further.")\
-\
-  X(SelectSingleProcess, Key_Kind_Mouse0, 0,\
-    Ui_Constraint_HoverProcess|Ui_Constraint_ExitOnKeyup,\
-    "Select a single process.")\
-\
-  X(SelectAnotherProcess, Key_Kind_Mouse0, Modifier_Key_Control,\
-    Ui_Constraint_HoverProcess,\
-    "Add a process to the selected processes.")\
-\
-  X(CancelSelection, Key_Kind_Mouse0, 0,\
-    Ui_Constraint_NoHotProcess,\
-    "Clear out the selected processes.")\
-\
-  X(CreateProcess, Key_Kind_Mouse0, Modifier_Key_Control,\
-    Ui_Constraint_NoHotProcess,\
-    "Create a new process.")\
-\
-  X(DeleteProcess, KEY_BACKSPACE, 0, 0,\
-    "Delete the selected processes.")\
-\
-  X(BeginEditText, KEY_I, 0, 0,\
-    "Begin text-insertion mode.")\
-\
-  X(CycleProcessDisplay, KEY_TAB, 0, 0,\
-    "Cycle through special displays for selected processes.")\
-\
-  X(ToggleDisplayMode, KEY_M, 0, 0,\
-    "Toggle between 'classic' and 'rounded' display modes.")
-
-
 
 
 
@@ -356,8 +277,6 @@ global_variable F32 global_panel_font_size = 14.0f;
 global_variable Color global_background_color;
 
 global_variable S32 global_shape_fan_triangle_count = 12;
-
-global_variable Keybind global_keybind_lookup[Ui_Feature__Count];
 
 #define Half_Circle_Fudge 1.32f
 #define Half_Circle_Radius_Fudge 1.0f
@@ -1586,7 +1505,13 @@ function Context initialize_context(void) {
 
 
 
-function void initialize_globals(void) {
+
+
+
+
+
+
+function void initialize_globals(Context *context) {
   S32 monitor_id = GetCurrentMonitor();
   S32 screen_width = GetMonitorWidth(monitor_id);
   S32 screen_height = GetMonitorHeight(monitor_id);
@@ -1611,10 +1536,7 @@ function void initialize_globals(void) {
   global_line_thickness = 0.05f*global_shape_size;
   global_active_line_thickness = 0.1f*global_shape_size;
 
-#define X(feature, key_kind, modifiers, constraint, description)\
-  global_keybind_lookup[Ui_Feature_##feature] = (Keybind){Ui_Feature_##feature, key_kind, modifiers, constraint, description};
-  Keybind_Xlist;
-#undef X
+  load_keybinds(context);
 }
 
 
@@ -1626,10 +1548,10 @@ int main(void) {
   SetWindowState(FLAG_WINDOW_RESIZABLE);
   SetTargetFPS(60);
 
-  initialize_globals();
+  Context context = initialize_context();
+  initialize_globals(&context);
   SetWindowSize(global_window_width, global_window_height);
 
-  Context context = initialize_context();
   Arena *ra = context.render_arena;
   Arena *ta = context.temp_arena;
   render_Initialize(ta);

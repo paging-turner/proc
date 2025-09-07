@@ -1,0 +1,13 @@
+# In order to create custom keybinds, create a file called config/keybind.txt
+# The first value is a name from Ui_Feature_Xlist in keybind.h
+
+# The second value should be *at most* one key name, which is usually the literal character that the key represents.
+# There are some exceptions like "tab", "space", and "backspace".
+# TODO: Document what key-kind exceptions there are!!!!
+
+# The keys and modifiers can be defined in any order.
+# Modifier keys are: control, alt, shift
+
+# Single-line comments start with "#"
+
+DeleteProcess = Control D;

@@ -15,6 +15,20 @@
 
 
 
+///////////////////////////////////////
+// Function Declarations
+///////////////////////////////////////
+function B32 c_strings_equal(char *a, char *b);
+
+function F32 which_side_of_line(Vector2 a, Vector2 b, Vector2 p);
+function F32 which_side_of_bezier(Vector2 first_point, Vector2 second_point, Vector2 first_control, Vector2 second_control, Vector2 test_point);
+
+function Vector2 get_bezier_point(Vector2 first_point, Vector2 second_point, Vector2 first_control, Vector2 second_control, F32 t);
+function S32 create_bezier_triangle_fan(Vector2 first_point, Vector2 second_point, Vector2 first_control, Vector2 second_control, Vector2 *points, S32 max_points, S32 triangle_count);
+
+
+
+
 
 ////////////////
 //  NOT REAL UTF-8
@@ -47,6 +61,7 @@ U8 ascii_char_lookup[256][2] = {
 
 #define Is_Ascii_Range(c) ((c) >= 0 && (c)<=255)
 #define Is_Editable_Char(c)  (Is_Ascii_Range(c)?is_editable_char_lookup[c&0xff]:0)
+
 
 
 

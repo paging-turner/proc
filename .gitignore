@@ -5,3 +5,6 @@ build/
 # TODO: fix the build.bat script from putting proc.obj in the project root.
 *.obj
 *.pdb
+
+config/*
+!config/example-keybind.txt
