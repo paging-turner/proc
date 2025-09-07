@@ -149,16 +149,13 @@ function void load_keybinds(Context *context);
     Ui_Constraint_NoHotProcess,\
     "Create a new process.")\
 \
-  X(DeleteProcess, KEY_BACKSPACE, 0, 0,\
+  X(DeleteProcess, KEY_D, Modifier_Key_Control, 0,\
     "Delete the selected processes.")\
-\
-  X(BeginEditText, KEY_I, 0, 0,\
-    "Begin text-insertion mode.")\
 \
   X(CycleProcessDisplay, KEY_TAB, 0, 0,\
     "Cycle through special displays for selected processes.")\
 \
-  X(ToggleDisplayMode, KEY_M, 0, 0,\
+  X(ToggleDisplayMode, KEY_M, Modifier_Key_Control, 0,\
     "Toggle between 'classic' and 'rounded' display modes.")
 
 
@@ -330,8 +327,9 @@ function Keybind_Config_Tokens tokenize_keybinds_config_file(Context *context) {
       } break;
       case S(Comment): {
         while (i < file_size) {
-          if (file_str[i] != '\n') {
+          if (file_str[i] == '\n') {
             state = S(Begin);
+            break;
           } else {
             i += 1;
           }
@@ -356,6 +354,7 @@ function Keybind_Config_Tokens tokenize_keybinds_config_file(Context *context) {
 typedef enum {
   Keybind_Config_Parse_State_Begin,
   Keybind_Config_Parse_State_Error,
+  Keybind_Config_Parse_State_LineError,
   Keybind_Config_Parse_State_Equals,
   Keybind_Config_Parse_State_Keybind,
 } Keybind_Config_Parse_State;
@@ -376,16 +375,25 @@ function void parse_keybind_config_tokens(Context *context, Keybind_Config_Token
           keybind.feature = feature;
           state = S(Equals);
         } else {
-          state = S(Error);
+          printf("[ Keybind Config Parse Error ] Unknown feature '");
+          print_string8(token->name);
+          printf("'\n");
+          state = S(LineError);
         }
       } else {
-        state = S(Error);
+        printf("[ Keybind Config Parse Error ] Expected a feature but got token of value '");
+        print_string8(token->name);
+        printf("'\n");
+        state = S(LineError);
       }
     } break;
     case S(Equals): {
       if (token->kind == Keybind_Config_Token_Kind_Equal) {
         state = S(Keybind);
       } else {
+        printf("[ Keybind Config Parse Error ] Expected an equals '=' after feature name, but got token with value '");
+        print_string8(token->name);
+        printf("'\n");
         state = S(Error);
       }
     } break;
@@ -407,6 +415,7 @@ function void parse_keybind_config_tokens(Context *context, Keybind_Config_Token
             printf("[ Keybind Config Parse Error ] Key-kind already defined. While defining feature '");
             print_string8(ref_keybind.name);
             printf("'\n");
+            state = S(LineError);
           } else {
             keybind.key_kind = key_kind;
           }
@@ -414,8 +423,13 @@ function void parse_keybind_config_tokens(Context *context, Keybind_Config_Token
           printf("[ Keybind Config Parse Error ] Unknown key-kind '");
           print_string8(token->name);
           printf("'\n");
-          state = S(Error);
+          state = S(LineError);
         }
+      }
+    } break;
+    case S(LineError): {
+      if (token->kind == Keybind_Config_Token_Kind_Semicolon) {
+        state = S(Begin);
       }
     } break;
     default: state = S(Error);

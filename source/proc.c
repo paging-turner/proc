@@ -165,8 +165,7 @@ typedef enum {
   Context_Flag_Bounding       = 1 << 1,
   Context_Flag_Panning        = 1 << 2,
   Context_Flag_NewWire        = 1 << 3,
-  Context_Flag_EditText       = 1 << 4,
-  Context_Flag_RoundedShapes  = 1 << 5,
+  Context_Flag_RoundedShapes  = 1 << 4,
 } Context_Flag;
 
 typedef struct {
@@ -180,6 +179,8 @@ typedef struct {
   B32 control_down;
   B32 shift_down;
   B32 alt_down;
+
+  B32 action_occured;
 } Ui_State;
 
 typedef struct {
@@ -943,10 +944,11 @@ get_process_selection(Context *context, Process *p) {
 
 
 
-function Keybind_Result get_keybind(Context *context, Ui_Feature feature, Process_Selection selection) {
+function Keybind_Result check_keybind(Context *context, Ui_Feature feature, Process_Selection selection) {
+  Keybind_Result result = 0;
+
   Keybind keybind = global_keybind_lookup[feature];
   Ui_State *ui_state = &context->ui_state;
-  Keybind_Result result = 0;
 
   B32 key_is_pressed = 0;
   B32 key_is_down = 0;
@@ -1002,8 +1004,13 @@ function Keybind_Result get_keybind(Context *context, Ui_Feature feature, Proces
     }
   }
 
+  if (result == Keybind_Result_Enter) {
+    context->ui_state.action_occured = 1;
+  }
+
   return result;
 }
+
 
 
 function void handle_user_input(Context *context) {
@@ -1020,10 +1027,11 @@ function void handle_user_input(Context *context) {
   ui_state->control_down = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_LEFT_CONTROL);
   ui_state->shift_down = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_LEFT_SHIFT);
   ui_state->alt_down = IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_LEFT_ALT);
+  ui_state->action_occured = 0;
 
   // initial bounding handling
   if (Get_Flag(context->flags, Context_Flag_Bounding)) {
-    if (get_keybind(context, Ui_Feature_Bound, selection) == Keybind_Result_Exit) {
+    if (check_keybind(context, Ui_Feature_Bound, selection) == Keybind_Result_Exit) {
       Unset_Flag(context->flags, Context_Flag_Bounding);
     } else {
       clear_active_process(context);
@@ -1032,13 +1040,13 @@ function void handle_user_input(Context *context) {
 
   // panning
   {
-    if (get_keybind(context, Ui_Feature_Pan, selection) == Keybind_Result_Enter) {
+    if (check_keybind(context, Ui_Feature_Pan, selection) == Keybind_Result_Enter) {
       Set_Flag(context->flags, Context_Flag_Panning);
       context->active_position = context->mouse_position;
     }
 
     if (Get_Flag(context->flags, Context_Flag_Panning)) {
-      if (get_keybind(context, Ui_Feature_Pan, selection) == Keybind_Result_Exit) {
+      if (check_keybind(context, Ui_Feature_Pan, selection) == Keybind_Result_Exit) {
         Unset_Flag(context->flags, Context_Flag_Panning);
       } else {
         // Update camera position
@@ -1051,8 +1059,8 @@ function void handle_user_input(Context *context) {
 
   // zooming
   {
-    B32 zoom_in = get_keybind(context, Ui_Feature_ZoomIn, selection) == Keybind_Result_Enter;
-    B32 zoom_out = get_keybind(context, Ui_Feature_ZoomOut, selection) == Keybind_Result_Enter;
+    B32 zoom_in = check_keybind(context, Ui_Feature_ZoomIn, selection) == Keybind_Result_Enter;
+    B32 zoom_out = check_keybind(context, Ui_Feature_ZoomOut, selection) == Keybind_Result_Enter;
 
     if (zoom_in || zoom_out) {
       Keybind keybind_in = global_keybind_lookup[Ui_Feature_ZoomIn];
@@ -1080,14 +1088,13 @@ function void handle_user_input(Context *context) {
     }
   }
 
-
   // process interaction
   for (Process *p = context->processes.first; p != 0; p = p->next) {
     selection = get_process_selection(context, p);
     ui_state->hot_id_assigned = selection.hot_id_assigned || ui_state->hot_id_assigned;
     B32 is_active = is_active_process(context, p);
 
-    if (get_keybind(context, Ui_Feature_SelectSingleProcess, selection) == Keybind_Result_Enter) {
+    if (check_keybind(context, Ui_Feature_SelectSingleProcess, selection) == Keybind_Result_Enter) {
       if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
         // select wire
         Process *wire = get_process_wire_by_selection(context, selection);
@@ -1118,12 +1125,12 @@ function void handle_user_input(Context *context) {
             clear_active_process(context);
             SLLQueuePush_NZ(context->active_process.first, context->active_process.last, p, next_active, 0);
           }
-          Unset_Flag(context->flags, (Context_Flag_NewWire | Context_Flag_EditText));
+          Unset_Flag(context->flags, Context_Flag_NewWire);
           Set_Flag(context->flags, Context_Flag_Dragging);
           context->active_position = context->mouse_position;
         }
       }
-    } else if (get_keybind(context, Ui_Feature_SelectAnotherProcess, selection) == Keybind_Result_Enter) {
+    } else if (check_keybind(context, Ui_Feature_SelectAnotherProcess, selection) == Keybind_Result_Enter) {
       // select another process
       if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
         Process *wire = get_process_wire_by_selection(context, selection);
@@ -1169,10 +1176,49 @@ function void handle_user_input(Context *context) {
     context->hot_process = 0;
   }
 
+  // more rectangle selection handling
+  if (Get_Flag(context->flags, Context_Flag_Bounding)) {
+    // add hot process to active processes
+    if (context->hot_process) {
+      B32 hot_is_active = is_active_process(context, context->hot_process);
+      if (!hot_is_active) {
+        SLLQueuePush_NZ(context->active_process.first, context->active_process.last, context->hot_process, next_active, 0);
+      }
+    }
+  }
+
+  // create process
+  if (check_keybind(context, Ui_Feature_CreateProcess, selection)) {
+    Process *new_p = create_process(context);
+    if (new_p) {
+      new_p->position = GetScreenToWorld2D(context->mouse_position, context->camera);
+      clear_active_process(context);
+      SLLQueuePush_NZ(context->active_process.first, context->active_process.last, new_p, next_active, 0);
+    }
+  }
+
+  // cancel selection
+  if (check_keybind(context, Ui_Feature_CancelSelection, selection)) {
+    clear_active_process(context);
+    Unset_Flag(context->flags, Context_Flag_NewWire);
+  }
+
+  // enter bounding
+  if (check_keybind(context, Ui_Feature_Bound, selection) == Keybind_Result_Enter) {
+    Set_Flag(context->flags, Context_Flag_Bounding);
+    context->active_position = context->mouse_position;
+  }
+
+  // top-level actions
+  if (check_keybind(context, Ui_Feature_ToggleDisplayMode, selection) == Keybind_Result_Enter) {
+    // toggle between rounded and triangular shapes
+    Toggle_Flag(context->flags, Context_Flag_RoundedShapes);
+  }
+
   // handle active-process
   if (context->active_process.first) {
     B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging);
-    B32 should_stop_dragging = get_keybind(context, Ui_Feature_SelectSingleProcess, selection) == Keybind_Result_Exit;
+    B32 should_stop_dragging = check_keybind(context, Ui_Feature_SelectSingleProcess, selection) == Keybind_Result_Exit;
     if (is_dragging && should_stop_dragging) {
       // stop dragging
       for (Process *a = context->active_process.first; a != 0; a = a->next_active) {
@@ -1180,7 +1226,30 @@ function void handle_user_input(Context *context) {
         a->position = new_position;
       }
       Unset_Flag(context->flags, Context_Flag_Dragging);
-    } else if (Get_Flag(context->flags, Context_Flag_EditText)) {
+    } else if (check_keybind(context, Ui_Feature_CycleProcessDisplay, selection)) {
+      // cycle through special process types (cups/caps/empty)
+      for (Process *a = context->active_process.first; a != 0; a = a->next_active) {
+        if (!Get_Flag(a->flags, Process_Flag_Wire)) {
+          if ((a->in_count == 0 && a->out_count == 0) ||
+              (a->in_count == 1 && a->out_count == 0) ||
+              (a->in_count == 0 && a->out_count == 1)) {
+            Toggle_Flag(a->flags, Process_Flag_Empty);
+          } else if (a->in_count == 0 && a->out_count == 2) {
+            Toggle_Flag(a->flags, Process_Flag_Cup);
+          } else if (a->in_count == 2 && a->out_count == 0) {
+            Toggle_Flag(a->flags, Process_Flag_Cap);
+          }
+        }
+      }
+    } else if (check_keybind(context, Ui_Feature_DeleteProcess, selection)) {
+      // delete processes
+      for (Process *a = context->active_process.first; a != 0;) {
+        Process *next_active = a->next_active;
+        delete_process(context, a);
+        a = next_active;
+      }
+      clear_active_process(context);
+    } else if (!ui_state->action_occured) {
       // process label editing
       U32 key = 0;
       B32 shift_down = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
@@ -1197,74 +1266,6 @@ function void handle_user_input(Context *context) {
           }
         }
       }
-    } else if (get_keybind(context, Ui_Feature_BeginEditText, selection)) {
-      // begin process label editing
-      Set_Flag(context->flags, Context_Flag_EditText);
-    } else if (get_keybind(context, Ui_Feature_CycleProcessDisplay, selection)) {
-      // cycle through special process types (cups/caps/empty)
-      for (Process *a = context->active_process.first; a != 0; a = a->next_active) {
-        if (!Get_Flag(a->flags, Process_Flag_Wire)) {
-          if ((a->in_count == 0 && a->out_count == 0) ||
-              (a->in_count == 1 && a->out_count == 0) ||
-              (a->in_count == 0 && a->out_count == 1)) {
-            Toggle_Flag(a->flags, Process_Flag_Empty);
-          } else if (a->in_count == 0 && a->out_count == 2) {
-            Toggle_Flag(a->flags, Process_Flag_Cup);
-          } else if (a->in_count == 2 && a->out_count == 0) {
-            Toggle_Flag(a->flags, Process_Flag_Cap);
-          }
-        }
-      }
-    } else if (get_keybind(context, Ui_Feature_DeleteProcess, selection)) {
-      // delete processes
-      for (Process *a = context->active_process.first; a != 0;) {
-        Process *next_active = a->next_active;
-        delete_process(context, a);
-        a = next_active;
-      }
-      clear_active_process(context);
-    }
-  }
-
-  // more rectangle selection handling
-  if (Get_Flag(context->flags, Context_Flag_Bounding)) {
-    // add hot process to active processes
-    if (context->hot_process) {
-      B32 hot_is_active = is_active_process(context, context->hot_process);
-      if (!hot_is_active) {
-        SLLQueuePush_NZ(context->active_process.first, context->active_process.last, context->hot_process, next_active, 0);
-      }
-    }
-  }
-
-  // create process
-  if (get_keybind(context, Ui_Feature_CreateProcess, selection)) {
-    Process *new_p = create_process(context);
-    if (new_p) {
-      new_p->position = GetScreenToWorld2D(context->mouse_position, context->camera);
-      clear_active_process(context);
-      SLLQueuePush_NZ(context->active_process.first, context->active_process.last, new_p, next_active, 0);
-    }
-  }
-
-  // cancel selection
-  if (get_keybind(context, Ui_Feature_CancelSelection, selection)) {
-    clear_active_process(context);
-    Unset_Flag(context->flags, (Context_Flag_NewWire|Context_Flag_EditText));
-  }
-
-  // enter bounding
-  if (get_keybind(context, Ui_Feature_Bound, selection) == Keybind_Result_Enter) {
-    Set_Flag(context->flags, Context_Flag_Bounding);
-    context->active_position = context->mouse_position;
-  }
-
-  // top-level actions
-  // TODO: We don't have to check if we are editing text once we are always editing text for selected processes.
-  if (!Get_Flag(context->flags, Context_Flag_EditText)) {
-    if (get_keybind(context, Ui_Feature_ToggleDisplayMode, selection) == Keybind_Result_Enter) { 
-      // toggle between rounded and triangular shapes
-      Toggle_Flag(context->flags, Context_Flag_RoundedShapes);
     }
   }
 }
