@@ -153,7 +153,6 @@ typedef struct {
   B32 mouse1_pressed;
   B32 mouse0_down;
   B32 mouse1_down;
-  B32 process_clicked;
   B32 hot_id_assigned;
   Vector2 mouse_wheel_movement;
   B32 control_down;
@@ -248,12 +247,10 @@ typedef enum {
 } Ui_Feature;
 
 typedef enum {
-  Ui_Constraint__Null               = 0,
-  Ui_Constraint_ClickedProcess      = (1 << 0),
-  Ui_Constraint_NoClickedProcess    = (1 << 1),
-  Ui_Constraint_HoverProcess        = (1 << 2),
-  Ui_Constraint_NoHotProcess        = (1 << 3),
-  Ui_Constraint_ExitOnKeyup         = (1 << 4),
+  Ui_Constraint__Null         = 0,
+  Ui_Constraint_HoverProcess  = (1 << 1),
+  Ui_Constraint_NoHotProcess  = (1 << 2),
+  Ui_Constraint_ExitOnKeyup   = (1 << 3),
 } Ui_Constraint;
 
 // NOTE: These enum values start with values higher than raylib's highest KEY_* value, which is in the 300s
@@ -301,7 +298,7 @@ typedef enum {
     "Zoom your field of view out to make objects appear further.")\
 \
   X(SelectSingleProcess, Key_Kind_Mouse0, 0,\
-    Ui_Constraint_HoverProcess,\
+    Ui_Constraint_HoverProcess|Ui_Constraint_ExitOnKeyup,\
     "Select a single process.")\
 \
   X(SelectAnotherProcess, Key_Kind_Mouse0, Modifier_Key_Control,\
@@ -1063,15 +1060,6 @@ function Keybind_Result get_keybind(Context *context, Ui_Feature feature, Proces
                           (!(modifier_shift ^ ui_state->shift_down)) &&
                           (!(modifier_alt ^ ui_state->alt_down)));
 
-  B32 constraint_clicked_process =
-    (Get_Flag(keybind.constraint, Ui_Constraint_ClickedProcess)
-     ? ui_state->process_clicked
-     : 1);
-  B32 constraint_no_clicked_process =
-    (Get_Flag(keybind.constraint, Ui_Constraint_NoClickedProcess)
-     ? !ui_state->process_clicked
-     : 1);
-
   B32 constraint_hover_process =
     (Get_Flag(keybind.constraint, Ui_Constraint_HoverProcess)
      ? selection.type != 0
@@ -1081,9 +1069,7 @@ function Keybind_Result get_keybind(Context *context, Ui_Feature feature, Proces
      ? (context->hot_process == 0)
      : 1);
 
-  B32 constraints_met = (constraint_clicked_process &&
-                         constraint_no_clicked_process &&
-                         constraint_hover_process &&
+  B32 constraints_met = (constraint_hover_process &&
                          constraint_no_hover);
 
   if (key_is_pressed && modifier_matches && constraints_met) {
@@ -1109,7 +1095,6 @@ function void handle_user_input(Context *context) {
   ui_state->mouse1_pressed = IsMouseButtonPressed(1);
   ui_state->mouse0_down = IsMouseButtonDown(0);
   ui_state->mouse1_down = IsMouseButtonDown(1);
-  ui_state->process_clicked = 0;
   ui_state->hot_id_assigned = 0;
   ui_state->mouse_wheel_movement = GetMouseWheelMoveV();
   ui_state->control_down = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_LEFT_CONTROL);
@@ -1193,7 +1178,6 @@ function void handle_user_input(Context *context) {
             clear_active_process(context);
             SLLQueuePush_NZ(context->active_process.first, context->active_process.last, wire, next_active, 0);
           }
-          ui_state->process_clicked = 1;
         }
       } else if ((is_active || context->hot_process == p) &&
                  selection.type == Process_Selection_NewWire) {
@@ -1203,7 +1187,6 @@ function void handle_user_input(Context *context) {
           clear_active_process(context);
           SLLQueuePush_NZ(context->active_process.first, context->active_process.last, p, next_active, 0);
         }
-        ui_state->process_clicked = 1;
       } else if (selection.type == Process_Selection_Process) {
         if (Get_Flag(context->flags, Context_Flag_NewWire)) {
           // connect processes
@@ -1218,11 +1201,10 @@ function void handle_user_input(Context *context) {
           Unset_Flag(context->flags, (Context_Flag_NewWire | Context_Flag_EditText));
           Set_Flag(context->flags, Context_Flag_Dragging);
           context->active_position = context->mouse_position;
-          ui_state->process_clicked = 1;
         }
       }
     } else if (get_keybind(context, Ui_Feature_SelectAnotherProcess, selection) == Keybind_Result_Enter) {
-      // select anothe process
+      // select another process
       if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
         Process *wire = get_process_wire_by_selection(context, selection);
         if (wire) {
@@ -1270,7 +1252,8 @@ function void handle_user_input(Context *context) {
   // handle active-process
   if (context->active_process.first) {
     B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging);
-    if (is_dragging && !ui_state->mouse0_down) {
+    B32 should_stop_dragging = get_keybind(context, Ui_Feature_SelectSingleProcess, selection) == Keybind_Result_Exit;
+    if (is_dragging && should_stop_dragging) {
       // stop dragging
       for (Process *a = context->active_process.first; a != 0; a = a->next_active) {
         Vector2 new_position = get_process_position(context, a);
@@ -1294,10 +1277,10 @@ function void handle_user_input(Context *context) {
           }
         }
       }
-    } else if (IsKeyPressed(KEY_I)) {
+    } else if (get_keybind(context, Ui_Feature_BeginEditText, selection)) {
       // begin process label editing
       Set_Flag(context->flags, Context_Flag_EditText);
-    } else if (IsKeyPressed(KEY_TAB)) {
+    } else if (get_keybind(context, Ui_Feature_CycleProcessDisplay, selection)) {
       // cycle through special process types (cups/caps/empty)
       for (Process *a = context->active_process.first; a != 0; a = a->next_active) {
         if (!Get_Flag(a->flags, Process_Flag_Wire)) {
@@ -1312,7 +1295,7 @@ function void handle_user_input(Context *context) {
           }
         }
       }
-    } else if (IsKeyPressed(KEY_BACKSPACE)) {
+    } else if (get_keybind(context, Ui_Feature_DeleteProcess, selection)) {
       // delete processes
       for (Process *a = context->active_process.first; a != 0;) {
         Process *next_active = a->next_active;
@@ -1357,8 +1340,9 @@ function void handle_user_input(Context *context) {
   }
 
   // top-level actions
+  // TODO: We don't have to check if we are editing text once we are always editing text for selected processes.
   if (!Get_Flag(context->flags, Context_Flag_EditText)) {
-    if (IsKeyPressed(KEY_M)) {
+    if (get_keybind(context, Ui_Feature_ToggleDisplayMode, selection) == Keybind_Result_Enter) { 
       // toggle between rounded and triangular shapes
       Toggle_Flag(context->flags, Context_Flag_RoundedShapes);
     }
