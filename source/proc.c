@@ -305,10 +305,11 @@ typedef enum {
     "Select a single process.")\
 \
   X(SelectAnotherProcess, Key_Kind_Mouse0, Modifier_Key_Control,\
-    Ui_Constraint_ClickedProcess,\
+    Ui_Constraint_HoverProcess,\
     "Add a process to the selected processes.")\
 \
-  X(CancelSelection, Key_Kind_Mouse0, 0, 0,\
+  X(CancelSelection, Key_Kind_Mouse0, 0,\
+    Ui_Constraint_NoHotProcess,\
     "Clear out the selected processes.")\
 \
   X(CreateProcess, Key_Kind_Mouse0, Modifier_Key_Control,\
@@ -747,7 +748,7 @@ function void delete_process(Context *context, Process *p) {
 function void connect_processes(Context *context, Process *out, Process *in) {
   Process *new_wire = create_process(context);
 
-  if (new_wire) {
+  if (new_wire && out && in) {
     Set_Flag(new_wire->flags, Process_Flag_Wire);
     new_wire->out_id = out;
     new_wire->in_id = in;
@@ -976,7 +977,7 @@ get_process_selection(Context *context, Process *p) {
   if (rectangle_contains_point(new_wire_box, context->mouse_position)) {
     // check new-wire-box
     selection.type = Process_Selection_NewWire;
-    context->hot_process = selection.process;
+    context->hot_process = p;
     selection.hot_id_assigned = 1;
   } else {
     // check in wire-boxes
@@ -1013,7 +1014,7 @@ get_process_selection(Context *context, Process *p) {
       if (process_shape_contains_point(context, shape, context->mouse_position)) {
         // process selection
         selection.type = Process_Selection_Process;
-        context->hot_process = selection.process;
+        context->hot_process = p;
         selection.hot_id_assigned = 1;
       }
     }
@@ -1023,21 +1024,6 @@ get_process_selection(Context *context, Process *p) {
 }
 
 
-function void handle_process_selection(Context *context, Process *p) {
-  B32 is_active = is_active_process(context, p);
-  B32 ctrl_down = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
-
-  if (is_active) {
-    if (ctrl_down) {
-      remove_process_from_active_processes(context, p);
-    }
-  } else {
-    if (!ctrl_down) {
-      clear_active_process(context);
-    }
-    SLLQueuePush_NZ(context->active_process.first, context->active_process.last, p, next_active, 0);
-  }
-}
 
 
 function Keybind_Result get_keybind(Context *context, Ui_Feature feature, Process_Selection selection) {
@@ -1200,16 +1186,23 @@ function void handle_user_input(Context *context) {
       if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
         // select wire
         Process *wire = get_process_wire_by_selection(context, selection);
+        B32 is_active_wire = is_active_process(context, wire);
+
         if (wire) {
-          handle_process_selection(context, wire);
+          if (!is_active_wire) {
+            clear_active_process(context);
+            SLLQueuePush_NZ(context->active_process.first, context->active_process.last, wire, next_active, 0);
+          }
           ui_state->process_clicked = 1;
         }
       } else if ((is_active || context->hot_process == p) &&
                  selection.type == Process_Selection_NewWire) {
         // begin new-wire
         Set_Flag(context->flags, Context_Flag_NewWire);
-        clear_active_process(context);
-        SLLQueuePush_NZ(context->active_process.first, context->active_process.last, p, next_active, 0);
+        if (!is_active) {
+          clear_active_process(context);
+          SLLQueuePush_NZ(context->active_process.first, context->active_process.last, p, next_active, 0);
+        }
         ui_state->process_clicked = 1;
       } else if (selection.type == Process_Selection_Process) {
         if (Get_Flag(context->flags, Context_Flag_NewWire)) {
@@ -1218,12 +1211,25 @@ function void handle_user_input(Context *context) {
         } else {
           // select process
           context->hot_process = p;
-          handle_process_selection(context, p);
+          if (!is_active) {
+            clear_active_process(context);
+            SLLQueuePush_NZ(context->active_process.first, context->active_process.last, p, next_active, 0);
+          }
           Unset_Flag(context->flags, (Context_Flag_NewWire | Context_Flag_EditText));
           Set_Flag(context->flags, Context_Flag_Dragging);
           context->active_position = context->mouse_position;
           ui_state->process_clicked = 1;
         }
+      }
+    } else if (get_keybind(context, Ui_Feature_SelectAnotherProcess, selection) == Keybind_Result_Enter) {
+      // select anothe process
+      if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
+        Process *wire = get_process_wire_by_selection(context, selection);
+        if (wire) {
+          SLLQueuePush_NZ(context->active_process.first, context->active_process.last, wire, next_active, 0);
+        }
+      } else if (selection.type == Process_Selection_Process) {
+        SLLQueuePush_NZ(context->active_process.first, context->active_process.last, selection.process, next_active, 0);
       }
     } else if (selection.type == Process_Selection_Process) {
       // process hover
@@ -1338,13 +1344,10 @@ function void handle_user_input(Context *context) {
     }
   }
 
-  // non-process clicks
-  if (ui_state->mouse0_pressed && !ui_state->process_clicked) {
-    if (context->active_process.first) {
-      // un-select process
-      clear_active_process(context);
-      Unset_Flag(context->flags, (Context_Flag_NewWire|Context_Flag_EditText));
-    }
+  // cancel selection
+  if (get_keybind(context, Ui_Feature_CancelSelection, selection)) {
+    clear_active_process(context);
+    Unset_Flag(context->flags, (Context_Flag_NewWire|Context_Flag_EditText));
   }
 
   // enter bounding
