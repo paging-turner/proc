@@ -30,7 +30,8 @@
        [ ] Line without semi-color
        [ ] Line without equals
        [ ] Multiple definitions for same feature (should overwrite)
-       [ ] Mutiple key-kind definitions for single feature (should error)
+       [ ] Multiple key-kind definitions for single feature (should error)
+     [ ] Add in error messages for tokenizing/parsing errors.
      [ ] Rewrite example-config to have good-instructions to help users write their own config.
      [ ] Add ability to define bindings for mouse buttons and mouse-wheels
    === Testing ===
