@@ -100,10 +100,11 @@
 
 // TODO: Should Process_Flag just be a non-flag enum?
 typedef enum {
-  Process_Flag_Wire    = 1 << 0,
-  Process_Flag_Empty   = 1 << 1,
-  Process_Flag_Cup     = 1 << 2,
-  Process_Flag_Cap     = 1 << 3,
+  Process_Flag_Wire      = 1 << 0,
+  Process_Flag_Empty     = 1 << 1,
+  Process_Flag_Cup       = 1 << 2,
+  Process_Flag_Cap       = 1 << 3,
+  Process_Flag_Identity  = 1 << 4,
 } Process_Flag;
 
 typedef struct Process Process;
@@ -1238,6 +1239,8 @@ function void handle_user_input(Context *context) {
             Toggle_Flag(a->flags, Process_Flag_Cup);
           } else if (a->in_count == 2 && a->out_count == 0) {
             Toggle_Flag(a->flags, Process_Flag_Cap);
+          } else if (a->in_count == 1 && a->out_count == 1) {
+            Toggle_Flag(a->flags, Process_Flag_Identity);
           }
         }
       }
@@ -1314,6 +1317,10 @@ function void draw_processes(Context *context) {
         Vector2 ctrl0 = (Vector2){pos0.x, pos0.y-cup_cap_control_offset};
         Vector2 ctrl1 = (Vector2){pos1.x, pos1.y-cup_cap_control_offset};
         render_DrawLineBezierCubic(ra, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color);
+      } else if (Get_Flag(p->flags, Process_Flag_Identity)) {
+        Vector2 pos0 = get_process_wire_in_position(context, p, shape, 0);
+        Vector2 pos1 = get_process_wire_out_position(context, p, shape, 0);
+        render_DrawLineBezierCubic(ra, pos0, pos1, pos1, pos0, thickness, stroke_color);
       } else {
         switch(shape.kind) {
         case Process_Shape_Triangle:
