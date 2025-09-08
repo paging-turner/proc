@@ -1024,9 +1024,9 @@ function void handle_user_input(Context *context) {
   ui_state->mouse1_down = IsMouseButtonDown(1);
   ui_state->hot_id_assigned = 0;
   ui_state->mouse_wheel_movement = GetMouseWheelMoveV();
-  ui_state->control_down = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_LEFT_CONTROL);
-  ui_state->shift_down = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_LEFT_SHIFT);
-  ui_state->alt_down = IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_LEFT_ALT);
+  ui_state->control_down = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+  ui_state->shift_down = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+  ui_state->alt_down = IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT);
   ui_state->action_occured = 0;
 
   // initial bounding handling
