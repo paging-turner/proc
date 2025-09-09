@@ -13,7 +13,9 @@
   X(DeleteProcess)\
   X(BeginEditText)\
   X(CycleProcessDisplay)\
-  X(ToggleDisplayMode)
+  X(ToggleDisplayMode)\
+  X(CopyProcess)\
+  X(PasteProcess)
 
 typedef enum {
   Ui_Feature__Null,
@@ -156,7 +158,13 @@ function void load_keybinds(Context *context);
     "Cycle through special displays for selected processes.")\
 \
   X(ToggleDisplayMode, KEY_M, Modifier_Key_Control, 0,\
-    "Toggle between 'classic' and 'rounded' display modes.")
+    "Toggle between 'classic' and 'rounded' display modes.")\
+\
+  X(CopyProcess, KEY_C, Modifier_Key_Control, 0,\
+    "Copy selected processes.")\
+\
+  X(PasteProcess, KEY_V, Modifier_Key_Control, 0,\
+    "Paste copied processes, centered at the mouse.")
 
 
 
