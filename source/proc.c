@@ -321,7 +321,7 @@ global_variable Color global_background_color;
 global_variable S32 global_shape_fan_triangle_count = 12;
 
 global_variable Process global_null_process;
-#define Zero_Process() (global_null_process=(Process){0}, &global_null_process)
+#define The_Null_Process() (global_null_process=(Process){0}, &global_null_process)
 
 #define Half_Circle_Fudge 1.32f
 #define Half_Circle_Radius_Fudge 1.0f
@@ -552,7 +552,7 @@ function Process *create_detached_process(Context *context) {
   if (p) {
     *p = (Process){0};
   } else {
-    p = Zero_Process();
+    p = The_Null_Process();
   }
 
   return p;

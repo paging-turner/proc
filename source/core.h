@@ -13,6 +13,7 @@
 #define    Get_Flag(flags, flag) ((flags) &   (flag))
 #define Toggle_Flag(flags, flag) ((flags) ^=  (flag))
 
+#define Zero_Struct(type) (type){0}
 
 
 ///////////////////////////////////////
