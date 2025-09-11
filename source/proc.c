@@ -1559,6 +1559,7 @@ function void draw_processes(Context *context) {
           if (rounded) {
             // rounded half-circle
             Vector2 position = get_process_position(context, p);
+            position = GetWorldToScreen2D(position, context->camera);
             Half_Circle_Points points = get_half_circle_points(context, shape, p, position, downward);
             p0 = points.middle_of_line;
             p1 = points.middle_of_curve;
