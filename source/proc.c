@@ -37,7 +37,7 @@
    === Testing ===
      [ ] Enumerate some test cases, to at least be able to manually check that things are working.
      [ ] Automated test??
-   [ ] Copy-paste of selected processes
+   [x] Copy-paste of selected processes
    [ ] Use a font other than the raylib default
    [ ] Expand base-layer and let it consume core.h and ryn_memory.h
    [ ] Make some sliders/fields for global settings like process-size and font-size.
@@ -62,6 +62,9 @@
 
 #define MR4TH_NO_INCLUDES 1
 #define MR4TH_NO_CLAMP 1
+#if !No_Assert
+# define MR4TH_ASSERTS 1
+#endif
 #include "../libraries/mr4th/src/mr4th_base.h"
 #define push_struct(a, s) arena_push((a), sizeof(s))
 
@@ -107,30 +110,52 @@ typedef enum {
   Process_Flag_Identity  = 1 << 4,
 } Process_Flag;
 
+typedef enum {
+  Process_Connection_In,
+  Process_Connection_Out,
+  Process_Connection__Count,
+} Process_Connection;
+
 typedef struct Process Process;
 struct Process {
   Vector2 position;
 
   B32 flags;
 
-  S32 in_count;
-  S32 out_count;
+  union {
+    struct {
+      S32 in_count;
+      S32 out_count;
+    };
+    S32 conn_count[Process_Connection__Count];
+  };
 
-  Process *in_id;
-  Process *out_id;
+  union {
+    struct {
+      Process *in;
+      Process *out;
+    };
+    Process *conn[Process_Connection__Count];
+  };
 
-  U32 which_in;
-  U32 which_out;
+  union {
+    struct {
+      U32 which_in;
+      U32 which_out;
+    };
+    U32 which_conn[Process_Connection__Count];
+  };
 
   Process *next;
   Process *next_active;
+
+  Process *to_copied;
 
   // TODO: Use a growable structure for strings.
 #define Process_Label_Size 64
   U8 label[Process_Label_Size];
   U32 label_cursor;
 };
-
 
 typedef enum {
   Process_Selection__Null,
@@ -283,6 +308,9 @@ global_variable F32 global_panel_font_size = 14.0f;
 global_variable Color global_background_color;
 
 global_variable S32 global_shape_fan_triangle_count = 12;
+
+global_variable Process global_null_process;
+#define Zero_Process() (global_null_process=(Process){0}, &global_null_process)
 
 #define Half_Circle_Fudge 1.32f
 #define Half_Circle_Radius_Fudge 1.0f
@@ -475,7 +503,7 @@ function Process *get_process_wire_by_selection(Context *context, Process_Select
 
   for (Process *p = context->processes.first; p != 0; p = p->next) {
     if (Get_Flag(p->flags, Process_Flag_Wire)) {
-      if (selection.type == Process_Selection_In && p->in_id == selection.process) {
+      if (selection.type == Process_Selection_In && p->in == selection.process) {
         // matching in-wire
         if (match_count == selection.index) {
           wire = p;
@@ -483,7 +511,7 @@ function Process *get_process_wire_by_selection(Context *context, Process_Select
         } else {
           match_count += 1;
         }
-      } else if (selection.type == Process_Selection_Out && p->out_id == selection.process) {
+      } else if (selection.type == Process_Selection_Out && p->out == selection.process) {
         // matching out-wire
         if (match_count == selection.index) {
           wire = p;
@@ -512,6 +540,8 @@ function Process *create_detached_process(Context *context) {
 
   if (p) {
     *p = (Process){0};
+  } else {
+    p = Zero_Process();
   }
 
   return p;
@@ -594,7 +624,7 @@ function void delete_process(Context *context, Process *p) {
 
       for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
         // adjust in-connections that come after deleted wire
-        if (test_wire->in_id == p->in_id) {
+        if (test_wire->in == p->in) {
           if (test_wire->which_in > p->which_in) {
             test_wire->which_in -= 1;
           }
@@ -602,7 +632,7 @@ function void delete_process(Context *context, Process *p) {
         }
 
         // adjust out-connections that come after deleted wire
-        if (test_wire->out_id == p->out_id) {
+        if (test_wire->out == p->out) {
           if (test_wire->which_out > p->which_out) {
             test_wire->which_out -= 1;
           }
@@ -610,20 +640,20 @@ function void delete_process(Context *context, Process *p) {
         }
       }
 
-      B32 only_in_conn = p->in_id != 0 && p->which_in == 0;
-      B32 only_out_conn = p->out_id != 0 && p->which_out == 0;
+      B32 only_in_conn = p->in != 0 && p->which_in == 0;
+      B32 only_out_conn = p->out != 0 && p->which_out == 0;
 
       // decrement process' in-count
       if (in_matched || only_in_conn) {
-        if (p->in_id) {
-          p->in_id->in_count -= 1;
+        if (p->in) {
+          p->in->in_count -= 1;
         }
       }
 
       // decrement process' out-count
       if (out_matched || only_out_conn) {
-        if (p->out_id) {
-          p->out_id->out_count -= 1;
+        if (p->out) {
+          p->out->out_count -= 1;
         }
       }
     }
@@ -633,36 +663,36 @@ function void delete_process(Context *context, Process *p) {
 
     // check for wires connected to the deleted process, and delete those also
     for (Process *wire = context->processes.first; wire != 0;) {
-      B32 in_match = wire->in_id == p;
-      B32 out_match = wire->out_id == p;
+      B32 in_match = wire->in == p;
+      B32 out_match = wire->out == p;
       B32 should_delete = 0;
 
       if (in_match || out_match) {
         if (!in_match) {
           // adjust in-connections to deleted wire
           for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
-            if (test_wire->in_id == wire->in_id &&
+            if (test_wire->in == wire->in &&
                 test_wire->which_in > wire->which_in) {
               test_wire->which_in -= 1;
             }
           }
 
-          if (wire->in_id) {
-            wire->in_id->in_count -= 1;
+          if (wire->in) {
+            wire->in->in_count -= 1;
           }
         }
 
         if (!out_match) {
           // adjust out-connections to deleted wire
           for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
-            if (test_wire->out_id == wire->out_id &&
+            if (test_wire->out == wire->out &&
                 test_wire->which_out > wire->which_out) {
               test_wire->which_out -= 1;
             }
           }
 
-          if (wire->out_id) {
-            wire->out_id->out_count -= 1;
+          if (wire->out) {
+            wire->out->out_count -= 1;
           }
         }
 
@@ -683,38 +713,144 @@ function void delete_process(Context *context, Process *p) {
 
 
 function void copy_active_processes(Context *context) {
-  Vector2 copy_center = (Vector2){0};
   B32 error = 0;
+  Vector2 copy_center = (Vector2){0};
   F32 copy_count = 0.0f;
 
   // remove whatever processes were already in the copy-list
   remove_process_list(context, &context->copy_processes);
 
-  // push'em all on the copy-list
+  // Add in un-selected processes that are connected to selected wires.
   for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
-    Process *new_p = create_detached_process(context);
-    if (new_p) {
-      if (!Get_Flag(a->flags, Process_Flag_Wire)) {
-        copy_center = Vector2Add(copy_center, a->position);
-        copy_count += 1.0f;
+    if (Get_Flag(a->flags, Process_Flag_Wire)) {
+      for (S32 conn = 0; conn < Process_Connection__Count; ++conn) {
+        if (a->conn[conn] && a->conn[conn]->to_copied == 0) {
+          B32 found_conn = 0;
+          for (Process *test_p = context->active_processes.first; test_p != 0; test_p = test_p->next_active) {
+            if (test_p == a->conn[conn]) {
+              found_conn = 1;
+              // map active to copied
+              // @Copypasta    v------------------v
+              Process *copied_p = create_detached_process(context);
+              *copied_p = *a->conn[conn];
+              a->conn[conn]->to_copied = copied_p;
+              copy_center = Vector2Add(copy_center, a->conn[conn]->position);
+              copy_count += 1.0f;
+              SLLQueuePush(context->copy_processes.first, context->copy_processes.last, copied_p);
+              break;
+            }
+          }
+          if (!found_conn) {
+            // push invisible process to copied list
+            // map active to copied
+            // @Copypasta       ^----------v
+            Process *copied_p = create_detached_process(context);
+            *copied_p = *a->conn[conn];
+            Set_Flag(copied_p->flags, Process_Flag_Empty);
+            a->conn[conn]->to_copied = copied_p;
+            copy_center = Vector2Add(copy_center, a->conn[conn]->position);
+            copy_count += 1.0f;
+            SLLQueuePush(context->copy_processes.first, context->copy_processes.last, copied_p);
+          }
+        }
       }
-      *new_p = *a;
-      SLLQueuePush(context->copy_processes.first, context->copy_processes.last, new_p);
+      // copy active wire
+      // @Copypasta       ^----------v
+      Process *copied_wire = create_detached_process(context);
+      *copied_wire = *a;
+      // connect copied wire to copied processes
+      for (S32 conn = 0; conn < Process_Connection__Count; ++conn) {
+        if (copied_wire->conn[conn]) {
+          copied_wire->conn[conn] = copied_wire->conn[conn]->to_copied;
+        }
+      }
+      SLLQueuePush(context->copy_processes.first, context->copy_processes.last, copied_wire);
     } else {
-      error = 1;
-      break;
+      // map active to copied
+      // @Copypasta       ^----------^
+      Process *copied_p = create_detached_process(context);
+      *copied_p = *a;
+      a->to_copied = copied_p;
+      copy_center = Vector2Add(copy_center, a->position);
+      copy_count += 1.0f;
+      SLLQueuePush(context->copy_processes.first, context->copy_processes.last, copied_p);
+    }
+  }
+
+  // remove all to_copied fields
+  for (Process *p = context->processes.first; p != 0; p = p->next) {
+    p->to_copied = 0;
+  }
+
+  // TODO: @Speed
+  // fix-up copied wire positions (in the cases that some wires are not copied)
+  for (Process *c = context->copy_processes.first; c != 0; c = c->next) {
+    if (!Get_Flag(c->flags, Process_Flag_Wire)) {
+      for (S32 conn = 0; conn < Process_Connection__Count; ++conn) {
+        // get connected wire count
+        S32 conn_count = 0;
+        for (Process *w = context->copy_processes.first; w != 0; w = w->next) {
+          if (Get_Flag(w->flags, Process_Flag_Wire) && w->conn[conn] == c) {
+            conn_count += 1;
+          }
+        }
+        // adjust process' conn count
+        c->conn_count[conn] = conn_count;
+        // have to loop wire-count times to re-assign each wire
+        for (S32 min_conn = 0; min_conn < conn_count; ++min_conn) {
+          Process *min_wire = 0;
+          for (Process *w = context->copy_processes.first; w != 0; w = w->next) {
+            if (Get_Flag(w->flags, Process_Flag_Wire) && w->conn[conn] == c) {
+              if (w->which_conn[conn] >= min_conn) {
+                if (min_wire == 0 || w->which_conn[conn] < min_wire->which_conn[conn]) {
+                  min_wire = w;
+                }
+              }
+            }
+          }
+          // adjust the wire's connection
+          if (min_wire) {
+            min_wire->which_conn[conn] = min_conn;
+          }
+        }
+      }
+    }
+  }
+
+  // make any process with more than one connection (in or out) visible
+  for (Process *c = context->copy_processes.first; c != 0; c = c->next) {
+    if (c->in_count > 1 || c->out_count > 1) {
+      Unset_Flag(c->flags, Process_Flag_Empty);
     }
   }
 
   if (error) {
     remove_process_list(context, &context->copy_processes);
   } else {
-    copy_center = Vector2Scale(copy_center, 1.0f/copy_count);
+    if (copy_count > 0.0f) {
+      copy_center = Vector2Scale(copy_center, 1.0f/copy_count);
+    } else {
+      copy_center = (Vector2){0};
+    }
     context->copy_center = copy_center;
   }
 }
 
 function void paste_processes(Context *context) {
+  Vector2 center_delta = Vector2Subtract(context->mouse_position, context->copy_center);
+
+  for (Process *p = context->copy_processes.first; p != 0;) {
+    Process *next_p = p->next;
+    if (!Get_Flag(p->flags, Process_Flag_Wire)) {
+      p->position = Vector2Add(p->position, center_delta);
+    }
+
+    SLLQueuePush(context->processes.first, context->processes.last, p);
+    p = next_p;
+  }
+
+  context->copy_processes.first = 0;
+  context->copy_processes.last = 0;
 }
 
 
@@ -724,8 +860,8 @@ function void connect_processes(Context *context, Process *out, Process *in) {
 
   if (new_wire && out && in) {
     Set_Flag(new_wire->flags, Process_Flag_Wire);
-    new_wire->out_id = out;
-    new_wire->in_id = in;
+    new_wire->out = out;
+    new_wire->in = in;
 
     new_wire->which_out = out->out_count;
     new_wire->which_in = in->in_count;
@@ -1206,10 +1342,10 @@ function void handle_user_input(Context *context) {
       Rectangle selection_rectangle = get_selection_rectangle(context);
 
       if (Get_Flag(p->flags, Process_Flag_Wire)) {
-        Process_Shape out_shape = get_process_shape(context, p->out_id);
-        Process_Shape in_shape = get_process_shape(context, p->in_id);
-        Vector2 out_position = get_process_wire_out_position(context, p->out_id, out_shape, p->which_out);
-        Vector2 in_position = get_process_wire_in_position(context, p->in_id, in_shape, p->which_in);
+        Process_Shape out_shape = get_process_shape(context, p->out);
+        Process_Shape in_shape = get_process_shape(context, p->in);
+        Vector2 out_position = get_process_wire_out_position(context, p->out, out_shape, p->which_out);
+        Vector2 in_position = get_process_wire_in_position(context, p->in, in_shape, p->which_in);
 
         if (rectangle_contains_point(selection_rectangle, out_position) ||
             rectangle_contains_point(selection_rectangle, in_position)) {
@@ -1275,7 +1411,7 @@ function void handle_user_input(Context *context) {
     copy_active_processes(context);
   }
   // paste processes
-  if (check_keybind(context, Ui_Feature_CopyProcess, selection) == Keybind_Result_Enter) {
+  if (check_keybind(context, Ui_Feature_PasteProcess, selection) == Keybind_Result_Enter) {
     paste_processes(context);
   }
 
@@ -1473,11 +1609,11 @@ function void draw_processes(Context *context) {
     B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
 
     if (is_wire) {
-      Process_Shape out_shape = get_process_shape(context, p->out_id);
-      Process_Shape in_shape = get_process_shape(context, p->in_id);
+      Process_Shape out_shape = get_process_shape(context, p->out);
+      Process_Shape in_shape = get_process_shape(context, p->in);
 
-      Vector2 out_position = get_process_wire_out_position(context, p->out_id, out_shape, p->which_out);
-      Vector2 in_position = get_process_wire_in_position(context, p->in_id, in_shape, p->which_in);
+      Vector2 out_position = get_process_wire_out_position(context, p->out, out_shape, p->which_out);
+      Vector2 in_position = get_process_wire_in_position(context, p->in, in_shape, p->which_in);
 
       Vector2 out_control = out_position;
       out_control.y -= context->camera.zoom * 30.0f;
@@ -1485,10 +1621,10 @@ function void draw_processes(Context *context) {
       in_control.y += context->camera.zoom * 30.0f;
 
       B32 is_active = is_active_process(context, p) || context->hot_process == p;
-      B32 connected_in_active = (is_active_process(context, p->in_id) ||
-                                 context->hot_process == p->in_id);
-      B32 connected_out_active = (is_active_process(context, p->out_id) ||
-                                  context->hot_process == p->out_id);
+      B32 connected_in_active = (is_active_process(context, p->in) ||
+                                 context->hot_process == p->in);
+      B32 connected_out_active = (is_active_process(context, p->out) ||
+                                  context->hot_process == p->out);
       F32 thickness = is_active ? global_active_line_thickness : global_line_thickness;
       thickness *= context->camera.zoom;
 
