@@ -37,7 +37,9 @@
    === Testing ===
      [ ] Enumerate some test cases, to at least be able to manually check that things are working.
      [ ] Automated test??
-   [x] Copy-paste of selected processes
+   === Copy/Paste ===
+     [x] Copy-paste of selected processes
+     [ ] BUG: Connect two processes by a single wire. Select the wire *first* and then one or both of the other processes. Copy and paste. There will be extra processes pasted.
    [ ] Use a font other than the raylib default
    [ ] Expand base-layer and let it consume core.h and ryn_memory.h
    [ ] Make some sliders/fields for global settings like process-size and font-size.
