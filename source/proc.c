@@ -179,6 +179,15 @@ typedef struct {
   Process *last;
 } Process_List;
 
+typedef struct {
+  Vector2 first_point;
+  Vector2 second_point;
+  Vector2 first_control;
+  Vector2 second_control;
+  Vector2 middle_of_curve;
+  Vector2 middle_of_line;
+} Half_Circle_Points;
+
 
 
 
@@ -722,16 +731,17 @@ function void copy_active_processes(Context *context) {
   // remove whatever processes were already in the copy-list
   remove_process_list(context, &context->copy_processes);
 
-  // Add in un-selected processes that are connected to selected wires.
+  // copy processes from active-list to copy-list
   for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
     if (Get_Flag(a->flags, Process_Flag_Wire)) {
+      // add connected processes if they have not been added yet
       for (S32 conn = 0; conn < Process_Connection__Count; ++conn) {
         if (a->conn[conn] && a->conn[conn]->to_copied == 0) {
           B32 found_conn = 0;
           for (Process *test_p = context->active_processes.first; test_p != 0; test_p = test_p->next_active) {
             if (test_p == a->conn[conn]) {
               found_conn = 1;
-              // map active to copied
+              // add connected process to copied list
               // @Copypasta    v------------------v
               Process *copied_p = create_detached_process(context);
               *copied_p = *a->conn[conn];
@@ -743,8 +753,7 @@ function void copy_active_processes(Context *context) {
             }
           }
           if (!found_conn) {
-            // push invisible process to copied list
-            // map active to copied
+            // add invisible process to copied list
             // @Copypasta       ^----------v
             Process *copied_p = create_detached_process(context);
             *copied_p = *a->conn[conn];
@@ -756,8 +765,7 @@ function void copy_active_processes(Context *context) {
           }
         }
       }
-      // copy active wire
-      // @Copypasta       ^----------v
+      // add wire to copied-list
       Process *copied_wire = create_detached_process(context);
       *copied_wire = *a;
       // connect copied wire to copied processes
@@ -767,8 +775,8 @@ function void copy_active_processes(Context *context) {
         }
       }
       SLLQueuePush(context->copy_processes.first, context->copy_processes.last, copied_wire);
-    } else {
-      // map active to copied
+    } else if (!a->to_copied) {
+      // only add process if it hasn't already been added by a connected wire
       // @Copypasta       ^----------^
       Process *copied_p = create_detached_process(context);
       *copied_p = *a;
@@ -785,7 +793,7 @@ function void copy_active_processes(Context *context) {
   }
 
   // TODO: @Speed
-  // fix-up copied wire positions (in the cases that some wires are not copied)
+  // fix-up copied wire positions (in the cases that only some of the wires between two processes are copied)
   for (Process *c = context->copy_processes.first; c != 0; c = c->next) {
     if (!Get_Flag(c->flags, Process_Flag_Wire)) {
       for (S32 conn = 0; conn < Process_Connection__Count; ++conn) {
@@ -798,9 +806,10 @@ function void copy_active_processes(Context *context) {
         }
         // adjust process' conn count
         c->conn_count[conn] = conn_count;
-        // have to loop wire-count times to re-assign each wire
+        // we have to loop wire-count times to re-assign each wire
         for (S32 min_conn = 0; min_conn < conn_count; ++min_conn) {
           Process *min_wire = 0;
+          // find the next connected wire
           for (Process *w = context->copy_processes.first; w != 0; w = w->next) {
             if (Get_Flag(w->flags, Process_Flag_Wire) && w->conn[conn] == c) {
               if (w->which_conn[conn] >= min_conn) {
@@ -821,7 +830,14 @@ function void copy_active_processes(Context *context) {
 
   // make any process with more than one connection (in or out) visible
   for (Process *c = context->copy_processes.first; c != 0; c = c->next) {
-    if (c->in_count > 1 || c->out_count > 1) {
+    B32 more_than_one_connection = 0;
+    for (S32 conn = 0; conn < Process_Connection__Count; ++conn) {
+      if (c->conn_count[conn] > 1) {
+        more_than_one_connection = 1;
+        break;
+      }
+    }
+    if (more_than_one_connection) {
       Unset_Flag(c->flags, Process_Flag_Empty);
     }
   }
@@ -832,6 +848,7 @@ function void copy_active_processes(Context *context) {
     if (copy_count > 0.0f) {
       copy_center = Vector2Scale(copy_center, 1.0f/copy_count);
     } else {
+      // TODO: If copy_count is 0 then something went wrong and maybe we should just bail?
       copy_center = (Vector2){0};
     }
     context->copy_center = copy_center;
@@ -875,21 +892,18 @@ function void connect_processes(Context *context, Process *out, Process *in) {
 }
 
 
-
-function void
-fill_out_half_circle_shape(Context *context, Process_Shape *shape, Process *p, Vector2 position, B32 downward) {
+function Half_Circle_Points
+get_half_circle_points(Context *context, Process_Shape shape, Process *p, Vector2 position, B32 downward) {
+  Half_Circle_Points half_circle_points;
   F32 padding = context->camera.zoom * global_process_wire_padding;
   F32 spacing = context->camera.zoom * global_process_wire_spacing;
+
+  F32 height = context->camera.zoom * global_shape_size;
+  F32 half_height = context->camera.zoom * global_shape_half_size;
 
   F32 conn_count = (F32)(downward ? p->out_count : p->in_count);
   F32 width = (2.0f*padding + conn_count*spacing);
   F32 half_width = 0.5f*(width);
-
-  F32 height = context->camera.zoom * global_shape_size;
-  F32 half_height = context->camera.zoom * global_shape_half_size;
-  shape->kind = Process_Shape_HalfCircle;
-  shape->triangle_count = global_shape_fan_triangle_count;
-  shape->downward = downward;
 
   F32 multiplier = downward ? -1.0f : 1.0f;
   F32 x_offset = multiplier * half_width;
@@ -897,14 +911,42 @@ fill_out_half_circle_shape(Context *context, Process_Shape *shape, Process *p, V
 
   Vector2 first_point = (Vector2){position.x-x_offset, position.y+y_offset};
   Vector2 second_point = (Vector2){position.x+x_offset, position.y+y_offset};
-  shape->first_control = (Vector2){first_point.x, first_point.y-2.0f*y_offset};
-  shape->second_control = (Vector2){second_point.x, second_point.y-2.0f*y_offset};
 
-  Vector2 middle_of_curve = get_bezier_point(
-    first_point, second_point,
-    shape->first_control, shape->second_control,
+  half_circle_points.first_point = first_point;
+  half_circle_points.second_point = second_point;
+  half_circle_points.first_control = (Vector2){first_point.x, first_point.y-2.0f*y_offset};
+  half_circle_points.second_control = (Vector2){second_point.x, second_point.y-2.0f*y_offset};
+
+  half_circle_points.middle_of_curve = get_bezier_point(
+    first_point,
+    second_point,
+    half_circle_points.first_control,
+    half_circle_points.second_control,
     0.5f);
-  Vector2 middle_of_line = get_percentage_between_points(first_point, second_point, 0.5f);
+
+  half_circle_points.middle_of_line = get_percentage_between_points(first_point, second_point, 0.5f);
+
+  return half_circle_points;
+}
+
+
+function void
+fill_out_half_circle_shape(Context *context, Process_Shape *shape, Process *p, Vector2 position, B32 downward) {
+  Half_Circle_Points half_circle_points = get_half_circle_points(context, *shape, p, position, downward);
+
+  shape->kind = Process_Shape_HalfCircle;
+  shape->triangle_count = global_shape_fan_triangle_count;
+  shape->downward = downward;
+
+  shape->first_control = half_circle_points.first_control;
+  shape->second_control = half_circle_points.second_control;
+
+  Vector2 first_point = half_circle_points.first_point;
+  Vector2 second_point = half_circle_points.second_point;
+
+  Vector2 middle_of_curve = half_circle_points.middle_of_curve;
+  Vector2 middle_of_line = half_circle_points.middle_of_line;
+
   shape->center = get_percentage_between_points(middle_of_curve, middle_of_line, 0.5);
 
   shape->point_count = create_bezier_triangle_fan(
@@ -1506,20 +1548,49 @@ function void draw_processes(Context *context) {
       F32 cup_cap_control_offset = 10.0f;
 
       if (Get_Flag(p->flags, Process_Flag_Empty)) {
-        // don't draw anything, allowing for dangling wire-ends
+        // draw line through empty shape
+        B32 upward = p->in_count == 1 && p->out_count == 0;
+        B32 downward = p->in_count == 0 && p->out_count == 1;
+        // only if it's valid
+        if (upward || downward) {
+          Vector2 p0 = (Vector2){0};
+          Vector2 p1 = (Vector2){0};
+          B32 rounded = Get_Flag(context->flags, Context_Flag_RoundedShapes);
+          if (rounded) {
+            // rounded half-circle
+            Vector2 position = get_process_position(context, p);
+            Half_Circle_Points points = get_half_circle_points(context, shape, p, position, downward);
+            p0 = points.middle_of_line;
+            p1 = points.middle_of_curve;
+          } else {
+            if (upward) {
+              // upward triangle
+              p0 = get_percentage_between_points(shape.points[1], shape.points[2], 0.5f);
+              p1 = shape.points[0];
+            } else if (downward) {
+              // downward triangle
+              p0 = get_percentage_between_points(shape.points[0], shape.points[1], 0.5f);
+              p1 = shape.points[2];
+            }
+          }
+          render_DrawLineBezierCubic(ra, p0, p1, p1, p0, thickness, stroke_color);
+        }
       } else if (Get_Flag(p->flags, Process_Flag_Cup)) {
+        // draw cup
         Vector2 pos0 = get_process_wire_out_position(context, p, shape, 0);
         Vector2 pos1 = get_process_wire_out_position(context, p, shape, 1);
         Vector2 ctrl0 = (Vector2){pos0.x, pos0.y+cup_cap_control_offset};
         Vector2 ctrl1 = (Vector2){pos1.x, pos1.y+cup_cap_control_offset};
         render_DrawLineBezierCubic(ra, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color);
       } else if (Get_Flag(p->flags, Process_Flag_Cap)) {
+        // draw cap
         Vector2 pos0 = get_process_wire_in_position(context, p, shape, 0);
         Vector2 pos1 = get_process_wire_in_position(context, p, shape, 1);
         Vector2 ctrl0 = (Vector2){pos0.x, pos0.y-cup_cap_control_offset};
         Vector2 ctrl1 = (Vector2){pos1.x, pos1.y-cup_cap_control_offset};
         render_DrawLineBezierCubic(ra, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color);
       } else if (Get_Flag(p->flags, Process_Flag_Identity)) {
+        // draw "identity" process (just a wire)
         Vector2 pos0 = get_process_wire_in_position(context, p, shape, 0);
         Vector2 pos1 = get_process_wire_out_position(context, p, shape, 0);
         render_DrawLineBezierCubic(ra, pos0, pos1, pos1, pos0, thickness, stroke_color);
