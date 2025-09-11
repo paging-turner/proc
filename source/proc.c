@@ -837,7 +837,8 @@ function void copy_active_processes(Context *context) {
 }
 
 function void paste_processes(Context *context) {
-  Vector2 center_delta = Vector2Subtract(context->mouse_position, context->copy_center);
+  Vector2 mouse_world_pos = GetScreenToWorld2D(context->mouse_position, context->camera);
+  Vector2 center_delta = Vector2Subtract(mouse_world_pos, context->copy_center);
 
   for (Process *p = context->copy_processes.first; p != 0;) {
     Process *next_p = p->next;
