@@ -17,11 +17,13 @@
    === Multi-select ===
      [x] Allow multi-selection of processes
      [x] Allow dragging all selected processes
-     [x] Allow de-selectin of processes
+     [ ] Allow de-selecting of processes
      [x] Click-and-drag selection rectangle
      [ ] Ctrl-click-and-drag to include more processes
    === Zooming and Panning ===
      [x] BUG: When zoomed way out, the wire positioning gets messed up.
+   === Coordinates ===
+     [ ] We use the word "position" a lot, but sometimes it's screen-pos and sometimes world-pos. Should probably distinguish between the two to avoid confusion.
    === Graphics ===
      [ ] Replace line-drawing calls with a call that draws triangle-strips/fans. This should help deal with how to cleanly connect the ends of lines together.
    === Keybind Config ===
@@ -39,7 +41,7 @@
      [ ] Automated test??
    === Copy/Paste ===
      [x] Copy-paste of selected processes
-     [ ] BUG: Connect two processes by a single wire. Select the wire *first* and then one or both of the other processes. Copy and paste. There will be extra processes pasted.
+     [x] BUG: Connect two processes by a single wire. Select the wire *first* and then one or both of the other processes. Copy and paste. There will be extra processes pasted.
    [ ] Use a font other than the raylib default
    [ ] Expand base-layer and let it consume core.h and ryn_memory.h
    [ ] Make some sliders/fields for global settings like process-size and font-size.
@@ -47,8 +49,9 @@
    [x] Allow toggling on/off "mr4th style" process drawing, which is a variation on the visual style of diragrams in the book.
      [x] Move towards defining shapes using triangle strips/fans. We used some raylib funcs for circles and stuff just because it was easy, but now we need more control.
      [x] Implement collision detection for triangle strip/fan so we can just define a shape with triangles and be able to interact and draw with the same shape.
-   [ ] BUG: If you toggle a process to be a special display (cup/cap/invisible), and then connect a new wire to it, the special visual still applies and you cannot toggle away. When connecting wires, we need to check if the special display flag should be unset.
-   [ ] Undo/redo
+   [x] BUG: If you toggle a process to be a special display (cup/cap/invisible), and then connect a new wire to it, the special visual still applies and you cannot toggle away. When connecting wires, we need to check if the special display flag should be unset.
+   === Undo/redo ===
+     [ ]
    [ ] BUG: Connect a two processes. Make one process invisible. Delete the *other* process. The invisible process is still there but, well, you can't see it! Either delete the invisible one, or make it visible again. Probably just delete it??
    [ ] New Arena Changes
      [x] Change how we loop through processes, so that we can enable growable arenas.
@@ -110,6 +113,8 @@ typedef enum {
   Process_Flag_Cup       = 1 << 2,
   Process_Flag_Cap       = 1 << 3,
   Process_Flag_Identity  = 1 << 4,
+  Process_Flag_Drag_In   = 1 << 5,
+  Process_Flag_Drag_Out  = 1 << 6,
 } Process_Flag;
 
 typedef enum {
@@ -376,6 +381,7 @@ function Vector2 get_process_position(Context *context, Process *process) {
 
 
   if (is_active && is_dragging) {
+    // @Copypasta draw_processes    draw wire
     Vector2 delta = Vector2Subtract(context->mouse_position, context->active_position);
     position = Vector2Add(position, Vector2Scale(delta, 1.0f/context->camera.zoom));
   }
@@ -532,6 +538,10 @@ function Process *get_process_wire_by_selection(Context *context, Process_Select
         }
       }
     }
+  }
+
+  if (wire == 0) {
+    wire = The_Null_Process();
   }
 
   return wire;
@@ -1266,6 +1276,8 @@ function void handle_user_input(Context *context) {
   ui_state->alt_down = IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT);
   ui_state->action_occured = 0;
 
+  B32 should_stop_dragging = check_keybind(context, Ui_Feature_SelectSingleProcess, selection) == Keybind_Result_Exit;
+
   // initial bounding handling
   if (Get_Flag(context->flags, Context_Flag_Bounding)) {
     if (check_keybind(context, Ui_Feature_Bound, selection) == Keybind_Result_Exit) {
@@ -1331,13 +1343,26 @@ function void handle_user_input(Context *context) {
     ui_state->hot_id_assigned = selection.hot_id_assigned || ui_state->hot_id_assigned;
     B32 is_active = is_active_process(context, p);
 
+    // check if we need to stop dragging wire
+    B32 wire_drag_flag = Process_Flag_Drag_In | Process_Flag_Drag_Out;
+    if (Get_Flag(p->flags, wire_drag_flag)) {
+      if (should_stop_dragging) {
+        Unset_Flag(p->flags, wire_drag_flag);
+      }
+    }
+
     if (check_keybind(context, Ui_Feature_SelectSingleProcess, selection) == Keybind_Result_Enter) {
-      if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
+      B32 in_selection = selection.type == Process_Selection_In;
+      B32 out_selection = selection.type == Process_Selection_Out;
+      if (in_selection || out_selection) {
         // select wire
         Process *wire = get_process_wire_by_selection(context, selection);
         B32 is_active_wire = is_active_process(context, wire);
 
         if (wire) {
+          U32 drag_flag = in_selection ? Process_Flag_Drag_In : Process_Flag_Drag_Out;
+          Set_Flag(wire->flags, drag_flag);
+          context->active_position = context->mouse_position;
           if (!is_active_wire) {
             clear_active_processes(context);
             SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, wire, next_active, 0);
@@ -1463,7 +1488,6 @@ function void handle_user_input(Context *context) {
   // handle active-process
   if (context->active_processes.first) {
     B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging);
-    B32 should_stop_dragging = check_keybind(context, Ui_Feature_SelectSingleProcess, selection) == Keybind_Result_Exit;
     if (is_dragging && should_stop_dragging) {
       // stop dragging
       for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
@@ -1475,9 +1499,14 @@ function void handle_user_input(Context *context) {
       // cycle through special process types (cups/caps/empty)
       for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
         if (!Get_Flag(a->flags, Process_Flag_Wire)) {
-          if ((a->in_count == 0 && a->out_count == 0) ||
-              (a->in_count == 1 && a->out_count == 0) ||
-              (a->in_count == 0 && a->out_count == 1)) {
+          U32 toggle_flags = (Process_Flag_Empty | Process_Flag_Cup | Process_Flag_Cap | Process_Flag_Identity);
+          if (Get_Flag(a->flags, toggle_flags)) {
+            // toggle off process-display flags first, before trying to toggle them on
+            Unset_Flag(a->flags, toggle_flags);
+          } else if ((a->in_count == 0 && a->out_count == 0) ||
+                     (a->in_count == 1 && a->out_count == 0) ||
+                     (a->in_count == 0 && a->out_count == 1)) {
+            // toggle single in/out or unconnected process
             Toggle_Flag(a->flags, Process_Flag_Empty);
           } else if (a->in_count == 0 && a->out_count == 2) {
             Toggle_Flag(a->flags, Process_Flag_Cup);
@@ -1689,6 +1718,14 @@ function void draw_processes(Context *context) {
 
       Vector2 out_position = get_process_wire_out_position(context, p->out, out_shape, p->which_out);
       Vector2 in_position = get_process_wire_in_position(context, p->in, in_shape, p->which_in);
+      if (Get_Flag(p->flags, Process_Flag_Drag_In)) {
+        // @Copypasta get_process_position
+        Vector2 delta = Vector2Subtract(context->mouse_position, context->active_position);
+        in_position = Vector2Add(in_position, delta);
+      } else if (Get_Flag(p->flags, Process_Flag_Drag_Out)) {
+        Vector2 delta = Vector2Subtract(context->mouse_position, context->active_position);
+        out_position = Vector2Add(out_position, delta);
+      }
 
       Vector2 out_control = out_position;
       out_control.y -= context->camera.zoom * 30.0f;
