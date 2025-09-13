@@ -117,11 +117,23 @@ typedef enum {
   Process_Flag_Drag_Out  = 1 << 6,
 } Process_Flag;
 
+#define Process_Connection_Xlist\
+  X(In, 0) X(Out, 1)
+
 typedef enum {
-  Process_Connection_In,
-  Process_Connection_Out,
+#define X(conn, ...)\
+  Process_Connection_##conn,
+  Process_Connection_Xlist
+#undef X
   Process_Connection__Count,
 } Process_Connection;
+
+typedef enum {
+#define X(conn, i)\
+  Process_Connection_Flag_##conn = (1 << i),
+  Process_Connection_Xlist
+#undef X
+} Process_Connection_Flag;
 
 typedef struct Process Process;
 struct Process {
@@ -516,26 +528,21 @@ function B32 rectangle_contains_point(Rectangle r, Vector2 p) {
 
 function Process *get_process_wire_by_selection(Context *context, Process_Selection selection) {
   Process *wire = 0;
-  S32 match_count = 0;
 
   for (Process *p = context->processes.first; p != 0; p = p->next) {
     if (Get_Flag(p->flags, Process_Flag_Wire)) {
-      if (selection.type == Process_Selection_In && p->in == selection.process) {
+      if (selection.type == Process_Selection_In &&
+          p->in == selection.process &&
+          p->which_in == selection.index) {
         // matching in-wire
-        if (match_count == selection.index) {
-          wire = p;
-          break;
-        } else {
-          match_count += 1;
-        }
-      } else if (selection.type == Process_Selection_Out && p->out == selection.process) {
+        wire = p;
+        break;
+      } else if (selection.type == Process_Selection_Out &&
+                 p->out == selection.process &&
+                 p->which_out == selection.index) {
         // matching out-wire
-        if (match_count == selection.index) {
-          wire = p;
-          break;
-        } else {
-          match_count += 1;
-        }
+        wire = p;
+        break;
       }
     }
   }
@@ -626,6 +633,70 @@ function void remove_process_from_active_processes(Context *context, Process *p)
 #endif
 
 
+function void
+add_wire_connection(Context *context, Process *wire, Process *process, Process_Connection conn, U32 which_conn) {
+  // Add wire at the given connection index, moving any wires that come after that index over to the right.
+  wire->conn[conn] = process;
+  wire->which_conn[conn] = which_conn;
+
+  for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
+    if (wire != test_wire &&
+        test_wire->conn[conn] == process &&
+        test_wire->which_conn[conn] >= which_conn) {
+      // increment the wire's which_conn if it comes at or after the added wire's which_conn
+      test_wire->which_conn[conn] += 1;
+    }
+  }
+
+  process->conn_count[conn] += 1;
+}
+
+function void
+remove_wire_connection(Context *context, Process *wire, Process_Connection_Flag conn_flags) {
+  // Remove a wire and move wires to the right of it to the left one.
+  B32 in_matched = 0;
+  B32 out_matched = 0;
+
+  B32 remove_in = Get_Flag(conn_flags, Process_Connection_Flag_In);
+  B32 remove_out = Get_Flag(conn_flags, Process_Connection_Flag_Out);
+
+  for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
+    // adjust in-connections that come after deleted wire
+    if (remove_in && test_wire->in == wire->in) {
+      if (test_wire->which_in > wire->which_in) {
+        test_wire->which_in -= 1;
+      }
+      in_matched = 1;
+    }
+
+    // adjust out-connections that come after deleted wire
+    if (remove_out && test_wire->out == wire->out) {
+      if (test_wire->which_out > wire->which_out) {
+        test_wire->which_out -= 1;
+      }
+      out_matched = 1;
+    }
+  }
+
+  B32 only_in_conn = wire->in != 0 && wire->which_in == 0;
+  B32 only_out_conn = wire->out != 0 && wire->which_out == 0;
+
+  // decrement process' in-count
+  if (remove_in && (in_matched || only_in_conn)) {
+    if (wire->in) {
+      wire->in->in_count -= 1;
+    }
+  }
+
+  // decrement process' out-count
+  if (remove_out && (out_matched || only_out_conn)) {
+    if (wire->out) {
+      wire->out->out_count -= 1;
+    }
+  }
+}
+
+
 
 function void delete_process(Context *context, Process *p) {
   // TODO: Do we really want to check if it is a live process? Maybe sometimes the program wants to delete a process that is *not* in the processes list and still want it to end up in the free-list.
@@ -640,43 +711,8 @@ function void delete_process(Context *context, Process *p) {
   if (is_live_process) {
     // if deleting a wire, adjust connected processes
     if (Get_Flag(p->flags, Process_Flag_Wire)) {
-      B32 in_matched = 0;
-      B32 out_matched = 0;
-
-      for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
-        // adjust in-connections that come after deleted wire
-        if (test_wire->in == p->in) {
-          if (test_wire->which_in > p->which_in) {
-            test_wire->which_in -= 1;
-          }
-          in_matched = 1;
-        }
-
-        // adjust out-connections that come after deleted wire
-        if (test_wire->out == p->out) {
-          if (test_wire->which_out > p->which_out) {
-            test_wire->which_out -= 1;
-          }
-          out_matched = 1;
-        }
-      }
-
-      B32 only_in_conn = p->in != 0 && p->which_in == 0;
-      B32 only_out_conn = p->out != 0 && p->which_out == 0;
-
-      // decrement process' in-count
-      if (in_matched || only_in_conn) {
-        if (p->in) {
-          p->in->in_count -= 1;
-        }
-      }
-
-      // decrement process' out-count
-      if (out_matched || only_out_conn) {
-        if (p->out) {
-          p->out->out_count -= 1;
-        }
-      }
+      U32 both_conns = Process_Connection_Flag_In | Process_Connection_Flag_Out;
+      remove_wire_connection(context, p, both_conns);
     }
 
     // remove p from processes
@@ -1277,6 +1313,8 @@ function void handle_user_input(Context *context) {
   ui_state->action_occured = 0;
 
   B32 should_stop_dragging = check_keybind(context, Ui_Feature_SelectSingleProcess, selection) == Keybind_Result_Exit;
+  Process *moved_wire = 0;
+  Process_Connection moved_wire_conn = 0;
 
   // initial bounding handling
   if (Get_Flag(context->flags, Context_Flag_Bounding)) {
@@ -1344,10 +1382,14 @@ function void handle_user_input(Context *context) {
     B32 is_active = is_active_process(context, p);
 
     // check if we need to stop dragging wire
-    B32 wire_drag_flag = Process_Flag_Drag_In | Process_Flag_Drag_Out;
-    if (Get_Flag(p->flags, wire_drag_flag)) {
-      if (should_stop_dragging) {
+    if (should_stop_dragging) {
+      // unset drag flag
+      B32 wire_drag_flag = Process_Flag_Drag_In | Process_Flag_Drag_Out;
+      if (Get_Flag(p->flags, wire_drag_flag)) {
+        B32 is_in = Get_Flag(p->flags, Process_Flag_Drag_In);
         Unset_Flag(p->flags, wire_drag_flag);
+        moved_wire = p;
+        moved_wire_conn = is_in ? Process_Connection_In : Process_Connection_Out;
       }
     }
 
@@ -1485,15 +1527,42 @@ function void handle_user_input(Context *context) {
     paste_processes(context);
   }
 
+  // handle moved wire
+  if (moved_wire && context->hot_process) {
+    if (Get_Flag(context->hot_process->flags, Process_Flag_Wire)) {
+      Process *connected_process = context->hot_process->conn[moved_wire_conn];
+      if (connected_process) {
+        // move wire to hovered wire
+        U32 which_conn = context->hot_process->which_conn[moved_wire_conn];
+        if (moved_wire != context->hot_process) {
+          remove_wire_connection(context, moved_wire, (1<<moved_wire_conn));
+          add_wire_connection(context, moved_wire, connected_process, moved_wire_conn, which_conn);
+        }
+      }
+    } else {
+      Process *connected_process = context->hot_process;
+      // move wire to last wire of process
+      U32 which_conn;
+      if (moved_wire->conn[moved_wire_conn] == connected_process) {
+        which_conn = connected_process->conn_count[moved_wire_conn] - 1;
+      } else {
+        which_conn = connected_process->conn_count[moved_wire_conn];
+      }
+      remove_wire_connection(context, moved_wire, (1<<moved_wire_conn));
+      add_wire_connection(context, moved_wire, connected_process, moved_wire_conn, which_conn);
+    }
+  }
+
   // handle active-process
   if (context->active_processes.first) {
     B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging);
     if (is_dragging && should_stop_dragging) {
-      // stop dragging
+      // update positions of active processes
       for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
         Vector2 new_position = get_process_position(context, a);
         a->position = new_position;
       }
+      // stop dragging
       Unset_Flag(context->flags, Context_Flag_Dragging);
     } else if (check_keybind(context, Ui_Feature_CycleProcessDisplay, selection)) {
       // cycle through special process types (cups/caps/empty)
@@ -1895,6 +1964,7 @@ function void initialize_globals(Context *context) {
 
 int main(void) {
   InitWindow(800, 500, "proc");
+  SetExitKey(0);
   SetWindowState(FLAG_WINDOW_RESIZABLE);
   SetTargetFPS(60);
 
