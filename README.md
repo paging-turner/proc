@@ -27,11 +27,11 @@ The keybinds below are defaults, but can be changed by editing `config/keybind.t
 - Use the mouse-wheel to zoom in and out.
 - Right-click and drag to pan.
 
-- Enter text by selecting some pressing and typing. Backspace deletes from the end of the characters.
+- Enter text by selecting some processes and typing. Backspace deletes from the end of the characters.
 - Press the "Tab" key when certain processes are selected to change their appearance. These special processes are:
     - Processes with only one input, only one output, or no inputs/outputs can be toggled to be invisible. This is useful if you want to have dangling wires or text labels.
         - Ex. If you wanted to draw a bare wire, you would connect two processes, and then toggle both processes to be invisible.
         - Ex. For a text label, create a process with no ins/outs, enter some text, then toggle the process to be invisible.
     - Processes with exactly 2 inputs or outputs can be toggled to look like a wire that changes directions (cups and caps).
-    - Processes with exaclt 1 input and 1 output will just look like a wire.
+    - Processes with exactly 1 input and 1 output will just look like a wire.
 - Ctrl-M will toggle on/off "rounded shapes" mode (Rounded shapes are still a bit wonky with their shape and sizing).
