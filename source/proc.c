@@ -12,14 +12,15 @@
    [ ] File save and load
    [ ] Processes should expand to contain their label
    === Wires ===
-     [ ] Allow reordering of connected wires
-     [ ] BUG: While making a new wire-connection, if you click on another wire-box, the new-wire jumps to a place off the screen. Clicking on a process while in this busted state makes a new wire that leads to some invisible process.
+     [x] Allow reordering of connected wires
+     [x] BUG: While making a new wire-connection, if you click on another wire-box, the new-wire jumps to a place off the screen. Clicking on a process while in this busted state makes a new wire that leads to some invisible process.
+     [ ] Preview wire movement while dragging wire.
    === Multi-select ===
      [x] Allow multi-selection of processes
      [x] Allow dragging all selected processes
-     [ ] Allow de-selecting of processes
+     [x] Allow de-selecting of processes
      [x] Click-and-drag selection rectangle
-     [ ] Ctrl-click-and-drag to include more processes
+     [ ] Ctrl-click-and-drag to include more processes (this collides with process creation right now...)
    === Zooming and Panning ===
      [x] BUG: When zoomed way out, the wire positioning gets messed up.
    === Coordinates ===
@@ -52,7 +53,8 @@
    [x] BUG: If you toggle a process to be a special display (cup/cap/invisible), and then connect a new wire to it, the special visual still applies and you cannot toggle away. When connecting wires, we need to check if the special display flag should be unset.
    === Undo/redo ===
      [ ]
-   [ ] BUG: Connect a two processes. Make one process invisible. Delete the *other* process. The invisible process is still there but, well, you can't see it! Either delete the invisible one, or make it visible again. Probably just delete it??
+   [x] BUG: Connect a two processes. Make one process invisible. Delete the *other* process. The invisible process is still there but, well, you can't see it! Either delete the invisible one, or make it visible again. Probably just delete it??
+   [x] Automatically show invisible processes. This should only apply to processes with no connections, set to invisible, and no text.
    [ ] New Arena Changes
      [x] Change how we loop through processes, so that we can enable growable arenas.
      [x] Right now we have to make sure the Process struct is a size that's a multiple of a pointer. We should fix that :(
@@ -614,7 +616,6 @@ function void remove_process_list(Context *context, Process_List *list) {
   }
 }
 
-#if 0
 function void remove_process_from_active_processes(Context *context, Process *p) {
   if (context->active_processes.first == p) {
     SLLQueuePop_NZ(context->active_processes.first, context->active_processes.last, next_active, 0);
@@ -630,7 +631,6 @@ function void remove_process_from_active_processes(Context *context, Process *p)
     }
   }
 }
-#endif
 
 
 function void
@@ -1403,6 +1403,7 @@ function void handle_user_input(Context *context) {
 
         if (wire) {
           U32 drag_flag = in_selection ? Process_Flag_Drag_In : Process_Flag_Drag_Out;
+          Unset_Flag(context->flags, Context_Flag_NewWire);
           Set_Flag(wire->flags, drag_flag);
           context->active_position = context->mouse_position;
           if (!is_active_wire) {
@@ -1439,10 +1440,18 @@ function void handle_user_input(Context *context) {
       if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
         Process *wire = get_process_wire_by_selection(context, selection);
         if (wire) {
-          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, wire, next_active, 0);
+          if (is_active_process(context, wire)) {
+            remove_process_from_active_processes(context, wire);
+          } else {
+            SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, wire, next_active, 0);
+          }
         }
       } else if (selection.type == Process_Selection_Process) {
-        SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, selection.process, next_active, 0);
+        if (is_active_process(context, selection.process)) {
+          remove_process_from_active_processes(context, selection.process);
+        } else {
+          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, selection.process, next_active, 0);
+        }
       }
     } else if (selection.type == Process_Selection_Process) {
       // process hover
@@ -1618,19 +1627,61 @@ function void handle_user_input(Context *context) {
 
 
 
+function void draw_circular_process(Context *context, Vector2 center, F32 radius, F32 thickness, Color bg_color, Color stroke_color) {
+  Arena *ra = context->render_arena;
+
+  render_DrawCircle(ra, center, radius, bg_color);
+  F32 fudge = Half_Circle_Fudge*radius;
+  Vector2 first_point = (Vector2){center.x-radius, center.y};
+  Vector2 second_point = (Vector2){center.x+radius, center.y};
+  Vector2 control0 = (Vector2){first_point.x, first_point.y-fudge};
+  Vector2 control1 = (Vector2){second_point.x, second_point.y-fudge};
+  render_DrawLineBezierCubic(ra, first_point, second_point, control0, control1, thickness, stroke_color);
+  Vector2 control2 = (Vector2){first_point.x, first_point.y+fudge};
+  Vector2 control3 = (Vector2){second_point.x, second_point.y+fudge};
+  render_DrawLineBezierCubic(ra, first_point, second_point, control2, control3, thickness, stroke_color);
+}
+
+
+
+function void draw_process_with_triangles(Context *context, Process_Shape shape, F32 thickness, Color bg_color, Color stroke_color) {
+  Arena *ra = context->render_arena;
+  // draw process background
+  render_DrawTriangleStrip(ra, shape.points, shape.point_count, bg_color);
+
+  // draw process lines
+  Vector2 p0 = shape.points[0];
+  Vector2 p1 = shape.points[1];
+  Vector2 p2 = shape.points[2];
+  Vector2 p3 = shape.points[3];
+  // TODO: We should not have these special cases for the shape's point-counts.
+  if (shape.point_count == 3) {
+    render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
+    render_DrawLine(ra, p1.x, p1.y, p2.x, p2.y, thickness, stroke_color);
+    render_DrawLine(ra, p2.x, p2.y, p0.x, p0.y, thickness, stroke_color);
+  } else if (shape.point_count == 4) {
+    render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
+    render_DrawLine(ra, p1.x, p1.y, p3.x, p3.y, thickness, stroke_color);
+    render_DrawLine(ra, p3.x, p3.y, p2.x, p2.y, thickness, stroke_color);
+    render_DrawLine(ra, p2.x, p2.y, p0.x, p0.y, thickness, stroke_color);
+  }
+}
 
 
 function void draw_processes(Context *context) {
   Arena *ra = context->render_arena;
 
   Color bg_color = (Color){255, 255, 255, 255};
+  Color invisible_bg_color = (Color){0, 0, 0, 0};
   Color stroke_color = (Color){0, 0, 0, 255};
+  Color invisible_stroke_color = (Color){0, 0, 0, 100};
   Color text_color = (Color){0, 0, 0, 255};
   Color box_color = (Color){10, 190, 40, 255};
   Color box_hover_color = (Color){5, 250, 20, 255};
 
   F32 padding = global_process_wire_padding;
   F32 spacing = global_process_wire_spacing;
+  B32 rounded = Get_Flag(context->flags, Context_Flag_RoundedShapes);
 
   // draw processes
   for (Process *p = context->processes.first; p != 0; p = p->next) {
@@ -1653,7 +1704,6 @@ function void draw_processes(Context *context) {
         if (upward || downward) {
           Vector2 p0 = (Vector2){0};
           Vector2 p1 = (Vector2){0};
-          B32 rounded = Get_Flag(context->flags, Context_Flag_RoundedShapes);
           if (rounded) {
             // rounded half-circle
             Vector2 position = get_process_position(context, p);
@@ -1673,6 +1723,12 @@ function void draw_processes(Context *context) {
             }
           }
           render_DrawLineBezierCubic(ra, p0, p1, p1, p0, thickness, stroke_color);
+        } else if (!p->label[0]) {
+          if (rounded) {
+            draw_circular_process(context, shape.center, shape.radius, thickness, invisible_bg_color, invisible_stroke_color);
+          } else {
+            draw_process_with_triangles(context, shape, thickness, invisible_bg_color, invisible_stroke_color);
+          }
         }
       } else if (Get_Flag(p->flags, Process_Flag_Cup)) {
         // draw cup
@@ -1698,36 +1754,10 @@ function void draw_processes(Context *context) {
         case Process_Shape_Triangle:
         case Process_Shape_Quadrangle:
         case Process_Shape_Rectangle: {
-          // draw process background
-          render_DrawTriangleStrip(ra, shape.points, shape.point_count, bg_color);
-
-          // draw process lines
-          Vector2 p0 = shape.points[0];
-          Vector2 p1 = shape.points[1];
-          Vector2 p2 = shape.points[2];
-          Vector2 p3 = shape.points[3];
-          if (shape.point_count == 3) {
-            render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
-            render_DrawLine(ra, p1.x, p1.y, p2.x, p2.y, thickness, stroke_color);
-            render_DrawLine(ra, p2.x, p2.y, p0.x, p0.y, thickness, stroke_color);
-          } else if (shape.point_count == 4) {
-            render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
-            render_DrawLine(ra, p1.x, p1.y, p3.x, p3.y, thickness, stroke_color);
-            render_DrawLine(ra, p3.x, p3.y, p2.x, p2.y, thickness, stroke_color);
-            render_DrawLine(ra, p2.x, p2.y, p0.x, p0.y, thickness, stroke_color);
-          }
+          draw_process_with_triangles(context, shape, thickness, bg_color, stroke_color);
         } break;
         case Process_Shape_Circle: {
-          render_DrawCircle(ra, shape.center, shape.radius, bg_color);
-          F32 fudge = Half_Circle_Fudge*shape.radius;
-          Vector2 first_point = (Vector2){shape.center.x-shape.radius, shape.center.y};
-          Vector2 second_point = (Vector2){shape.center.x+shape.radius, shape.center.y};
-          Vector2 control0 = (Vector2){first_point.x, first_point.y-fudge};
-          Vector2 control1 = (Vector2){second_point.x, second_point.y-fudge};
-          render_DrawLineBezierCubic(ra, first_point, second_point, control0, control1, thickness, stroke_color);
-          Vector2 control2 = (Vector2){first_point.x, first_point.y+fudge};
-          Vector2 control3 = (Vector2){second_point.x, second_point.y+fudge};
-          render_DrawLineBezierCubic(ra, first_point, second_point, control2, control3, thickness, stroke_color);
+          draw_circular_process(context, shape.center, shape.radius, thickness, bg_color, stroke_color);
         } break;
         case Process_Shape_HalfCircle: {
           // draw half-circle background
