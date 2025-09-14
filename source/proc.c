@@ -43,10 +43,15 @@
    === Copy/Paste ===
      [x] Copy-paste of selected processes
      [x] BUG: Connect two processes by a single wire. Select the wire *first* and then one or both of the other processes. Copy and paste. There will be extra processes pasted.
+     [ ] Allow cutting processes
    [ ] Use a font other than the raylib default
    [ ] Expand base-layer and let it consume core.h and ryn_memory.h
    [ ] Make some sliders/fields for global settings like process-size and font-size.
-   [ ] Show cursor when editing the text of a process.
+   === Text Editing ===
+     [ ] Show cursor when editing the text of a process.
+     [ ] Allow moving the cursor to the middle of the text.
+     [ ] Allow selecting regions of text.
+     [ ] Cut/copy/paste
    [x] Allow toggling on/off "mr4th style" process drawing, which is a variation on the visual style of diragrams in the book.
      [x] Move towards defining shapes using triangle strips/fans. We used some raylib funcs for circles and stuff just because it was easy, but now we need more control.
      [x] Implement collision detection for triangle strip/fan so we can just define a shape with triangles and be able to interact and draw with the same shape.
