@@ -412,53 +412,48 @@ function Vector2 get_process_position(Context *context, Process *process) {
 
 
 
-function Vector2
-get_process_wire_out_position(Context *context, Process *p, Process_Shape shape, U32 wire_index) {
-  F32 padding = context->camera.zoom * global_process_wire_padding;
-  Vector2 p0 = shape.points[0];
-  Vector2 p1 = shape.points[1];
 
-  if (shape.kind == Process_Shape_HalfCircle) {
-    p0 = shape.points[shape.point_count-1];
-    p1 = shape.points[0];
+
+
+function Vector2
+get_process_wire_position(Context *context, Process *p, Process_Shape shape, Process_Connection conn, U32 wire_index) {
+  F32 padding = context->camera.zoom * global_process_wire_padding;
+  Vector2 p0;
+  Vector2 p1;
+
+  switch(conn) {
+  case Process_Connection_In: {
+    if (shape.kind == Process_Shape_HalfCircle) {
+      p0 = shape.points[0];
+      p1 = shape.points[shape.point_count-1];
+    } else if (shape.point_count == 4) {
+      p0 = shape.points[2];
+      p1 = shape.points[3];
+    } else {
+      p0 = shape.points[2];
+      p1 = shape.points[1];
+    }
+  } break;
+  case Process_Connection_Out: {
+    if (shape.kind == Process_Shape_HalfCircle) {
+      p0 = shape.points[shape.point_count-1];
+      p1 = shape.points[0];
+    } else {
+      p0 = shape.points[0];
+      p1 = shape.points[1];
+    }
+  } break;
   }
 
   Vector2 delta = Vector2Subtract(p0, p1);
   Vector2 delta_norm = Vector2Normalize(delta);
   F32 inner_distance = fmax(0.0f, Vector2Distance(p0, p1) - 2.0f*padding);
-  F32 chunk_size = inner_distance / (F32)(p->out_count+1);
+  F32 chunk_size = inner_distance / (F32)(p->conn_count[conn]+1);
   F32 distance_from_point = padding + chunk_size*(F32)(wire_index+1);
 
-  Vector2 out_position = Vector2Add(p1, Vector2Scale(delta_norm, distance_from_point));
+  Vector2 wire_position = Vector2Add(p1, Vector2Scale(delta_norm, distance_from_point));
 
-  return out_position;
-}
-
-
-function Vector2
-get_process_wire_in_position(Context *context, Process *p, Process_Shape shape, U32 wire_index) {
-  F32 padding = context->camera.zoom * global_process_wire_padding;
-  Vector2 p0 = shape.points[2];
-  Vector2 p1 = shape.points[1];
-
-  if (shape.kind == Process_Shape_HalfCircle) {
-    // @Copypasta draw_processes
-    p0 = shape.points[0];
-    p1 = shape.points[shape.point_count-1];
-  } else if (shape.point_count == 4) {
-    p0 = shape.points[2];
-    p1 = shape.points[3];
-  }
-
-  Vector2 delta = Vector2Subtract(p0, p1);
-  Vector2 delta_norm = Vector2Normalize(delta);
-  F32 inner_distance = fmax(0.0f, Vector2Distance(p0, p1) - 2.0f*padding);
-  F32 chunk_size = inner_distance / (F32)(p->in_count+1);
-  F32 distance_from_point = padding + chunk_size*(F32)(wire_index+1);
-
-  Vector2 in_position = Vector2Add(p1, Vector2Scale(delta_norm, distance_from_point));
-
-  return in_position;
+  return wire_position;
 }
 
 
@@ -473,9 +468,6 @@ function Rectangle get_wire_box(Context *context, Vector2 position) {
 
 
 function Rectangle get_new_wire_box(Context *context, Process *p, Process_Shape shape) {
-  // NOTE: Currently, the first point of any process-shape is always the corner where the new-wire-box wants to be.
-  F32 x = shape.points[0].x;
-  F32 y = shape.points[0].y;
   Vector2 position = shape.new_wire_position;
   F32 size = context->camera.zoom * global_box_size;
   F32 half_size = context->camera.zoom * global_box_half_size;
@@ -1151,17 +1143,15 @@ triangle_strip_contains_point(Vector2 *points, S32 triangle_count, Vector2 point
     F32 side3 = which_side_of_line(points[i+2], points[i], point);
 
     if (i % 2 == 0) {
-            if (side1 < 0.0f && side2 < 0.0f && side3 < 0.0f) {
+      if (side1 < 0.0f && side2 < 0.0f && side3 < 0.0f) {
         contains = 1;
         break;
       }
-
     } else {
-            if (side1 > 0.0f && side2 > 0.0f && side3 > 0.0f) {
+      if (side1 > 0.0f && side2 > 0.0f && side3 > 0.0f) {
         contains = 1;
         break;
       }
-
     }
   }
 
@@ -1216,7 +1206,7 @@ get_process_selection(Context *context, Process *p) {
   } else {
     // check in wire-boxes
     for (U32 i = 0; i < p->in_count; ++i) {
-      Vector2 in_position = get_process_wire_in_position(context, p, shape, i);
+      Vector2 in_position = get_process_wire_position(context, p, shape, Process_Connection_In, i);
       Rectangle r = get_wire_box(context, in_position);
       if (rectangle_contains_point(r, context->mouse_position)) {
         selection.type = Process_Selection_In;
@@ -1231,7 +1221,7 @@ get_process_selection(Context *context, Process *p) {
     if (selection.type == 0) {
       // check out wire-boxes
       for (U32 i = 0; i < p->out_count; ++i) {
-        Vector2 out_position = get_process_wire_out_position(context, p, shape, i);
+        Vector2 out_position = get_process_wire_position(context, p, shape, Process_Connection_Out, i);
         Rectangle r = get_wire_box(context, out_position);
         if (rectangle_contains_point(r, context->mouse_position)) {
           selection.type = Process_Selection_Out;
@@ -1498,8 +1488,8 @@ function void handle_user_input(Context *context) {
       if (Get_Flag(p->flags, Process_Flag_Wire)) {
         Process_Shape out_shape = get_process_shape(context, p->out);
         Process_Shape in_shape = get_process_shape(context, p->in);
-        Vector2 out_position = get_process_wire_out_position(context, p->out, out_shape, p->which_out);
-        Vector2 in_position = get_process_wire_in_position(context, p->in, in_shape, p->which_in);
+        Vector2 out_position = get_process_wire_position(context, p->out, out_shape, Process_Connection_Out, p->which_out);
+        Vector2 in_position = get_process_wire_position(context, p->in, in_shape, Process_Connection_In, p->which_in);
 
         if (rectangle_contains_point(selection_rectangle, out_position) ||
             rectangle_contains_point(selection_rectangle, in_position)) {
@@ -1691,6 +1681,7 @@ function void draw_process_with_triangle_fan(Context *context, Process_Shape sha
     Vector2 p1 = shape.points[i+1];
     render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
   }
+
   // draw line from last point to first point
   Vector2 p0 = shape.points[0];
   Vector2 p1 = shape.points[shape.point_count-1];
@@ -1794,22 +1785,22 @@ function void draw_processes(Context *context) {
         }
       } else if (Get_Flag(p->flags, Process_Flag_Cup)) {
         // draw cup
-        Vector2 pos0 = get_process_wire_out_position(context, p, shape, 0);
-        Vector2 pos1 = get_process_wire_out_position(context, p, shape, 1);
+        Vector2 pos0 = get_process_wire_position(context, p, shape, Process_Connection_Out, 0);
+        Vector2 pos1 = get_process_wire_position(context, p, shape, Process_Connection_Out, 1);
         Vector2 ctrl0 = (Vector2){pos0.x, pos0.y+cup_cap_control_offset};
         Vector2 ctrl1 = (Vector2){pos1.x, pos1.y+cup_cap_control_offset};
         render_DrawLineBezierCubic(ra, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color);
       } else if (Get_Flag(p->flags, Process_Flag_Cap)) {
         // draw cap
-        Vector2 pos0 = get_process_wire_in_position(context, p, shape, 0);
-        Vector2 pos1 = get_process_wire_in_position(context, p, shape, 1);
+        Vector2 pos0 = get_process_wire_position(context, p, shape, Process_Connection_In, 0);
+        Vector2 pos1 = get_process_wire_position(context, p, shape, Process_Connection_In, 1);
         Vector2 ctrl0 = (Vector2){pos0.x, pos0.y-cup_cap_control_offset};
         Vector2 ctrl1 = (Vector2){pos1.x, pos1.y-cup_cap_control_offset};
         render_DrawLineBezierCubic(ra, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color);
       } else if (Get_Flag(p->flags, Process_Flag_Identity)) {
         // draw "identity" process (just a wire)
-        Vector2 pos0 = get_process_wire_in_position(context, p, shape, 0);
-        Vector2 pos1 = get_process_wire_out_position(context, p, shape, 0);
+        Vector2 pos0 = get_process_wire_position(context, p, shape, Process_Connection_In, 0);
+        Vector2 pos1 = get_process_wire_position(context, p, shape, Process_Connection_Out, 0);
         render_DrawLineBezierCubic(ra, pos0, pos1, pos1, pos0, thickness, stroke_color);
       } else {
         switch(shape.kind) {
@@ -1878,8 +1869,8 @@ function void draw_processes(Context *context) {
       Process_Shape out_shape = get_process_shape(context, p->out);
       Process_Shape in_shape = get_process_shape(context, p->in);
 
-      Vector2 out_position = get_process_wire_out_position(context, p->out, out_shape, p->which_out);
-      Vector2 in_position = get_process_wire_in_position(context, p->in, in_shape, p->which_in);
+      Vector2 out_position = get_process_wire_position(context, p->out, out_shape, Process_Connection_Out, p->which_out);
+      Vector2 in_position = get_process_wire_position(context, p->in, in_shape, Process_Connection_In, p->which_in);
       if (Get_Flag(p->flags, Process_Flag_Drag_In)) {
         // @Copypasta get_process_position
         Vector2 delta = Vector2Subtract(context->mouse_position, context->active_position);
@@ -2070,9 +2061,6 @@ int main(void) {
   render_Initialize(ta);
 
   while (!WindowShouldClose()) {
-    if (IsKeyPressed(KEY_U)) {
-      B32 i_hate_vscode = 1;
-    }
     handle_user_input(&context);
 
     render_ClearBackground(ra, global_background_color);

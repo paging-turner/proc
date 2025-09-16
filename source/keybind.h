@@ -208,8 +208,6 @@ function Modifier_Key modifier_key_from_identifier(String8 identifier) {
   return modifier;
 }
 
-#define Key_Kind_Map_Xlist\
-  X(
 
 function U32 key_kind_from_identifier(String8 identifier) {
   U32 key_kind = 0;
