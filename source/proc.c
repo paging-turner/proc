@@ -289,9 +289,8 @@ typedef struct {
 //////////////////////////////////////
 
 typedef enum {
-  Process_Shape_Triangle,
-  Process_Shape_Quadrangle, // TODO: Do we need both Quadrangle and Rectangle?
-  Process_Shape_Rectangle,
+  Process_Shape_TriangleFan,
+  Process_Shape_TriangleStrip,
   Process_Shape_Circle,
   Process_Shape_HalfCircle,
 } Process_Shape_Kind;
@@ -944,7 +943,7 @@ function void connect_processes(Context *context, Process *out, Process *in) {
 
 
 function Half_Circle_Points
-get_half_circle_points(Context *context, Process_Shape shape, Process *p, Vector2 position, B32 downward) {
+get_half_circle_points(Context *context, Process_Shape shape, Process *p, Vector2 position, S32 text_width, B32 downward) {
   Half_Circle_Points half_circle_points;
   F32 padding = context->camera.zoom * global_process_wire_padding;
   F32 spacing = context->camera.zoom * global_process_wire_spacing;
@@ -955,6 +954,10 @@ get_half_circle_points(Context *context, Process_Shape shape, Process *p, Vector
   F32 conn_count = (F32)(downward ? p->out_count : p->in_count);
   F32 width = (2.0f*padding + conn_count*spacing);
   F32 half_width = 0.5f*(width);
+  // fit shape to text, if the text is wider than the shape
+  if ((F32)text_width > half_width) {
+    half_width = 0.8f*(2.0f*padding + text_width);
+  }
 
   F32 multiplier = downward ? -1.0f : 1.0f;
   F32 x_offset = multiplier * half_width;
@@ -982,8 +985,8 @@ get_half_circle_points(Context *context, Process_Shape shape, Process *p, Vector
 
 
 function void
-fill_out_half_circle_shape(Context *context, Process_Shape *shape, Process *p, Vector2 position, B32 downward) {
-  Half_Circle_Points half_circle_points = get_half_circle_points(context, *shape, p, position, downward);
+fill_out_half_circle_shape(Context *context, Process_Shape *shape, Process *p, Vector2 position, S32 text_width, B32 downward) {
+  Half_Circle_Points half_circle_points = get_half_circle_points(context, *shape, p, position, text_width, downward);
 
   shape->kind = Process_Shape_HalfCircle;
   shape->triangle_count = global_shape_fan_triangle_count;
@@ -1011,6 +1014,8 @@ fill_out_half_circle_shape(Context *context, Process_Shape *shape, Process *p, V
 function Process_Shape
 get_process_shape(Context *context, Process *p) {
   Process_Shape shape = {0};
+  F32 font_size = context->camera.zoom * global_process_font_size;
+  S32 text_width = MeasureText((char *)p->label, font_size);
 
   Vector2 position = get_process_position(context, p);
   position = GetWorldToScreen2D(position, context->camera);
@@ -1029,8 +1034,13 @@ get_process_shape(Context *context, Process *p) {
     // rectangular
     F32 max_conn = (F32)Max(p->in_count, p->out_count);
     F32 half_width = 0.5f*(2.0f*padding + max_conn*spacing);
-    shape.kind = Process_Shape_Rectangle;
+    // fit shape to text if text is wide enough
+    if ((F32)text_width > half_width) {
+      half_width = 0.5f*(2.0f*padding + (F32)text_width);
+    }
+    shape.kind = Process_Shape_TriangleStrip;
     shape.point_count = 4;
+    shape.triangle_count = 2;
     shape.points[0].x = position.x + half_width;
     shape.points[0].y = position.y - half_size;
     shape.points[1].x = position.x - half_width;
@@ -1043,13 +1053,18 @@ get_process_shape(Context *context, Process *p) {
   } else if (has_in) {
     F32 width = (2.0f*padding + p->in_count*spacing);
     F32 half_width = 0.5f*(width);
+    // fit shape to text if text is wide enough
+    if ((F32)text_width > 0.5f*half_width) {
+      half_width = (2.0f*padding + (F32)text_width);
+    }
     if (rounded) {
       // upward half-circle
-      fill_out_half_circle_shape(context, &shape, p, position, 0);
+      fill_out_half_circle_shape(context, &shape, p, position, text_width, 0);
     } else {
       // upward triangle
-      shape.kind = Process_Shape_Triangle;
+      shape.kind = Process_Shape_TriangleFan;
       shape.point_count = 3;
+      shape.triangle_count = 1;
       shape.points[0].x = position.x;
       shape.points[0].y = position.y - quarter_size;
       shape.points[1].x = position.x - half_width;
@@ -1062,13 +1077,18 @@ get_process_shape(Context *context, Process *p) {
   } else if (has_out) {
     F32 width = (2.0f*padding + p->out_count*spacing);
     F32 half_width = 0.5f*(width);
+    // fit shape to text if text is wide enough
+    if ((F32)text_width > 0.5f*half_width) {
+      half_width = (2.0f*padding + (F32)text_width);
+    }
     if (rounded) {
       // downward half-circle
-      fill_out_half_circle_shape(context, &shape, p, position, 1);
+      fill_out_half_circle_shape(context, &shape, p, position, text_width, 1);
     } else {
       // downward triangle
-      shape.kind = Process_Shape_Triangle;
+      shape.kind = Process_Shape_TriangleFan;
       shape.point_count = 3;
+      shape.triangle_count = 1;
       shape.points[0].x = position.x + half_width;
       shape.points[0].y = position.y - half_size;
       shape.points[1].x = position.x - half_width;
@@ -1081,22 +1101,29 @@ get_process_shape(Context *context, Process *p) {
   } else {
     if (rounded) {
       // circle
+      // TODO: Setup the circle in a different way so that it can fit text. Like an ellipse with beziers...
       shape.kind = Process_Shape_Circle;
       shape.center = position;
       shape.radius = half_size*0.7f;
     } else {
       // diamond
-      shape.kind = Process_Shape_Quadrangle;
+      // fit shape to text if text is wide enough
+      F32 half_size_x = half_size;
+      if ((F32)text_width > half_size) {
+        half_size_x = (F32)text_width;
+      }
+      shape.kind = Process_Shape_TriangleFan;
       shape.point_count = 4;
+      shape.triangle_count = 2;
       shape.points[0].x = position.x;
       shape.points[0].y = position.y - half_size;
-      shape.points[1].x = position.x - half_size;
+      shape.points[1].x = position.x - half_size_x;
       shape.points[1].y = position.y;
-      shape.points[2].x = position.x + half_size;
-      shape.points[2].y = position.y;
-      shape.points[3].x = position.x;
-      shape.points[3].y = position.y + half_size;
-      shape.center = get_percentage_between_points(shape.points[0], shape.points[3], 0.5f);
+      shape.points[2].x = position.x;
+      shape.points[2].y = position.y + half_size;
+      shape.points[3].x = position.x + half_size_x;
+      shape.points[3].y = position.y;
+      shape.center = position;
     }
   }
 
@@ -1126,34 +1153,39 @@ triangle_fan_contains_point(Vector2 *points, S32 triangle_count, Vector2 point) 
 
 
 function B32
+triangle_strip_contains_point(Vector2 *points, S32 triangle_count, Vector2 point) {
+  B32 contains = 0;
+
+  for (S32 i = 0; i < triangle_count; ++i) {
+    F32 side1 = which_side_of_line(points[i], points[i+1], point);
+    F32 side2 = which_side_of_line(points[i+1], points[i+2], point);
+    F32 side3 = which_side_of_line(points[i+2], points[i], point);
+
+    if (i % 2 == 0) {
+            if (side1 < 0.0f && side2 < 0.0f && side3 < 0.0f) {
+        contains = 1;
+        break;
+      }
+
+    } else {
+            if (side1 > 0.0f && side2 > 0.0f && side3 > 0.0f) {
+        contains = 1;
+        break;
+      }
+
+    }
+  }
+
+  return contains;
+}
+
+
+
+function B32
 process_shape_contains_point(Context *context, Process_Shape shape, Vector2 point) {
   B32 contains = 0;
 
   switch(shape.kind) {
-  case Process_Shape_Triangle:
-  case Process_Shape_Quadrangle:
-  case Process_Shape_Rectangle: {
-    if (shape.point_count == 3 || shape.point_count == 4) {
-      F32 side1 = which_side_of_line(shape.points[0], shape.points[1], point);
-      F32 side2 = which_side_of_line(shape.points[1], shape.points[2], point);
-      F32 side3 = which_side_of_line(shape.points[2], shape.points[0], point);
-
-      F32 threshold = 0.1f;
-
-      // test first triangle
-      if (side1 < threshold && side2 < threshold && side3 < threshold) {
-        contains = 1;
-      } else if (shape.point_count == 4) {
-        F32 side4 = which_side_of_line(shape.points[2], shape.points[3], point);
-        F32 side5 = which_side_of_line(shape.points[3], shape.points[1], point);
-
-        // test second triangle
-        if (side2 > threshold && side4 > threshold && side5 > threshold) {
-          contains = 1;
-        }
-      }
-    }
-  } break;
   case Process_Shape_Circle: {
     F32 distance = Vector2Distance(shape.center, point);
     contains = distance <= shape.radius;
@@ -1161,6 +1193,13 @@ process_shape_contains_point(Context *context, Process_Shape shape, Vector2 poin
   case Process_Shape_HalfCircle: {
     contains = triangle_fan_contains_point(shape.points, shape.triangle_count, point);
   } break;
+  case Process_Shape_TriangleFan: {
+    contains = triangle_fan_contains_point(shape.points, shape.triangle_count, point);
+  } break;
+  case Process_Shape_TriangleStrip: {
+    contains = triangle_strip_contains_point(shape.points, shape.triangle_count, point);
+  } break;
+  default: Assert(0);
   }
 
   return contains;
@@ -1649,26 +1688,52 @@ function void draw_circular_process(Context *context, Vector2 center, F32 radius
 
 
 
-function void draw_process_with_triangles(Context *context, Process_Shape shape, F32 thickness, Color bg_color, Color stroke_color) {
+
+function void draw_process_with_triangle_fan(Context *context, Process_Shape shape, F32 thickness, Color bg_color, Color stroke_color) {
+  Assert(shape.triangle_count == (shape.point_count - 2));
+  Arena *ra = context->render_arena;
+
+  // draw background
+  render_DrawTriangleFan(ra, shape.points, shape.point_count, bg_color);
+
+  // draw lines
+  for (S32 i = 0; i < shape.point_count-1 && i < Process_Shape_Max_Points; ++i) {
+    Vector2 p0 = shape.points[i];
+    Vector2 p1 = shape.points[i+1];
+    render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
+  }
+  // draw line from last point to first point
+  Vector2 p0 = shape.points[0];
+  Vector2 p1 = shape.points[shape.point_count-1];
+  render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
+}
+
+
+
+function void draw_process_with_triangle_strip(Context *context, Process_Shape shape, F32 thickness, Color bg_color, Color stroke_color) {
   Arena *ra = context->render_arena;
   // draw process background
   render_DrawTriangleStrip(ra, shape.points, shape.point_count, bg_color);
 
-  // draw process lines
-  Vector2 p0 = shape.points[0];
-  Vector2 p1 = shape.points[1];
-  Vector2 p2 = shape.points[2];
-  Vector2 p3 = shape.points[3];
-  // TODO: We should not have these special cases for the shape's point-counts.
-  if (shape.point_count == 3) {
+  if (shape.triangle_count) {
+    // draw first two lines
+    Vector2 p0 = shape.points[0];
+    Vector2 p1 = shape.points[1];
+    Vector2 p2 = shape.points[2];
     render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
-    render_DrawLine(ra, p1.x, p1.y, p2.x, p2.y, thickness, stroke_color);
-    render_DrawLine(ra, p2.x, p2.y, p0.x, p0.y, thickness, stroke_color);
-  } else if (shape.point_count == 4) {
+    render_DrawLine(ra, p0.x, p0.y, p2.x, p2.y, thickness, stroke_color);
+
+    // draw in-between lines
+    for (S32 i = 1; i < shape.triangle_count; ++i) {
+      Vector2 p0 = shape.points[i];
+      Vector2 p1 = shape.points[i+2];
+      render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
+    }
+
+    // draw line connecting last two points
+    p0 = shape.points[shape.point_count-1];
+    p1 = shape.points[shape.point_count-2];
     render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
-    render_DrawLine(ra, p1.x, p1.y, p3.x, p3.y, thickness, stroke_color);
-    render_DrawLine(ra, p3.x, p3.y, p2.x, p2.y, thickness, stroke_color);
-    render_DrawLine(ra, p2.x, p2.y, p0.x, p0.y, thickness, stroke_color);
   }
 }
 
@@ -1684,6 +1749,8 @@ function void draw_processes(Context *context) {
   Color box_color = (Color){10, 190, 40, 255};
   Color box_hover_color = (Color){5, 250, 20, 255};
 
+  F32 font_size = context->camera.zoom * global_process_font_size;
+
   F32 padding = global_process_wire_padding;
   F32 spacing = global_process_wire_spacing;
   B32 rounded = Get_Flag(context->flags, Context_Flag_RoundedShapes);
@@ -1691,6 +1758,7 @@ function void draw_processes(Context *context) {
   // draw processes
   for (Process *p = context->processes.first; p != 0; p = p->next) {
     B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
+    S32 text_width = MeasureText((char *)p->label, font_size);
 
     if (!is_wire) {
       Process_Shape shape = get_process_shape(context, p);
@@ -1713,7 +1781,7 @@ function void draw_processes(Context *context) {
             // rounded half-circle
             Vector2 position = get_process_position(context, p);
             position = GetWorldToScreen2D(position, context->camera);
-            Half_Circle_Points points = get_half_circle_points(context, shape, p, position, downward);
+            Half_Circle_Points points = get_half_circle_points(context, shape, p, position, text_width, downward);
             p0 = points.middle_of_line;
             p1 = points.middle_of_curve;
           } else {
@@ -1732,7 +1800,7 @@ function void draw_processes(Context *context) {
           if (rounded) {
             draw_circular_process(context, shape.center, shape.radius, thickness, invisible_bg_color, invisible_stroke_color);
           } else {
-            draw_process_with_triangles(context, shape, thickness, invisible_bg_color, invisible_stroke_color);
+            draw_process_with_triangle_strip(context, shape, thickness, invisible_bg_color, invisible_stroke_color);
           }
         }
       } else if (Get_Flag(p->flags, Process_Flag_Cup)) {
@@ -1756,10 +1824,11 @@ function void draw_processes(Context *context) {
         render_DrawLineBezierCubic(ra, pos0, pos1, pos1, pos0, thickness, stroke_color);
       } else {
         switch(shape.kind) {
-        case Process_Shape_Triangle:
-        case Process_Shape_Quadrangle:
-        case Process_Shape_Rectangle: {
-          draw_process_with_triangles(context, shape, thickness, bg_color, stroke_color);
+        case Process_Shape_TriangleStrip: {
+          draw_process_with_triangle_strip(context, shape, thickness, bg_color, stroke_color);
+        } break;
+        case Process_Shape_TriangleFan: {
+          draw_process_with_triangle_fan(context, shape, thickness, bg_color, stroke_color);
         } break;
         case Process_Shape_Circle: {
           draw_circular_process(context, shape.center, shape.radius, thickness, bg_color, stroke_color);
@@ -1781,13 +1850,13 @@ function void draw_processes(Context *context) {
                           shape.points[shape.point_count-1].y,
                           thickness, stroke_color);
         } break;
+        default: Assert(0);
         }
       }
 
       // draw label
       if (p->label[0]) {
         const char *text = (char *)p->label;
-        F32 font_size = context->camera.zoom * global_process_font_size;
         F32 text_width = (F32)MeasureText(text, font_size);
         F32 text_x = shape.center.x-0.5f*text_width;
         F32 text_y = shape.center.y-0.5f*font_size;
