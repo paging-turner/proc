@@ -307,6 +307,7 @@ typedef struct {
   Vector2 first_control;
   Vector2 second_control;
   B32 downward;
+  Vector2 new_wire_position;
 } Process_Shape;
 
 
@@ -470,35 +471,12 @@ function Rectangle get_wire_box(Context *context, Vector2 position) {
 }
 
 
-function Vector2 get_new_wire_position(Context *context, Process *p, Process_Shape shape) {
-  Vector2 position = shape.points[0];
-
-  if (shape.kind == Process_Shape_Circle) {
-    position.x = shape.center.x;
-    position.y = shape.center.y - shape.radius;
-  } else if (shape.kind == Process_Shape_HalfCircle) {
-    if (shape.downward) {
-      position.x = shape.points[shape.point_count-1].x;
-      position.y = shape.points[shape.point_count-1].y;
-    } else {
-      Vector2 point = get_bezier_point(
-        shape.points[0], shape.points[shape.point_count-1],
-        shape.first_control, shape.second_control,
-        0.5f);
-      position.x = point.x;
-      position.y = point.y;
-    }
-  }
-
-  return position;
-}
-
 
 function Rectangle get_new_wire_box(Context *context, Process *p, Process_Shape shape) {
   // NOTE: Currently, the first point of any process-shape is always the corner where the new-wire-box wants to be.
   F32 x = shape.points[0].x;
   F32 y = shape.points[0].y;
-  Vector2 position = get_new_wire_position(context, p, shape);
+  Vector2 position = shape.new_wire_position;
   F32 size = context->camera.zoom * global_box_size;
   F32 half_size = context->camera.zoom * global_box_half_size;
 
@@ -1003,6 +981,12 @@ fill_out_half_circle_shape(Context *context, Process_Shape *shape, Process *p, V
 
   shape->center = get_percentage_between_points(middle_of_curve, middle_of_line, 0.5);
 
+  if (downward) {
+    shape->new_wire_position = half_circle_points.first_point;
+  } else {
+    shape->new_wire_position = middle_of_curve;
+  }
+
   shape->point_count = create_bezier_triangle_fan(
     first_point, second_point,
     shape->first_control, shape->second_control,
@@ -1050,6 +1034,7 @@ get_process_shape(Context *context, Process *p) {
     shape.points[3].x = position.x - half_width;
     shape.points[3].y = position.y + half_size;
     shape.center = get_percentage_between_points(shape.points[0], shape.points[3], 0.5f);
+    shape.new_wire_position = shape.points[0];
   } else if (has_in) {
     F32 width = (2.0f*padding + p->in_count*spacing);
     F32 half_width = 0.5f*(width);
@@ -1073,6 +1058,7 @@ get_process_shape(Context *context, Process *p) {
       shape.points[2].y = position.y + half_size;
       Vector2 outer_mid = get_percentage_between_points(shape.points[1], shape.points[2], 0.5f);
       shape.center = get_percentage_between_points(shape.points[0], outer_mid, 0.66f);
+      shape.new_wire_position = shape.points[0];
     }
   } else if (has_out) {
     F32 width = (2.0f*padding + p->out_count*spacing);
@@ -1097,6 +1083,7 @@ get_process_shape(Context *context, Process *p) {
       shape.points[2].y = position.y + quarter_size;
       Vector2 outer_mid = get_percentage_between_points(shape.points[0], shape.points[1], 0.5f);
       shape.center = get_percentage_between_points(shape.points[2], outer_mid, 0.66f);
+      shape.new_wire_position = shape.points[0];
     }
   } else {
     if (rounded) {
@@ -1105,6 +1092,7 @@ get_process_shape(Context *context, Process *p) {
       shape.kind = Process_Shape_Circle;
       shape.center = position;
       shape.radius = half_size*0.7f;
+      shape.new_wire_position = (Vector2){shape.center.x, shape.center.y - shape.radius};
     } else {
       // diamond
       // fit shape to text if text is wide enough
@@ -1124,6 +1112,7 @@ get_process_shape(Context *context, Process *p) {
       shape.points[3].x = position.x + half_size_x;
       shape.points[3].y = position.y;
       shape.center = position;
+      shape.new_wire_position = shape.points[0];
     }
   }
 
@@ -1935,7 +1924,7 @@ function void draw_processes(Context *context) {
   // draw new wire
   if (Get_Flag(context->flags, Context_Flag_NewWire) && context->active_processes.first) {
     Process_Shape shape = get_process_shape(context, context->active_processes.first);
-    Vector2 position = get_new_wire_position(context, context->active_processes.first, shape);
+    Vector2 position = shape.new_wire_position;
 
     Vector2 from_control = position;
     from_control.y -= context->camera.zoom * 30.f;
