@@ -2060,6 +2060,22 @@ int main(void) {
   Arena *ta = context.temp_arena;
   render_Initialize(ta);
 
+  {
+    // NOTE: just testing out file-iter stuff on mac...
+    U8 file_name_bytes[1024];
+    String8 file_name;
+    file_name.str = file_name_bytes;
+    FileProperties file_props;
+    OS_FileIter file_iter = os_file_iter_init(str8_lit("/Users/ryan/projects/proc/source/"));
+    while(os_file_iter_next(context.temp_arena, &file_iter, &file_name, &file_props)) {
+      for (S32 i = 0; i < file_name.size; ++i) {
+        printf("%c", file_name.str[i]);
+      }
+      printf("\n");
+    }
+    os_file_iter_end(&file_iter);
+  }
+
   while (!WindowShouldClose()) {
     handle_user_input(&context);
 

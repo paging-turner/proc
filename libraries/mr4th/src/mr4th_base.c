@@ -3807,6 +3807,97 @@ os_this_image(void){
   return(result);
 }
 
+
+
+////////////////////////////////
+// Mac Implementation: File Handling
+// TODO: File handling should also work for Linux.
+MR4TH_SYMBOL OS_FileIter
+os_file_iter_init(String8 path){
+  ProfBeginFunc();
+
+  // store into iter
+  OS_FileIter result = {0};
+  Mac_FileIter *mac_iter = (Mac_FileIter*)&result;
+  mac_iter->base_path = path;
+  mac_iter->handle = opendir((const char *)mac_iter->base_path.str);
+
+  ProfEndFunc();
+  return(result);
+}
+
+MR4TH_SYMBOL B32
+os_file_iter_next(Arena *arena, OS_FileIter *iter,
+                  String8 *name, FileProperties *props){
+  ProfBeginFunc();
+
+  B32 result = 0;
+
+  Mac_FileIter *mac_iter = (Mac_FileIter*)iter;
+  if (mac_iter->handle != 0){
+    for (;!mac_iter->done;){
+      B32 emit = 1;
+      struct dirent *dir = readdir(mac_iter->handle);
+
+      if (dir) {
+        // check for . and ..
+        char *file_name = (char *)dir->d_name;
+        B32 is_dot = (file_name[0] == '.' && file_name[1] == 0);
+        B32 is_dotdot = (file_name[0] == '.' && file_name[1] == '.' &&
+                         file_name[2] == 0);
+
+        // setup to emit
+        emit = (!is_dot && !is_dotdot);
+      } else {
+        // no more dirs, we are done
+        mac_iter->done = 1;
+        emit = 0;
+      }
+
+      if (emit){
+        // join base-path and current dir
+        ArenaTemp scratch = arena_get_scratch(0, 0);
+        String8Node nodes[4];
+        String8List list = {0};
+        str8_list_push_explicit(&list, mac_iter->base_path, nodes + 0);
+        *name = str8_cstring((U8 *)dir->d_name);
+        // TODO: Check if base-path ends with path-separator, and if not, insert the path-separator.
+        str8_list_push_explicit(&list, *name, nodes + 1);
+        str8_list_push_explicit(&list, str8_lit("\0"), nodes + 2); // HACK: TODO: there's a better way to ensure null-termination, right?
+        String8 full_path = str8_join(scratch.arena, &list, 0);
+        // get the file stats in order to fill out the file-props struct.
+        struct stat file_stats;
+        if (lstat((char *)full_path.str, &file_stats) == 0) {
+          props->size = file_stats.st_size;
+          B32 is_directory = (file_stats.st_mode & S_IFMT) == S_IFDIR;
+          props->flags = is_directory ? FilePropertyFlag_IsFolder : 0;
+          props->create_time = file_stats.st_ctime; // NOTE: This is not exactly the creation time...
+          props->modify_time = file_stats.st_mtime;
+          props->access = file_stats.st_atime;
+          result = 1;
+        }
+        break;
+      }
+    }
+  }
+
+  ProfEndFunc();
+  return(result);
+}
+
+MR4TH_SYMBOL void
+os_file_iter_end(OS_FileIter *iter){
+  ProfBeginFunc();
+
+  Mac_FileIter *mac_iter = (Mac_FileIter*)iter;
+  if (mac_iter->handle != 0) {
+    closedir(mac_iter->handle);
+  }
+
+  ProfEndFunc();
+}
+
+
 #endif /* OS_MAC */
 
 

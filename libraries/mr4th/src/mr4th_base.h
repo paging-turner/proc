@@ -1507,8 +1507,19 @@ MR4TH_SYMBOL DataAccessFlags   w32_access_from_attributes(DWORD attribs);
 #if OS_MAC && !MR4TH_NO_INCLUDES
 
 #include <dlfcn.h> // for dlopen, dlsym, etc.
+// TODO: We no longer use "getsectbyname" because we finally introspect mach-o files! I guess we can delete the include and be happy?
 #include <mach-o/getsect.h> // for getsectbyname
 #include <sys/mman.h> // mmap, munmap, madvise
+#include <dirent.h> // opendir, readdir, closedir
+#include <sys/stat.h> // lstat, stat struct
+
+typedef struct Mac_FileIter{
+  String8 base_path;
+  DIR *handle;
+  B32 done;
+} Mac_FileIter;
+StaticAssert(sizeof(Mac_FileIter) <= sizeof(OS_FileIter), mac_fileiter);
+
 
 #endif /* OS_MAC */
 
