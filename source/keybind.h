@@ -262,7 +262,7 @@ function Keybind_Config_Tokens tokenize_keybinds_config_file(Context *context) {
   Keybind_Config_Tokens tokens = {0};
 
   // load custom keybinds from config file
-  FILE *f = fopen(Keybind_Config_Filepath, "rb");
+  FILE *f = fopen((char *)Keybind_Config_Filepath.str, "rb");
   if (f) {
     // read file into temp arena
     fseek(f, 0, SEEK_END);

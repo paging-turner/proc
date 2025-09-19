@@ -105,7 +105,8 @@
 # define _ "/"
 #endif
 
-global_variable char *Keybind_Config_Filepath = ".."_"config"_"keybind.txt";
+global_variable String8 Keybind_Config_Filepath = str8_comptime_lit(".."_"config"_"keybind.txt");
+global_variable String8 Saves_Filepath = str8_comptime_lit(".."_"saves"_);
 
 #undef _
 
@@ -116,7 +117,6 @@ global_variable char *Keybind_Config_Filepath = ".."_"config"_"keybind.txt";
 // Process
 //////////////////////////////////////
 
-// TODO: Should Process_Flag just be a non-flag enum?
 typedef enum {
   Process_Flag_Wire      = 1 << 0,
   Process_Flag_Empty     = 1 << 1,
@@ -125,6 +125,9 @@ typedef enum {
   Process_Flag_Identity  = 1 << 4,
   Process_Flag_Drag_In   = 1 << 5,
   Process_Flag_Drag_Out  = 1 << 6,
+
+  // UI features
+  Process_Flag_Button    = 1 << 7,
 } Process_Flag;
 
 #define Process_Connection_Xlist\
@@ -147,9 +150,8 @@ typedef enum {
 
 typedef struct Process Process;
 struct Process {
-  Vector2 position;
-
   B32 flags;
+  Vector2 position;
 
   union {
     struct {
@@ -217,6 +219,22 @@ typedef struct {
 
 
 
+//////////////////////////////////////
+// UI
+//////////////////////////////////////
+
+typedef enum {
+  Ui_Element_Kind__Null,
+  Ui_Element_Kind_Button,
+} Ui_Element_Kind;
+
+typedef struct {
+  Ui_Element_Kind kind;
+  Vector2 position;
+  String8 text;
+} Ui_Element;
+
+
 
 //////////////////////////////////////
 // Context
@@ -233,7 +251,6 @@ typedef enum {
 } Context_Flag;
 
 typedef struct {
-  Vector2 mouse_position;
   B32 mouse0_pressed;
   B32 mouse1_pressed;
   B32 mouse0_down;
@@ -246,6 +263,11 @@ typedef struct {
 
   B32 action_occured;
 } Ui_State;
+
+typedef enum {
+  Open_Menu__Null,
+  Open_Menu_File,
+} Open_Menu;
 
 typedef struct {
   Arena *render_arena;
@@ -265,13 +287,13 @@ typedef struct {
 
   Process_List copy_processes;
 
+  Ui_State ui_state;
   Vector2 mouse_position; // TODO: move this to ui_state
   Vector2 active_position;
   Vector2 copy_center;
+  Open_Menu open_menu;
 
   Camera2D camera;
-
-  Ui_State ui_state;
 } Context;
 
 
@@ -346,6 +368,12 @@ global_variable F32 global_panel_font_size = 14.0f;
 global_variable Color global_background_color;
 
 global_variable S32 global_shape_fan_triangle_count = 12;
+
+global_variable Vector2 global_button_padding = (Vector2){7.0f, 4.0f};
+global_variable Color global_button_dormant_bg_color = {90, 70, 90, 255};
+global_variable Color global_button_hot_bg_color = {100, 80, 100, 255};
+global_variable Color global_button_font_color = {220, 220, 160, 255};
+
 
 global_variable Process global_null_process;
 #define The_Null_Process() (global_null_process=(Process){0}, &global_null_process)
@@ -1322,21 +1350,114 @@ function Keybind_Result check_keybind(Context *context, Ui_Feature feature, Proc
 
 
 
-function void handle_user_input(Context *context) {
-  context->mouse_position = GetMousePosition();
+function Ui_State get_ui_state(Context *context) {
+  Ui_State ui_state;
+  context->mouse_position = GetMousePosition(); // TODO: mouse_position should go in ui_state
+  ui_state.mouse0_pressed = IsMouseButtonPressed(0);
+  ui_state.mouse1_pressed = IsMouseButtonPressed(1);
+  ui_state.mouse0_down = IsMouseButtonDown(0);
+  ui_state.mouse1_down = IsMouseButtonDown(1);
+  ui_state.hot_id_assigned = 0;
+  ui_state.mouse_wheel_movement = GetMouseWheelMoveV();
+  ui_state.control_down = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+  ui_state.shift_down = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+  ui_state.alt_down = IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT);
+  ui_state.action_occured = 0;
+  return ui_state;
+}
+
+
+function B32 do_button(Context *context, Ui_Element button) {
+  Arena *ra = context->render_arena;
+  // NOTE: Assumes label is null-terminated for now...
+  F32 font_size = global_panel_font_size;
+  S32 text_width = MeasureText((char *)button.text.str, font_size);
+  Vector2 padding = global_button_padding;
+  Color dormant_bg_color = global_button_dormant_bg_color;
+  Color hot_bg_color = global_button_hot_bg_color;
+  Color font_color = global_button_font_color;
+  Rectangle bg_rect = (Rectangle){button.position.x, button.position.y, (F32)text_width+2.0f*padding.x, font_size+2.0f*padding.y};
+  B32 is_hot = 0;
+  B32 clicked = 0;
+
+  if (!context->ui_state.action_occured &&
+      rectangle_contains_point(bg_rect, context->mouse_position)) {
+    context->hot_process = 0;
+    is_hot = 1;
+
+    if (IsMouseButtonPressed(0)) {
+      clicked = 1;
+      context->ui_state.action_occured = 1;
+    }
+  }
+
+  Color bg_color = is_hot ? hot_bg_color : dormant_bg_color;
+
+  render_DrawRectangle(ra, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, bg_color);
+  render_DrawText(ra, (char *)button.text.str, button.position.x+padding.x+1.0f, button.position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
+  render_DrawText(ra, (char *)button.text.str, button.position.x+padding.x, button.position.y+padding.y, font_size, font_color, 0);
+
+  return clicked;
+}
+
+
+function Ui_Element create_button(Context *context, Vector2 position, String8 text) {
+  Ui_Element button;
+  button.kind = Ui_Element_Kind_Button;
+  button.position = position;
+  button.text = text;
+
+  return button;
+}
+
+
+
+function void handle_ui(Context *context) {
+  Arena *ra = context->render_arena;
+  F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
+
+  Ui_Element file_button = create_button(context, (Vector2){0.0f, 0.0f}, str8_comptime_lit("File"));
+
+  if (do_button(context, file_button)) {
+    // show file menu
+    context->open_menu = context->open_menu == Open_Menu_File ? 0 : Open_Menu_File;
+  }
+
+  if (context->open_menu == Open_Menu_File) {
+    Ui_Element file_actions[] = {
+      create_button(context, (Vector2){0.0f, button_height*1.0f}, str8_comptime_lit("Open")),
+      create_button(context, (Vector2){0.0f, button_height*2.0f}, str8_comptime_lit("Save")),
+    };
+
+    S32 file_action_count = ArrayCount(file_actions);
+
+    // get max text width
+    F32 max_text_width = 0.0f;
+    for (S32 i = 0; i < ArrayCount(file_actions); ++i) {
+      S32 text_width_raw = MeasureText((char *)file_actions[i].text.str, global_panel_font_size);
+      F32 text_width = 2.0f*global_button_padding.x + (F32)text_width_raw;
+      if (text_width > max_text_width) {
+        max_text_width = text_width;
+      }
+    }
+
+    render_DrawRectangle(ra, 0.0f, button_height, (F32)max_text_width, button_height*file_action_count, global_button_dormant_bg_color);
+
+    for (S32 i = 0; i < ArrayCount(file_actions); ++i) {
+      Ui_Element file_action = file_actions[i];
+      B32 clicked = do_button(context, file_action);
+      if (clicked) {
+        context->open_menu = 0;
+      }
+    }
+  }
+}
+
+
+
+function void handle_process_interaction(Context *context) {
   Ui_State *ui_state = &context->ui_state;
   Process_Selection selection = (Process_Selection){0};
-
-  ui_state->mouse0_pressed = IsMouseButtonPressed(0);
-  ui_state->mouse1_pressed = IsMouseButtonPressed(1);
-  ui_state->mouse0_down = IsMouseButtonDown(0);
-  ui_state->mouse1_down = IsMouseButtonDown(1);
-  ui_state->hot_id_assigned = 0;
-  ui_state->mouse_wheel_movement = GetMouseWheelMoveV();
-  ui_state->control_down = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
-  ui_state->shift_down = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
-  ui_state->alt_down = IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT);
-  ui_state->action_occured = 0;
 
   B32 should_stop_dragging = check_keybind(context, Ui_Feature_SelectSingleProcess, selection) == Keybind_Result_Exit;
   Process *moved_wire = 0;
@@ -1651,6 +1772,14 @@ function void handle_user_input(Context *context) {
 }
 
 
+
+function void handle_user_input(Context *context) {
+  context->ui_state = get_ui_state(context);
+  handle_ui(context);
+  if (!context->ui_state.action_occured) {
+    handle_process_interaction(context);
+  }
+}
 
 
 function void draw_circular_process(Context *context, Vector2 center, F32 radius, F32 thickness, Color bg_color, Color stroke_color) {
@@ -2063,28 +2192,14 @@ int main(void) {
   Arena *ta = context.temp_arena;
   render_Initialize(ta);
 
-  {
-    // NOTE: just testing out file-iter stuff on mac...
-    U8 file_name_bytes[1024];
-    String8 file_name;
-    file_name.str = file_name_bytes;
-    FileProperties file_props;
-    OS_FileIter file_iter = os_file_iter_init(str8_lit("/Users/ryan/projects/proc/source/"));
-    while(os_file_iter_next(context.temp_arena, &file_iter, &file_name, &file_props)) {
-      for (S32 i = 0; i < file_name.size; ++i) {
-        printf("%c", file_name.str[i]);
-      }
-      printf("\n");
-    }
-    os_file_iter_end(&file_iter);
-  }
-
   while (!WindowShouldClose()) {
     handle_user_input(&context);
 
     render_ClearBackground(ra, global_background_color);
     draw_processes(&context);
+#if 0
     draw_info_panel(&context);
+#endif
 
     BeginDrawing();
     render_Commands(&context, ra);

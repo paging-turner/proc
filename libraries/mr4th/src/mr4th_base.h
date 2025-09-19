@@ -1070,6 +1070,7 @@ MR4TH_SYMBOL String8 str8_cstring(U8 *cstr);
 MR4TH_SYMBOL String8 str8_cstring_capped(U8 *cstr, U8 *opl);
 
 #define str8_lit(s) str8((U8*)(s), sizeof(s) - 1)
+#define str8_comptime_lit(s) (String8){(U8*)(s), sizeof(s)-1}
 #define str8_struct(s) str8((U8*)(s), sizeof(*(s)))
 #define str8_array(s) str8((U8*)(s), sizeof(s))
 #define str8_lit_const(s) { (U8*)(s), sizeof(s) - 1 }
