@@ -100,11 +100,14 @@
 // Paths
 //////////////////////////////////////
 #if OS_WINDOWS
-# define Keybind_Config_Filepath "..\\config\\keybind.txt"
+# define _ "\\"
 #else
-# define Keybind_Config_Filepath "../config/keybind.txt"
+# define _ "/"
 #endif
 
+global_variable char *Keybind_Config_Filepath = ".."_"config"_"keybind.txt";
+
+#undef _
 
 
 
