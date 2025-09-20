@@ -220,23 +220,6 @@ typedef struct {
 
 
 //////////////////////////////////////
-// UI
-//////////////////////////////////////
-
-typedef enum {
-  Ui_Element_Kind__Null,
-  Ui_Element_Kind_Button,
-} Ui_Element_Kind;
-
-typedef struct {
-  Ui_Element_Kind kind;
-  Vector2 position;
-  String8 text;
-} Ui_Element;
-
-
-
-//////////////////////////////////////
 // Context
 //////////////////////////////////////
 
@@ -295,6 +278,30 @@ typedef struct {
 
   Camera2D camera;
 } Context;
+
+
+
+//////////////////////////////////////
+// UI
+//////////////////////////////////////
+
+typedef enum {
+  Ui_Element_Kind__Null,
+  Ui_Element_Kind_Button,
+} Ui_Element_Kind;
+
+typedef struct {
+  Ui_Element_Kind kind;
+  Vector2 position;
+  String8 text;
+  Vector2 size;
+  B32 ignore_text_size;
+} Ui_Element;
+
+typedef struct {
+  String8 name;
+  void (*func)(Context*);
+} Ui_Dropdown_Item;
 
 
 
@@ -369,7 +376,7 @@ global_variable Color global_background_color;
 
 global_variable S32 global_shape_fan_triangle_count = 12;
 
-global_variable Vector2 global_button_padding = (Vector2){7.0f, 4.0f};
+global_variable Vector2 global_button_padding = (Vector2){12.0f, 5.0f};
 global_variable Color global_button_dormant_bg_color = {90, 70, 90, 255};
 global_variable Color global_button_hot_bg_color = {100, 80, 100, 255};
 global_variable Color global_button_font_color = {220, 220, 160, 255};
@@ -380,6 +387,28 @@ global_variable Process global_null_process;
 
 #define Half_Circle_Fudge 1.32f
 #define Half_Circle_Radius_Fudge 1.0f
+
+
+
+
+
+////////////////////////////////////////
+// File actions
+////////////////////////////////////////
+
+void open_file(Context *context) {
+  printf("open_file\n");
+}
+
+void save_file(Context *context) {
+  printf("save_file\n");
+}
+
+void save_file_as(Context *context) {
+  printf("save_file_as\n");
+}
+
+
 
 
 
@@ -1377,6 +1406,10 @@ function B32 do_button(Context *context, Ui_Element button) {
   Color hot_bg_color = global_button_hot_bg_color;
   Color font_color = global_button_font_color;
   Rectangle bg_rect = (Rectangle){button.position.x, button.position.y, (F32)text_width+2.0f*padding.x, font_size+2.0f*padding.y};
+  if (button.ignore_text_size) {
+    bg_rect.width = button.size.x;
+    bg_rect.height = button.size.y;
+  }
   B32 is_hot = 0;
   B32 clicked = 0;
 
@@ -1394,15 +1427,15 @@ function B32 do_button(Context *context, Ui_Element button) {
   Color bg_color = is_hot ? hot_bg_color : dormant_bg_color;
 
   render_DrawRectangle(ra, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, bg_color);
-  render_DrawText(ra, (char *)button.text.str, button.position.x+padding.x+1.0f, button.position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
-  render_DrawText(ra, (char *)button.text.str, button.position.x+padding.x, button.position.y+padding.y, font_size, font_color, 0);
+  render_DrawText(ra, (char *)button.text.str, button.position.x+padding.x+1.0f, button.position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 1);
+  render_DrawText(ra, (char *)button.text.str, button.position.x+padding.x, button.position.y+padding.y, font_size, font_color, 1);
 
   return clicked;
 }
 
 
 function Ui_Element create_button(Context *context, Vector2 position, String8 text) {
-  Ui_Element button;
+  Ui_Element button = (Ui_Element){0};
   button.kind = Ui_Element_Kind_Button;
   button.position = position;
   button.text = text;
@@ -1412,10 +1445,39 @@ function Ui_Element create_button(Context *context, Vector2 position, String8 te
 
 
 
-function void handle_ui(Context *context) {
+function void do_dropdown_items(Context *context, Ui_Dropdown_Item *items, S32 item_count, Vector2 position) {
   Arena *ra = context->render_arena;
   F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
 
+  // get max text width
+  F32 max_text_width = 0.0f;
+  for (S32 i = 0; i < item_count; ++i) {
+    S32 text_width_raw = MeasureText((char *)items[i].name.str, global_panel_font_size);
+    F32 text_width = 2.0f*global_button_padding.x + (F32)text_width_raw;
+    if (text_width > max_text_width) {
+      max_text_width = text_width;
+    }
+  }
+
+  render_DrawRectangle(ra, position.x, position.y, (F32)max_text_width, button_height*item_count, global_button_dormant_bg_color);
+
+  for (S32 i = 0; i < item_count; ++i) {
+    Ui_Dropdown_Item item = items[i];
+    Vector2 action_position = (Vector2){position.x, position.y + button_height*(F32)i};
+    Ui_Element file_action = create_button(context, action_position, item.name);
+    file_action.size = (Vector2){max_text_width, button_height};
+    file_action.ignore_text_size = 1;
+    B32 clicked = do_button(context, file_action);
+    if (clicked) {
+      context->open_menu = 0;
+      item.func(context);
+    }
+  }
+}
+
+
+
+function void handle_ui(Context *context) {
   Ui_Element file_button = create_button(context, (Vector2){0.0f, 0.0f}, str8_comptime_lit("File"));
 
   if (do_button(context, file_button)) {
@@ -1424,32 +1486,15 @@ function void handle_ui(Context *context) {
   }
 
   if (context->open_menu == Open_Menu_File) {
-    Ui_Element file_actions[] = {
-      create_button(context, (Vector2){0.0f, button_height*1.0f}, str8_comptime_lit("Open")),
-      create_button(context, (Vector2){0.0f, button_height*2.0f}, str8_comptime_lit("Save")),
+    Ui_Dropdown_Item file_dropdown_items[] = {
+      {str8_comptime_lit("Open"), open_file},
+      {str8_comptime_lit("Save"), save_file},
+      {str8_comptime_lit("Save As"), save_file_as},
     };
+    F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
+    Vector2 position = (Vector2){file_button.position.x, button_height};
 
-    S32 file_action_count = ArrayCount(file_actions);
-
-    // get max text width
-    F32 max_text_width = 0.0f;
-    for (S32 i = 0; i < ArrayCount(file_actions); ++i) {
-      S32 text_width_raw = MeasureText((char *)file_actions[i].text.str, global_panel_font_size);
-      F32 text_width = 2.0f*global_button_padding.x + (F32)text_width_raw;
-      if (text_width > max_text_width) {
-        max_text_width = text_width;
-      }
-    }
-
-    render_DrawRectangle(ra, 0.0f, button_height, (F32)max_text_width, button_height*file_action_count, global_button_dormant_bg_color);
-
-    for (S32 i = 0; i < ArrayCount(file_actions); ++i) {
-      Ui_Element file_action = file_actions[i];
-      B32 clicked = do_button(context, file_action);
-      if (clicked) {
-        context->open_menu = 0;
-      }
-    }
+    do_dropdown_items(context, file_dropdown_items, ArrayCount(file_dropdown_items), position);
   }
 }
 
