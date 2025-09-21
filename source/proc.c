@@ -60,6 +60,8 @@
      [ ]
    [x] BUG: Connect a two processes. Make one process invisible. Delete the *other* process. The invisible process is still there but, well, you can't see it! Either delete the invisible one, or make it visible again. Probably just delete it??
    [x] Automatically show invisible processes. This should only apply to processes with no connections, set to invisible, and no text.
+   === UI / Process-Interaction ===
+     [ ] Merge structs for ui-element and process. It will make memory management easier and give more use-cases of processes with different properties than what's covered in PQP.
    [ ] New Arena Changes
      [x] Change how we loop through processes, so that we can enable growable arenas.
      [x] Right now we have to make sure the Process struct is a size that's a multiple of a pointer. We should fix that :(
@@ -111,6 +113,11 @@ global_variable String8 Saves_Filepath = str8_comptime_lit(".."_"saves"_);
 #undef _
 
 
+//////////////////////////////////////
+// Forward Declarations
+//////////////////////////////////////
+
+typedef struct Context Context;
 
 
 //////////////////////////////////////
@@ -220,6 +227,37 @@ typedef struct {
 
 
 //////////////////////////////////////
+// UI Structs
+//////////////////////////////////////
+
+typedef enum {
+  Ui_Element_Kind__Null,
+  Ui_Element_Kind_Button,
+} Ui_Element_Kind;
+
+typedef struct Ui_Element Ui_Element;
+struct Ui_Element {
+  Ui_Element_Kind kind;
+  Vector2 position;
+  String8 text;
+  Vector2 size;
+  B32 ignore_text_size;
+  Ui_Element *next;
+};
+
+typedef struct {
+  Ui_Element *first;
+  Ui_Element *last;
+} Ui_Element_List;
+
+typedef struct {
+  String8 name;
+  void (*func)(Context*);
+} Ui_Dropdown_Item;
+
+
+
+//////////////////////////////////////
 // Context
 //////////////////////////////////////
 
@@ -248,17 +286,18 @@ typedef struct {
 } Ui_State;
 
 typedef enum {
-  Open_Menu__Null,
-  Open_Menu_File,
-} Open_Menu;
+  Menu_State__Null,
+  Menu_State_File,
+  Menu_State_OpenFile,
+  Menu_State_SaveFileAs,
+} Menu_State;
 
-typedef struct {
+struct Context {
   Arena *render_arena;
   Arena *process_arena;
+  Arena *ui_arena;
   Arena *temp_arena;
   U64 render_zero_pos;
-  U64 process_zero_pos;
-  U64 temp_zero_pos;
 
   U32 flags;
 
@@ -270,38 +309,16 @@ typedef struct {
 
   Process_List copy_processes;
 
+  Ui_Element_List ui_element_list;
+
   Ui_State ui_state;
   Vector2 mouse_position; // TODO: move this to ui_state
   Vector2 active_position;
   Vector2 copy_center;
-  Open_Menu open_menu;
+  Menu_State menu_state;
 
   Camera2D camera;
-} Context;
-
-
-
-//////////////////////////////////////
-// UI
-//////////////////////////////////////
-
-typedef enum {
-  Ui_Element_Kind__Null,
-  Ui_Element_Kind_Button,
-} Ui_Element_Kind;
-
-typedef struct {
-  Ui_Element_Kind kind;
-  Vector2 position;
-  String8 text;
-  Vector2 size;
-  B32 ignore_text_size;
-} Ui_Element;
-
-typedef struct {
-  String8 name;
-  void (*func)(Context*);
-} Ui_Dropdown_Item;
+};
 
 
 
@@ -352,8 +369,7 @@ typedef struct {
 // Globals
 //////////////////////////////////////
 
-global_variable F32 global_window_width;
-global_variable F32 global_window_height;
+global_variable Vector2 global_window_size;
 
 global_variable F32 global_process_wire_padding = 8.0f;
 global_variable F32 global_process_wire_spacing = 22.0f;
@@ -390,24 +406,64 @@ global_variable Process global_null_process;
 
 
 
+////////////////////////////////////////
+// UI Functions
+////////////////////////////////////////
+
+function void clear_ui_arena(Context *context) {
+  arena_pop_to(context->ui_arena, 0);
+}
+
+
 
 
 ////////////////////////////////////////
 // File actions
 ////////////////////////////////////////
 
-void open_file(Context *context) {
-  printf("open_file\n");
+function void set_menu_state_as_open_file(Context *context) {
+  Arena *uia = context->ui_arena;
+  context->menu_state = Menu_State_OpenFile;
+
+  // clear old potentially old ui-element-list
+  context->ui_element_list.first = 0;
+  context->ui_element_list.last = 0;
+
+  // gather the current files in the "saves" folder
+  FileProperties file_props = Zero_Struct(FileProperties);
+  String8 file_name = Zero_Struct(String8);
+  OS_FileIter file_iter = os_file_iter_init(Saves_Filepath);
+  while(os_file_iter_next(uia, &file_iter, &file_name, &file_props)) {
+    if (!Get_Flag(file_props.flags, FilePropertyFlag_IsFolder)) {
+      // just print out for now
+      for (S32 i = 0; i < file_name.size; ++i) {
+        printf("%c", file_name.str[i]);
+      }
+      printf("\n");
+    }
+  }
 }
 
-void save_file(Context *context) {
+function void set_menu_state_as_save_file_as(Context *context) {
+  context->menu_state = Menu_State_SaveFileAs;
+}
+
+function void save_file(Context *context) {
   printf("save_file\n");
 }
 
-void save_file_as(Context *context) {
-  printf("save_file_as\n");
-}
+function void handle_open_file(Context *context) {
+  Arena *ra = context->render_arena;
+  Vector2 size = (Vector2){ 400.0f, 300.0f };
+  Vector2 position = Vector2Scale(Vector2Subtract(global_window_size, size), 0.5f);
+  Color dormant_bg_color = global_button_dormant_bg_color;
 
+  render_DrawRectangle(ra, position.x, position.y, size.x, size.y, dormant_bg_color);
+  if (IsMouseButtonPressed(0)) {
+    context->menu_state = 0;
+    clear_ui_arena(context);
+  }
+}
 
 
 
@@ -641,7 +697,7 @@ function void remove_process_from_process_list(Context *context, Process_List *l
   SLLQueuePush(context->free_processes.first, context->free_processes.last, p);
 }
 
-function void remove_process_list(Context *context, Process_List *list) {
+function void remove_copy_process_list(Context *context, Process_List *list) {
   // TODO: @Speed can probably do some fancy stuff with just the ends of the list?
   for (Process *p = list->first; p != 0;) {
     Process *next_process = p->next;
@@ -809,7 +865,7 @@ function void copy_active_processes(Context *context) {
   F32 copy_count = 0.0f;
 
   // remove whatever processes were already in the copy-list
-  remove_process_list(context, &context->copy_processes);
+  remove_copy_process_list(context, &context->copy_processes);
 
   // copy processes from active-list to copy-list
   for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
@@ -923,7 +979,7 @@ function void copy_active_processes(Context *context) {
   }
 
   if (error) {
-    remove_process_list(context, &context->copy_processes);
+    remove_copy_process_list(context, &context->copy_processes);
   } else {
     if (copy_count > 0.0f) {
       copy_center = Vector2Scale(copy_center, 1.0f/copy_count);
@@ -1469,7 +1525,7 @@ function void do_dropdown_items(Context *context, Ui_Dropdown_Item *items, S32 i
     file_action.ignore_text_size = 1;
     B32 clicked = do_button(context, file_action);
     if (clicked) {
-      context->open_menu = 0;
+      context->menu_state = 0;
       item.func(context);
     }
   }
@@ -1482,19 +1538,25 @@ function void handle_ui(Context *context) {
 
   if (do_button(context, file_button)) {
     // show file menu
-    context->open_menu = context->open_menu == Open_Menu_File ? 0 : Open_Menu_File;
+    context->menu_state = context->menu_state == Menu_State_File ? 0 : Menu_State_File;
   }
 
-  if (context->open_menu == Open_Menu_File) {
+  switch(context->menu_state) {
+  case Menu_State_File: {
     Ui_Dropdown_Item file_dropdown_items[] = {
-      {str8_comptime_lit("Open"), open_file},
+      {str8_comptime_lit("Open"), set_menu_state_as_open_file},
       {str8_comptime_lit("Save"), save_file},
-      {str8_comptime_lit("Save As"), save_file_as},
+      {str8_comptime_lit("Save As"), set_menu_state_as_save_file_as},
     };
     F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
     Vector2 position = (Vector2){file_button.position.x, button_height};
 
     do_dropdown_items(context, file_dropdown_items, ArrayCount(file_dropdown_items), position);
+  } break;
+  case Menu_State_OpenFile: {
+    handle_open_file(context);
+  } break;
+  case Menu_State_SaveFileAs: {} break;
   }
 }
 
@@ -2173,10 +2235,9 @@ function Context initialize_context(void) {
   context.render_arena = arena_alloc_reserve(Megabytes(1), 0);
   context.process_arena = arena_alloc_reserve(Megabytes(1), 0);
   context.temp_arena = arena_alloc_reserve(Megabytes(1), 0);
+  context.ui_arena = arena_alloc_reserve(Megabytes(1), 0);
 
-  context.process_zero_pos = context.process_arena->chunk_pos;
   context.render_zero_pos = context.render_arena->chunk_pos;
-  context.temp_zero_pos = context.temp_arena->chunk_pos;
 
   context.camera.zoom = 1.0f;
 
@@ -2198,10 +2259,10 @@ function void initialize_globals(Context *context) {
 
   global_background_color = (Color){220, 220, 200, 255};
 
-  global_window_width = 0.7f*(F32)screen_width;
-  global_window_height = 0.7f*(F32)screen_height;
+  global_window_size.x = 0.7f*(F32)screen_width;
+  global_window_size.y = 0.7f*(F32)screen_height;
 
-  global_shape_size = global_window_width / 20.0f;
+  global_shape_size = global_window_size.x / 20.0f;
   global_shape_half_size = 0.5f*global_shape_size;
 
   global_box_size = global_shape_size*0.22f;
@@ -2231,7 +2292,7 @@ int main(void) {
 
   Context context = initialize_context();
   initialize_globals(&context);
-  SetWindowSize(global_window_width, global_window_height);
+  SetWindowSize(global_window_size.x, global_window_size.y);
 
   Arena *ra = context.render_arena;
   Arena *ta = context.temp_arena;
@@ -2248,8 +2309,8 @@ int main(void) {
 
     BeginDrawing();
     render_Commands(&context, ra);
-    arena_pop_to(ra, context.render_zero_pos);
-    arena_pop_to(ta, context.temp_zero_pos);
+    arena_pop_to(ra, 0);
+    arena_pop_to(ta, 0);
     EndDrawing();
   }
 
