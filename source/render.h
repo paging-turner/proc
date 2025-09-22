@@ -84,21 +84,24 @@ function void render_DrawRectangleRec(Arena *Arena, Rectangle R, Color C)
 function char *render_PushTempString(const char *CString)
 {
   Assert(GlobalTempArena);
+  char *Result = 0;
 
-  // get CString length
-  U32 string_length = 0;
-  for (const char *c = CString;; ++c) {
-    string_length += 1;
-    if (*c == 0) {
-      break;
+  if (CString) {
+    // get CString length
+    U32 string_length = 0;
+    for (const char *c = CString;; ++c) {
+      string_length += 1;
+      if (*c == 0) {
+        break;
+      }
     }
-  }
 
-  char *Result = arena_push_no_zero(GlobalTempArena, string_length);
+    Result = arena_push_no_zero(GlobalTempArena, string_length);
 
-  // copy string
-  for (U32 i = 0; i < string_length; ++i) {
-    Result[i] = CString[i];
+    // copy string
+    for (U32 i = 0; i < string_length; ++i) {
+      Result[i] = CString[i];
+    }
   }
 
   return Result;

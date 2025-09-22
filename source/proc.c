@@ -406,12 +406,102 @@ global_variable Process global_null_process;
 
 
 
+
+function B32 rectangle_contains_point(Rectangle r, Vector2 p) {
+  F32 x2 = r.x + r.width;
+  F32 y2 = r.y + r.height;
+  B32 contains = (p.x >= r.x) && (p.y >= r.y) && (p.x <= x2) && (p.y <= y2);
+  return contains;
+}
+
+
+
 ////////////////////////////////////////
 // UI Functions
 ////////////////////////////////////////
 
 function void clear_ui_arena(Context *context) {
   arena_pop_to(context->ui_arena, 0);
+}
+
+
+function B32 do_button(Context *context, Ui_Element *button) {
+  Arena *ra = context->render_arena;
+  // NOTE: Assumes label is null-terminated for now...
+  F32 font_size = global_panel_font_size;
+  S32 text_width = MeasureText((char *)button->text.str, font_size);
+  Vector2 padding = global_button_padding;
+  Color dormant_bg_color = global_button_dormant_bg_color;
+  Color hot_bg_color = global_button_hot_bg_color;
+  Color font_color = global_button_font_color;
+  Rectangle bg_rect = (Rectangle){button->position.x, button->position.y, (F32)text_width+2.0f*padding.x, font_size+2.0f*padding.y};
+  if (button->ignore_text_size) {
+    bg_rect.width = button->size.x;
+    bg_rect.height = button->size.y;
+  }
+  B32 is_hot = 0;
+  B32 clicked = 0;
+
+  if (!context->ui_state.action_occured &&
+      rectangle_contains_point(bg_rect, context->mouse_position)) {
+    context->hot_process = 0;
+    is_hot = 1;
+
+    if (IsMouseButtonPressed(0)) {
+      clicked = 1;
+      context->ui_state.action_occured = 1;
+    }
+  }
+
+  Color bg_color = is_hot ? hot_bg_color : dormant_bg_color;
+
+  render_DrawRectangle(ra, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, bg_color);
+  render_DrawText(ra, (char *)button->text.str, button->position.x+padding.x+1.0f, button->position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 1);
+  render_DrawText(ra, (char *)button->text.str, button->position.x+padding.x, button->position.y+padding.y, font_size, font_color, 1);
+
+  return clicked;
+}
+
+
+function Ui_Element create_button(Context *context, Vector2 position, String8 text) {
+  Ui_Element button = (Ui_Element){0};
+  button.kind = Ui_Element_Kind_Button;
+  button.position = position;
+  button.text = text;
+
+  return button;
+}
+
+
+
+function void do_dropdown_items(Context *context, Ui_Dropdown_Item *items, S32 item_count, Vector2 position) {
+  Arena *ra = context->render_arena;
+  F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
+
+  // get max text width
+  F32 max_text_width = 0.0f;
+  for (S32 i = 0; i < item_count; ++i) {
+    S32 text_width_raw = MeasureText((char *)items[i].name.str, global_panel_font_size);
+    F32 text_width = 2.0f*global_button_padding.x + (F32)text_width_raw;
+    if (text_width > max_text_width) {
+      max_text_width = text_width;
+    }
+  }
+
+  render_DrawRectangle(ra, position.x, position.y, (F32)max_text_width, button_height*item_count, global_button_dormant_bg_color);
+
+  for (S32 i = 0; i < item_count; ++i) {
+    Ui_Dropdown_Item item = items[i];
+    Vector2 action_position = (Vector2){position.x, position.y + button_height*(F32)i};
+    Ui_Element file_action = create_button(context, action_position, item.name);
+    file_action.size = (Vector2){max_text_width, button_height};
+    file_action.ignore_text_size = 1;
+    B32 clicked = do_button(context, &file_action);
+    if (clicked) {
+      context->menu_state = 0;
+      item.func(context);
+    }
+  }
 }
 
 
@@ -435,11 +525,12 @@ function void set_menu_state_as_open_file(Context *context) {
   OS_FileIter file_iter = os_file_iter_init(Saves_Filepath);
   while(os_file_iter_next(uia, &file_iter, &file_name, &file_props)) {
     if (!Get_Flag(file_props.flags, FilePropertyFlag_IsFolder)) {
-      // just print out for now
-      for (S32 i = 0; i < file_name.size; ++i) {
-        printf("%c", file_name.str[i]);
+      Ui_Element *element = push_struct(uia, Ui_Element);
+      element->kind = Ui_Element_Kind_Button;
+      element->text = file_name;
+      if (element) {
+        SLLQueuePush(context->ui_element_list.first, context->ui_element_list.last, element);
       }
-      printf("\n");
     }
   }
 }
@@ -454,13 +545,24 @@ function void save_file(Context *context) {
 
 function void handle_open_file(Context *context) {
   Arena *ra = context->render_arena;
+  F32 font_size = global_panel_font_size;
   Vector2 size = (Vector2){ 400.0f, 300.0f };
   Vector2 position = Vector2Scale(Vector2Subtract(global_window_size, size), 0.5f);
   Color dormant_bg_color = global_button_dormant_bg_color;
+  Color font_color = global_button_font_color;
+  F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
 
-  render_DrawRectangle(ra, position.x, position.y, size.x, size.y, dormant_bg_color);
+  for (Ui_Element *element = context->ui_element_list.first; element; element = element->next) {
+    element->position = position;
+    do_button(context, element);
+    position.y += button_height;
+  }
+
+  /* render_DrawRectangle(ra, position.x, position.y, size.x, size.y, dormant_bg_color); */
   if (IsMouseButtonPressed(0)) {
     context->menu_state = 0;
+    context->ui_element_list.first = 0;
+    context->ui_element_list.last = 0;
     clear_ui_arena(context);
   }
 }
@@ -604,15 +706,6 @@ function Rectangle get_selection_rectangle(Context *context) {
   Rectangle selection_rect = (Rectangle){x, y, x1-x, y1-y};
 
   return selection_rect;
-}
-
-
-
-function B32 rectangle_contains_point(Rectangle r, Vector2 p) {
-  F32 x2 = r.x + r.width;
-  F32 y2 = r.y + r.height;
-  B32 contains = (p.x >= r.x) && (p.y >= r.y) && (p.x <= x2) && (p.y <= y2);
-  return contains;
 }
 
 
@@ -1452,91 +1545,11 @@ function Ui_State get_ui_state(Context *context) {
 }
 
 
-function B32 do_button(Context *context, Ui_Element button) {
-  Arena *ra = context->render_arena;
-  // NOTE: Assumes label is null-terminated for now...
-  F32 font_size = global_panel_font_size;
-  S32 text_width = MeasureText((char *)button.text.str, font_size);
-  Vector2 padding = global_button_padding;
-  Color dormant_bg_color = global_button_dormant_bg_color;
-  Color hot_bg_color = global_button_hot_bg_color;
-  Color font_color = global_button_font_color;
-  Rectangle bg_rect = (Rectangle){button.position.x, button.position.y, (F32)text_width+2.0f*padding.x, font_size+2.0f*padding.y};
-  if (button.ignore_text_size) {
-    bg_rect.width = button.size.x;
-    bg_rect.height = button.size.y;
-  }
-  B32 is_hot = 0;
-  B32 clicked = 0;
-
-  if (!context->ui_state.action_occured &&
-      rectangle_contains_point(bg_rect, context->mouse_position)) {
-    context->hot_process = 0;
-    is_hot = 1;
-
-    if (IsMouseButtonPressed(0)) {
-      clicked = 1;
-      context->ui_state.action_occured = 1;
-    }
-  }
-
-  Color bg_color = is_hot ? hot_bg_color : dormant_bg_color;
-
-  render_DrawRectangle(ra, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, bg_color);
-  render_DrawText(ra, (char *)button.text.str, button.position.x+padding.x+1.0f, button.position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 1);
-  render_DrawText(ra, (char *)button.text.str, button.position.x+padding.x, button.position.y+padding.y, font_size, font_color, 1);
-
-  return clicked;
-}
-
-
-function Ui_Element create_button(Context *context, Vector2 position, String8 text) {
-  Ui_Element button = (Ui_Element){0};
-  button.kind = Ui_Element_Kind_Button;
-  button.position = position;
-  button.text = text;
-
-  return button;
-}
-
-
-
-function void do_dropdown_items(Context *context, Ui_Dropdown_Item *items, S32 item_count, Vector2 position) {
-  Arena *ra = context->render_arena;
-  F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
-
-  // get max text width
-  F32 max_text_width = 0.0f;
-  for (S32 i = 0; i < item_count; ++i) {
-    S32 text_width_raw = MeasureText((char *)items[i].name.str, global_panel_font_size);
-    F32 text_width = 2.0f*global_button_padding.x + (F32)text_width_raw;
-    if (text_width > max_text_width) {
-      max_text_width = text_width;
-    }
-  }
-
-  render_DrawRectangle(ra, position.x, position.y, (F32)max_text_width, button_height*item_count, global_button_dormant_bg_color);
-
-  for (S32 i = 0; i < item_count; ++i) {
-    Ui_Dropdown_Item item = items[i];
-    Vector2 action_position = (Vector2){position.x, position.y + button_height*(F32)i};
-    Ui_Element file_action = create_button(context, action_position, item.name);
-    file_action.size = (Vector2){max_text_width, button_height};
-    file_action.ignore_text_size = 1;
-    B32 clicked = do_button(context, file_action);
-    if (clicked) {
-      context->menu_state = 0;
-      item.func(context);
-    }
-  }
-}
-
-
 
 function void handle_ui(Context *context) {
   Ui_Element file_button = create_button(context, (Vector2){0.0f, 0.0f}, str8_comptime_lit("File"));
 
-  if (do_button(context, file_button)) {
+  if (do_button(context, &file_button)) {
     // show file menu
     context->menu_state = context->menu_state == Menu_State_File ? 0 : Menu_State_File;
   }
