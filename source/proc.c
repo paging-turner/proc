@@ -159,6 +159,7 @@ typedef struct Process Process;
 struct Process {
   B32 flags;
   Vector2 position;
+  Vector2 size;
 
   union {
     struct {
@@ -190,9 +191,10 @@ struct Process {
   Process *to_copied;
 
   // TODO: Use a growable structure for strings.
-#define Process_Label_Size 64
+#define Process_Label_Size 256
   U8 label[Process_Label_Size];
   U32 label_cursor;
+  B32 ignore_label_size;
 };
 
 typedef enum {
@@ -229,26 +231,6 @@ typedef struct {
 //////////////////////////////////////
 // UI Structs
 //////////////////////////////////////
-
-typedef enum {
-  Ui_Element_Kind__Null,
-  Ui_Element_Kind_Button,
-} Ui_Element_Kind;
-
-typedef struct Ui_Element Ui_Element;
-struct Ui_Element {
-  Ui_Element_Kind kind;
-  Vector2 position;
-  String8 text;
-  Vector2 size;
-  B32 ignore_text_size;
-  Ui_Element *next;
-};
-
-typedef struct {
-  Ui_Element *first;
-  Ui_Element *last;
-} Ui_Element_List;
 
 typedef struct {
   String8 name;
@@ -309,7 +291,8 @@ struct Context {
 
   Process_List copy_processes;
 
-  Ui_Element_List ui_element_list;
+  /* Ui_Element_List ui_element_list; */
+  Process_List ui_element_list;
 
   Ui_State ui_state;
   Vector2 mouse_position; // TODO: move this to ui_state
@@ -447,17 +430,17 @@ function void handle_label_editing(Context *context, Process_List ps) {
 }
 
 
-function B32 do_button(Context *context, Ui_Element *button) {
+function B32 do_button(Context *context, Process *button) {
   Arena *ra = context->render_arena;
   // NOTE: Assumes label is null-terminated for now...
   F32 font_size = global_panel_font_size;
-  S32 text_width = MeasureText((char *)button->text.str, font_size);
+  S32 text_width = MeasureText((char *)button->label, font_size);
   Vector2 padding = global_button_padding;
   Color dormant_bg_color = global_button_dormant_bg_color;
   Color hot_bg_color = global_button_hot_bg_color;
   Color font_color = global_button_font_color;
   Rectangle bg_rect = (Rectangle){button->position.x, button->position.y, (F32)text_width+2.0f*padding.x, font_size+2.0f*padding.y};
-  if (button->ignore_text_size) {
+  if (button->ignore_label_size) {
     bg_rect.width = button->size.x;
     bg_rect.height = button->size.y;
   }
@@ -478,18 +461,22 @@ function B32 do_button(Context *context, Ui_Element *button) {
   Color bg_color = is_hot ? hot_bg_color : dormant_bg_color;
 
   render_DrawRectangle(ra, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, bg_color);
-  render_DrawText(ra, (char *)button->text.str, button->position.x+padding.x+1.0f, button->position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 1);
-  render_DrawText(ra, (char *)button->text.str, button->position.x+padding.x, button->position.y+padding.y, font_size, font_color, 1);
+  render_DrawText(ra, (char *)button->label, button->position.x+padding.x+1.0f, button->position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 1);
+  render_DrawText(ra, (char *)button->label, button->position.x+padding.x, button->position.y+padding.y, font_size, font_color, 1);
 
   return clicked;
 }
 
 
-function Ui_Element create_button(Context *context, Vector2 position, String8 text) {
-  Ui_Element button = (Ui_Element){0};
-  button.kind = Ui_Element_Kind_Button;
+function Process create_button(Context *context, Vector2 position, String8 text) {
+  Process button = (Process){0};
+  /* button.kind = Ui_Element_Kind_Button; */
+  Set_Flag(button.flags, Process_Flag_Button);
   button.position = position;
-  button.text = text;
+
+  for (S32 i = 0; i < text.size && i < Process_Label_Size-1; ++i) {
+    button.label[i] = text.str[i];
+  }
 
   return button;
 }
@@ -515,9 +502,9 @@ function void do_dropdown_items(Context *context, Ui_Dropdown_Item *items, S32 i
   for (S32 i = 0; i < item_count; ++i) {
     Ui_Dropdown_Item item = items[i];
     Vector2 action_position = (Vector2){position.x, position.y + button_height*(F32)i};
-    Ui_Element file_action = create_button(context, action_position, item.name);
+    Process file_action = create_button(context, action_position, item.name);
     file_action.size = (Vector2){max_text_width, button_height};
-    file_action.ignore_text_size = 1;
+    file_action.ignore_label_size = 1;
     B32 clicked = do_button(context, &file_action);
     if (clicked) {
       context->menu_state = 0;
@@ -546,9 +533,14 @@ function void collect_save_files(Context *context) {
   OS_FileIter file_iter = os_file_iter_init(Saves_Filepath);
   while(os_file_iter_next(uia, &file_iter, &file_name, &file_props)) {
     if (!Get_Flag(file_props.flags, FilePropertyFlag_IsFolder)) {
-      Ui_Element *element = push_struct(uia, Ui_Element);
-      element->kind = Ui_Element_Kind_Button;
-      element->text = file_name;
+      Process *element = push_struct(uia, Process);
+      Set_Flag(element->flags, Process_Flag_Button);
+      /* element->kind = Ui_Element_Kind_Button; */
+
+      for (S32 i = 0; i < file_name.size && i < Process_Label_Size-1; ++i) {
+        element->label[i] = file_name.str[i];
+      }
+
       if (element) {
         SLLQueuePush(context->ui_element_list.first, context->ui_element_list.last, element);
       }
@@ -582,7 +574,7 @@ function void handle_open_file(Context *context) {
   F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
 
   // show existing save files
-  for (Ui_Element *element = context->ui_element_list.first; element; element = element->next) {
+  for (Process *element = context->ui_element_list.first; element; element = element->next) {
     element->position = position;
     do_button(context, element);
     position.y += button_height;
@@ -605,7 +597,7 @@ function void handle_save_file_as(Context *context) {
   F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
 
   // show existing save files
-  for (Ui_Element *element = context->ui_element_list.first; element; element = element->next) {
+  for (Process *element = context->ui_element_list.first; element; element = element->next) {
     element->position = position;
     do_button(context, element);
     position.y += button_height;
@@ -1598,7 +1590,7 @@ function Ui_State get_ui_state(Context *context) {
 
 
 function void handle_ui(Context *context) {
-  Ui_Element file_button = create_button(context, (Vector2){0.0f, 0.0f}, str8_comptime_lit("File"));
+  Process file_button = create_button(context, (Vector2){0.0f, 0.0f}, str8_comptime_lit("File"));
 
   if (do_button(context, &file_button)) {
     // show file menu
