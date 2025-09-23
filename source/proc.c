@@ -135,6 +135,7 @@ typedef enum {
 
   // UI features
   Process_Flag_Button    = 1 << 7,
+  Process_Flag_TextEdit  = 1 << 8,
 } Process_Flag;
 
 #define Process_Connection_Xlist\
@@ -398,6 +399,48 @@ function B32 rectangle_contains_point(Rectangle r, Vector2 p) {
 }
 
 
+function Process *create_detached_process(Context *context) {
+  Process *p = context->free_processes.first;
+
+  if (p) {
+    SLLQueuePop(context->free_processes.first, context->free_processes.last);
+  } else {
+    p = push_struct(context->process_arena, Process);
+  }
+
+  if (p) {
+    *p = (Process){0};
+  } else {
+    p = The_Null_Process();
+  }
+
+  return p;
+}
+
+function Process *create_process(Context *context) {
+  Process *p = create_detached_process(context);
+
+  if (p) {
+    SLLQueuePush(context->processes.first, context->processes.last, p);
+  }
+
+  return p;
+}
+
+function void clear_active_processes(Context *context) {
+  if (context->active_processes.first) {
+    for (Process *p = context->active_processes.first; p != 0;) {
+      Process *next_active = p->next_active;
+      p->next_active = 0;
+      p = next_active;
+    }
+  }
+
+  context->active_processes.first = 0;
+  context->active_processes.last = 0;
+}
+
+
 
 ////////////////////////////////////////
 // UI Functions
@@ -416,14 +459,16 @@ function void handle_label_editing(Context *context, Process_List ps) {
 
   while ((key = GetKeyPressed())) {
     for (Process *a = ps.first; a != 0; a = a->next_active) {
-      B32 is_ascii = key > 0 && key < 256;
-      U8 c = ascii_char_lookup[key&0xff][shift_down];
-      if (is_ascii && c != 0 && a->label_cursor < Process_Label_Size-1) {
-        a->label[a->label_cursor] = c;
-        a->label_cursor += 1;
-      } else if (key == KEY_BACKSPACE && a->label_cursor > 0) {
-        a->label_cursor -= 1;
-        a->label[a->label_cursor] = 0;
+      if (Get_Flag(a->flags, Process_Flag_TextEdit)) {
+        B32 is_ascii = key > 0 && key < 256;
+        U8 c = ascii_char_lookup[key&0xff][shift_down];
+        if (is_ascii && c != 0 && a->label_cursor < Process_Label_Size-1) {
+          a->label[a->label_cursor] = c;
+          a->label_cursor += 1;
+        } else if (key == KEY_BACKSPACE && a->label_cursor > 0) {
+          a->label_cursor -= 1;
+          a->label[a->label_cursor] = 0;
+        }
       }
     }
   }
@@ -455,6 +500,8 @@ function B32 do_button(Context *context, Process *button) {
     if (IsMouseButtonPressed(0)) {
       clicked = 1;
       context->ui_state.action_occured = 1;
+      clear_active_processes(context);
+      SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, button, next_active, 0);
     }
   }
 
@@ -468,14 +515,17 @@ function B32 do_button(Context *context, Process *button) {
 }
 
 
-function Process create_button(Context *context, Vector2 position, String8 text) {
-  Process button = (Process){0};
-  /* button.kind = Ui_Element_Kind_Button; */
-  Set_Flag(button.flags, Process_Flag_Button);
-  button.position = position;
+function Process *create_button(Context *context, Vector2 position, String8 text) {
+  Arena *uia = context->ui_arena;
+  Process *button = push_struct(uia, Process);
 
-  for (S32 i = 0; i < text.size && i < Process_Label_Size-1; ++i) {
-    button.label[i] = text.str[i];
+  if (button) {
+    Set_Flag(button->flags, Process_Flag_Button);
+    button->position = position;
+
+    for (S32 i = 0; i < text.size && i < Process_Label_Size-1; ++i) {
+      button->label[i] = text.str[i];
+    }
   }
 
   return button;
@@ -502,10 +552,10 @@ function void do_dropdown_items(Context *context, Ui_Dropdown_Item *items, S32 i
   for (S32 i = 0; i < item_count; ++i) {
     Ui_Dropdown_Item item = items[i];
     Vector2 action_position = (Vector2){position.x, position.y + button_height*(F32)i};
-    Process file_action = create_button(context, action_position, item.name);
-    file_action.size = (Vector2){max_text_width, button_height};
-    file_action.ignore_label_size = 1;
-    B32 clicked = do_button(context, &file_action);
+    Process *file_action = create_button(context, action_position, item.name);
+    file_action->size = (Vector2){max_text_width, button_height};
+    file_action->ignore_label_size = 1;
+    B32 clicked = do_button(context, file_action);
     if (clicked) {
       context->menu_state = 0;
       item.func(context);
@@ -558,6 +608,16 @@ function void set_menu_state_as_save_file_as(Context *context) {
   context->menu_state = Menu_State_SaveFileAs;
 
   collect_save_files(context);
+
+  F32 input_height = 2.0f*global_button_padding.y + global_panel_font_size;
+  String8 empty_text = Zero_Struct(String8);
+  Process *text_input = create_button(context, (Vector2){0.0f, 0.0f}, empty_text);
+  if (text_input) {
+    Set_Flag(text_input->flags, Process_Flag_TextEdit);
+    text_input->ignore_label_size = 1;
+    text_input->size = (Vector2){300.0f, input_height};
+    SLLQueuePushFront(context->ui_element_list.first, context->ui_element_list.last, text_input);
+  }
 }
 
 function void save_file(Context *context) {
@@ -604,7 +664,7 @@ function void handle_save_file_as(Context *context) {
   }
 
   // TODO: replace this with handling of input, or detect if the user has clicked "away"
-  if (IsMouseButtonPressed(0)) {
+  if (IsKeyPressed(KEY_ESCAPE)) {
     context->menu_state = 0;
     clear_ui_state(context);
   }
@@ -640,17 +700,6 @@ function B32 is_active_process(Context *context, Process *p) {
 }
 
 
-
-function void clear_active_processes(Context *context) {
-  for (Process *p = context->active_processes.first; p != 0;) {
-    Process *next_active = p->next_active;
-    p->next_active = 0;
-    p = next_active;
-  }
-
-  context->active_processes.first = 0;
-  context->active_processes.last = 0;
-}
 
 
 
@@ -783,35 +832,6 @@ function Process *get_process_wire_by_selection(Context *context, Process_Select
 }
 
 
-
-
-function Process *create_detached_process(Context *context) {
-  Process *p = context->free_processes.first;
-
-  if (p) {
-    SLLQueuePop(context->free_processes.first, context->free_processes.last);
-  } else {
-    p = push_struct(context->process_arena, Process);
-  }
-
-  if (p) {
-    *p = (Process){0};
-  } else {
-    p = The_Null_Process();
-  }
-
-  return p;
-}
-
-function Process *create_process(Context *context) {
-  Process *p = create_detached_process(context);
-
-  if (p) {
-    SLLQueuePush(context->processes.first, context->processes.last, p);
-  }
-
-  return p;
-}
 
 
 
@@ -1590,9 +1610,9 @@ function Ui_State get_ui_state(Context *context) {
 
 
 function void handle_ui(Context *context) {
-  Process file_button = create_button(context, (Vector2){0.0f, 0.0f}, str8_comptime_lit("File"));
+  Process *file_button = create_button(context, (Vector2){0.0f, 0.0f}, str8_comptime_lit("File"));
 
-  if (do_button(context, &file_button)) {
+  if (do_button(context, file_button)) {
     // show file menu
     context->menu_state = context->menu_state == Menu_State_File ? 0 : Menu_State_File;
   }
@@ -1605,7 +1625,7 @@ function void handle_ui(Context *context) {
       {str8_comptime_lit("Save As"), set_menu_state_as_save_file_as},
     };
     F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
-    Vector2 position = (Vector2){file_button.position.x, button_height};
+    Vector2 position = (Vector2){file_button->position.x, button_height};
 
     do_dropdown_items(context, file_dropdown_items, ArrayCount(file_dropdown_items), position);
   } break;
@@ -1816,6 +1836,7 @@ function void handle_process_interaction(Context *context) {
   if (check_keybind(context, Ui_Feature_CreateProcess, selection)) {
     Process *new_p = create_process(context);
     if (new_p) {
+      Set_Flag(new_p->flags, Process_Flag_TextEdit);
       new_p->position = GetScreenToWorld2D(context->mouse_position, context->camera);
       clear_active_processes(context);
       SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, new_p, next_active, 0);
