@@ -134,8 +134,9 @@ typedef enum {
   Process_Flag_Drag_Out  = 1 << 6,
 
   // UI features
-  Process_Flag_Button    = 1 << 7,
-  Process_Flag_TextEdit  = 1 << 8,
+  Process_Flag_Button      = 1 << 7,
+  Process_Flag_TextEdit    = 1 << 8,
+  Process_Flag_CanBeActive = 1 << 9,
 } Process_Flag;
 
 #define Process_Connection_Xlist\
@@ -447,6 +448,8 @@ function void clear_active_processes(Context *context) {
 ////////////////////////////////////////
 
 function void clear_ui_state(Context *context) {
+  context->menu_state = 0;
+
   context->ui_element_list.first = 0;
   context->ui_element_list.last = 0;
 
@@ -500,8 +503,10 @@ function B32 do_button(Context *context, Process *button) {
     if (IsMouseButtonPressed(0)) {
       clicked = 1;
       context->ui_state.action_occured = 1;
-      clear_active_processes(context);
-      SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, button, next_active, 0);
+      if (Get_Flag(button->flags, Process_Flag_CanBeActive)) {
+        clear_active_processes(context);
+        SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, button, next_active, 0);
+      }
     }
   }
 
@@ -610,10 +615,12 @@ function void set_menu_state_as_save_file_as(Context *context) {
   collect_save_files(context);
 
   F32 input_height = 2.0f*global_button_padding.y + global_panel_font_size;
+
   String8 empty_text = Zero_Struct(String8);
-  Process *text_input = create_button(context, (Vector2){0.0f, 0.0f}, empty_text);
+  Process *text_input = create_button(context, (Vector2){0}, empty_text);
   if (text_input) {
-    Set_Flag(text_input->flags, Process_Flag_TextEdit);
+    // setup text input element
+    Set_Flag(text_input->flags, Process_Flag_TextEdit|Process_Flag_CanBeActive);
     text_input->ignore_label_size = 1;
     text_input->size = (Vector2){300.0f, input_height};
     SLLQueuePushFront(context->ui_element_list.first, context->ui_element_list.last, text_input);
@@ -642,7 +649,6 @@ function void handle_open_file(Context *context) {
 
   // TODO: replace this with handling of input, or detect if the user has clicked "away"
   if (IsMouseButtonPressed(0)) {
-    context->menu_state = 0;
     clear_ui_state(context);
   }
 }
@@ -656,6 +662,8 @@ function void handle_save_file_as(Context *context) {
   Color font_color = global_button_font_color;
   F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
 
+  Process *file_name_element = context->ui_element_list.first;
+
   // show existing save files
   for (Process *element = context->ui_element_list.first; element; element = element->next) {
     element->position = position;
@@ -663,9 +671,22 @@ function void handle_save_file_as(Context *context) {
     position.y += button_height;
   }
 
+  Process *cancel_button = create_button(context, position, str8_comptime_lit("cancel"));
+  position.y += button_height;
+  Process *save_button = create_button(context, position, str8_comptime_lit("save"));
+
+  if (do_button(context, cancel_button)) {
+    clear_ui_state(context);
+  } else if (do_button(context, save_button)) {
+    if (file_name_element) {
+      // TODO: Actually save the file once we define the file-type.
+      printf("saving... '%s'\n", file_name_element->label);
+    }
+    clear_ui_state(context);
+  }
+
   // TODO: replace this with handling of input, or detect if the user has clicked "away"
   if (IsKeyPressed(KEY_ESCAPE)) {
-    context->menu_state = 0;
     clear_ui_state(context);
   }
 }

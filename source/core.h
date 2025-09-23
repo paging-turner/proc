@@ -67,6 +67,13 @@ U8 ascii_char_lookup[256][2] = {
 
 
 
+// HACK: We should instead just make functions that construct c-strings from string8 and then print the c-string!!!
+function void print_string8(String8 string) {
+  for (S32 i = 0; i < string.size; ++i) {
+    printf("%c", string.str[i]);
+  }
+}
+
 
 
 
