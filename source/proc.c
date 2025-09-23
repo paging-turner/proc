@@ -420,8 +420,30 @@ function B32 rectangle_contains_point(Rectangle r, Vector2 p) {
 // UI Functions
 ////////////////////////////////////////
 
-function void clear_ui_arena(Context *context) {
+function void clear_ui_state(Context *context) {
+  context->ui_element_list.first = 0;
+  context->ui_element_list.last = 0;
+
   arena_pop_to(context->ui_arena, 0);
+}
+
+function void handle_label_editing(Context *context, Process_List ps) {
+  U32 key = 0;
+  B32 shift_down = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+
+  while ((key = GetKeyPressed())) {
+    for (Process *a = ps.first; a != 0; a = a->next_active) {
+      B32 is_ascii = key > 0 && key < 256;
+      U8 c = ascii_char_lookup[key&0xff][shift_down];
+      if (is_ascii && c != 0 && a->label_cursor < Process_Label_Size-1) {
+        a->label[a->label_cursor] = c;
+        a->label_cursor += 1;
+      } else if (key == KEY_BACKSPACE && a->label_cursor > 0) {
+        a->label_cursor -= 1;
+        a->label[a->label_cursor] = 0;
+      }
+    }
+  }
 }
 
 
@@ -511,9 +533,8 @@ function void do_dropdown_items(Context *context, Ui_Dropdown_Item *items, S32 i
 // File actions
 ////////////////////////////////////////
 
-function void set_menu_state_as_open_file(Context *context) {
+function void collect_save_files(Context *context) {
   Arena *uia = context->ui_arena;
-  context->menu_state = Menu_State_OpenFile;
 
   // clear old potentially old ui-element-list
   context->ui_element_list.first = 0;
@@ -535,8 +556,16 @@ function void set_menu_state_as_open_file(Context *context) {
   }
 }
 
+function void set_menu_state_as_open_file(Context *context) {
+  context->menu_state = Menu_State_OpenFile;
+
+  collect_save_files(context);
+}
+
 function void set_menu_state_as_save_file_as(Context *context) {
   context->menu_state = Menu_State_SaveFileAs;
+
+  collect_save_files(context);
 }
 
 function void save_file(Context *context) {
@@ -552,18 +581,40 @@ function void handle_open_file(Context *context) {
   Color font_color = global_button_font_color;
   F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
 
+  // show existing save files
   for (Ui_Element *element = context->ui_element_list.first; element; element = element->next) {
     element->position = position;
     do_button(context, element);
     position.y += button_height;
   }
 
-  /* render_DrawRectangle(ra, position.x, position.y, size.x, size.y, dormant_bg_color); */
+  // TODO: replace this with handling of input, or detect if the user has clicked "away"
   if (IsMouseButtonPressed(0)) {
     context->menu_state = 0;
-    context->ui_element_list.first = 0;
-    context->ui_element_list.last = 0;
-    clear_ui_arena(context);
+    clear_ui_state(context);
+  }
+}
+
+function void handle_save_file_as(Context *context) {
+  Arena *ra = context->render_arena;
+  F32 font_size = global_panel_font_size;
+  Vector2 size = (Vector2){ 400.0f, 300.0f };
+  Vector2 position = Vector2Scale(Vector2Subtract(global_window_size, size), 0.5f);
+  Color dormant_bg_color = global_button_dormant_bg_color;
+  Color font_color = global_button_font_color;
+  F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
+
+  // show existing save files
+  for (Ui_Element *element = context->ui_element_list.first; element; element = element->next) {
+    element->position = position;
+    do_button(context, element);
+    position.y += button_height;
+  }
+
+  // TODO: replace this with handling of input, or detect if the user has clicked "away"
+  if (IsMouseButtonPressed(0)) {
+    context->menu_state = 0;
+    clear_ui_state(context);
   }
 }
 
@@ -1569,7 +1620,9 @@ function void handle_ui(Context *context) {
   case Menu_State_OpenFile: {
     handle_open_file(context);
   } break;
-  case Menu_State_SaveFileAs: {} break;
+  case Menu_State_SaveFileAs: {
+    handle_save_file_as(context);
+  } break;
   }
 }
 
@@ -1872,21 +1925,7 @@ function void handle_process_interaction(Context *context) {
       clear_active_processes(context);
     } else if (!ui_state->action_occured) {
       // process label editing
-      U32 key = 0;
-      B32 shift_down = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
-      while ((key = GetKeyPressed())) {
-        for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
-          B32 is_ascii = key > 0 && key < 256;
-          U8 c = ascii_char_lookup[key&0xff][shift_down];
-          if (is_ascii && c != 0 && a->label_cursor < Process_Label_Size-1) {
-            a->label[a->label_cursor] = c;
-            a->label_cursor += 1;
-          } else if (key == KEY_BACKSPACE && a->label_cursor > 0) {
-            a->label_cursor -= 1;
-            a->label[a->label_cursor] = 0;
-          }
-        }
-      }
+      handle_label_editing(context, context->active_processes);
     }
   }
 }
