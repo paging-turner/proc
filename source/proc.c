@@ -2415,8 +2415,15 @@ int main(void) {
     BeginDrawing();
     render_Commands(&context.process_render_context);
     render_Commands(&context.ui_render_context);
+
+    // clear out per-frame stuff
     arena_pop_to(context.render_arena, 0);
     arena_pop_to(context.temp_arena, 0);
+    context.ui_render_context.command_list.first = 0;
+    context.ui_render_context.command_list.last = 0;
+    context.process_render_context.command_list.first = 0;
+    context.process_render_context.command_list.last = 0;
+
     EndDrawing();
   }
 
