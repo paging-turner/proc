@@ -2,8 +2,8 @@
     A wrapper for raylib rendering functions. Also, implements a command buffer, just in case we want to process the render-commands before actually drawing anything.
 */
 
-typedef enum
-{
+typedef enum {
+  render_command__Null,
   render_command_ClearBackground,
   render_command_DrawRectangleRec,
   render_command_DrawText,
@@ -22,8 +22,9 @@ typedef enum
 } render_command_kind;
 
 
-typedef struct render_command
-{
+typedef struct render_command render_command;
+struct render_command {
+  render_command *next;
   render_command_kind Kind;
 
   Rectangle Rectangle;
@@ -49,41 +50,52 @@ typedef struct render_command
   S32 PointCount;
   F32 StartAngle;
   F32 EndAngle;
-} render_command;
+};
 
+typedef struct Render_Command_List {
+  render_command *first;
+  render_command *last;
+} Render_Command_List;
 
-global_variable Arena *GlobalTempArena;
+typedef struct Render_Context {
+  Arena *arena;
+  Render_Command_List command_list;
+} Render_Context;
+
+global_variable Arena *render_GlobalTempArena;
 
 
 function void render_Initialize(Arena *TempArena) {
-  GlobalTempArena = TempArena;
+  render_GlobalTempArena = TempArena;
+}
+
+function render_command *create_render_command(Render_Context *rc) {
+  render_command *command = push_struct(rc->arena, render_command);
+  SLLQueuePush(rc->command_list.first, rc->command_list.last, command);
+  return command;
 }
 
 
-function void render_ClearBackground(Arena *Arena, Color C)
-{
-  render_command *Command = push_struct(Arena, render_command);
-  if (Command)
-  {
+function void render_ClearBackground(Render_Context *rc, Color C) {
+  render_command *Command = create_render_command(rc);
+  if (Command) {
+    Command->Kind = render_command_ClearBackground;
     Command->Color = C;
   }
 }
 
-function void render_DrawRectangleRec(Arena *Arena, Rectangle R, Color C)
-{
-  render_command *Command = push_struct(Arena, render_command);
+function void render_DrawRectangleRec(Render_Context *rc, Rectangle R, Color C) {
+  render_command *Command = create_render_command(rc);
 
-  if (Command)
-  {
+  if (Command) {
     Command->Kind = render_command_DrawRectangleRec;
     Command->Rectangle = R;
     Command->Color = C;
   }
 }
 
-function char *render_PushTempString(const char *CString)
-{
-  Assert(GlobalTempArena);
+function char *render_PushTempString(const char *CString) {
+  Assert(render_GlobalTempArena);
   char *Result = 0;
 
   if (CString) {
@@ -96,7 +108,7 @@ function char *render_PushTempString(const char *CString)
       }
     }
 
-    Result = arena_push_no_zero(GlobalTempArena, string_length);
+    Result = arena_push_no_zero(render_GlobalTempArena, string_length);
 
     // copy string
     for (U32 i = 0; i < string_length; ++i) {
@@ -107,9 +119,8 @@ function char *render_PushTempString(const char *CString)
   return Result;
 }
 
-function void render_DrawText(Arena *Arena, const char *Text, F32 X, F32 Y, S32 FontSize, Color C, B32 copy_string)
-{
-  render_command *Command = push_struct(Arena, render_command);
+function void render_DrawText(Render_Context *rc, const char *Text, F32 X, F32 Y, S32 FontSize, Color C, B32 copy_string) {
+  render_command *Command = create_render_command(rc);
   const char *RenderString;
   if (copy_string) {
     RenderString = render_PushTempString(Text);
@@ -117,8 +128,7 @@ function void render_DrawText(Arena *Arena, const char *Text, F32 X, F32 Y, S32 
     RenderString = Text;
   }
 
-  if (Command)
-  {
+  if (Command) {
     Command->Kind = render_command_DrawText;
     Command->Text = RenderString;
     Command->X = X;
@@ -128,12 +138,10 @@ function void render_DrawText(Arena *Arena, const char *Text, F32 X, F32 Y, S32 
   }
 }
 
-function void render_DrawRectangleLinesEx(Arena *Arena, Rectangle R, F32 Thickness, Color C)
-{
-  render_command *Command = push_struct(Arena, render_command);
+function void render_DrawRectangleLinesEx(Render_Context *rc, Rectangle R, F32 Thickness, Color C) {
+  render_command *Command = create_render_command(rc);
 
-  if (Command)
-  {
+  if (Command) {
     Command->Kind = render_command_DrawRectangleLinesEx;
     Command->Rectangle = R;
     Command->Thickness = Thickness;
@@ -141,12 +149,10 @@ function void render_DrawRectangleLinesEx(Arena *Arena, Rectangle R, F32 Thickne
   }
 }
 
-function void render_DrawRectangle(Arena *Arena, F32 X, F32 Y, F32 W, F32 H, Color C)
-{
-  render_command *Command = push_struct(Arena, render_command);
+function void render_DrawRectangle(Render_Context *rc, F32 X, F32 Y, F32 W, F32 H, Color C) {
+  render_command *Command = create_render_command(rc);
 
-  if (Command)
-  {
+  if (Command) {
     Command->Kind = render_command_DrawRectangle;
     Command->X = X;
     Command->Y = Y;
@@ -156,14 +162,12 @@ function void render_DrawRectangle(Arena *Arena, F32 X, F32 Y, F32 W, F32 H, Col
   }
 }
 
-function void render_DrawLine(Arena *Arena, int startPosX, int startPosY, int endPosX, int endPosY, F32 thickness, Color color)
-{
-  render_command *Command = push_struct(Arena, render_command);
+function void render_DrawLine(Render_Context *rc, int startPosX, int startPosY, int endPosX, int endPosY, F32 thickness, Color color) {
+  render_command *Command = create_render_command(rc);
 
   // HACK: Fudge the line length to avoid gaps between adjoined lines.
   Vector2 start;
-  Vector2 end;
-  {
+  Vector2 end; {
     Vector2 normal_delta = Vector2Normalize((Vector2){endPosX-startPosX, endPosY-startPosY});
     Vector2 offset = Vector2Scale(normal_delta, 0.4f*thickness);
     start.x = startPosX - offset.x;
@@ -172,8 +176,7 @@ function void render_DrawLine(Arena *Arena, int startPosX, int startPosY, int en
     end.y = endPosY + offset.y;
   }
 
-  if (Command)
-  {
+  if (Command) {
     Command->Kind = render_command_DrawLine;
     Command->X = start.x;
     Command->Y = start.y;
@@ -185,12 +188,10 @@ function void render_DrawLine(Arena *Arena, int startPosX, int startPosY, int en
 }
 
 
-function void render_DrawLineBezierCubic(Arena *Arena, Vector2 startPos, Vector2 endPos, Vector2 startControlPos, Vector2 endControlPos, float thick, Color color)
-{
-  render_command *Command = push_struct(Arena, render_command);
+function void render_DrawLineBezierCubic(Render_Context *rc, Vector2 startPos, Vector2 endPos, Vector2 startControlPos, Vector2 endControlPos, float thick, Color color) {
+  render_command *Command = create_render_command(rc);
 
-  if (Command)
-  {
+  if (Command) {
     Command->Kind = render_command_DrawLineBezierCubic;
     Command->Points[0] = startPos;
     Command->Points[1] = startControlPos;
@@ -203,11 +204,10 @@ function void render_DrawLineBezierCubic(Arena *Arena, Vector2 startPos, Vector2
 }
 
 
-function void render_DrawPoly(Arena *Arena, Vector2 center, int sides, float radius, float rotation, Color color) {
-  render_command *Command = push_struct(Arena, render_command);
+function void render_DrawPoly(Render_Context *rc, Vector2 center, int sides, float radius, float rotation, Color color) {
+  render_command *Command = create_render_command(rc);
 
-  if (Command)
-  {
+  if (Command) {
     Command->Kind = render_command_DrawPoly;
     Command->X = center.x;
     Command->Y = center.y;
@@ -218,11 +218,10 @@ function void render_DrawPoly(Arena *Arena, Vector2 center, int sides, float rad
   }
 }
 
-function void render_DrawPolyLinesEx(Arena *Arena, Vector2 center, int sides, float radius, float rotation, float lineThick, Color color) {
-  render_command *Command = push_struct(Arena, render_command);
+function void render_DrawPolyLinesEx(Render_Context *rc, Vector2 center, int sides, float radius, float rotation, float lineThick, Color color) {
+  render_command *Command = create_render_command(rc);
 
-  if (Command)
-  {
+  if (Command) {
     Command->Kind = render_command_DrawPolyLinesEx;
     Command->X = center.x;
     Command->Y = center.y;
@@ -234,12 +233,10 @@ function void render_DrawPolyLinesEx(Arena *Arena, Vector2 center, int sides, fl
   }
 }
 
-function void render_DrawTriangleStrip(Arena *Arena, Vector2 *Points, S32 PointCount, Color Color)
-{
-  render_command *Command = push_struct(Arena, render_command);
+function void render_DrawTriangleStrip(Render_Context *rc, Vector2 *Points, S32 PointCount, Color Color) {
+  render_command *Command = create_render_command(rc);
 
-  if (Command && PointCount <= render_Max_Points)
-  {
+  if (Command && PointCount <= render_Max_Points) {
     Command->Kind = render_command_DrawTriangleStrip;
     for (S32 i = 0; i < PointCount; ++i) {
       Command->Points[i] = Points[i];
@@ -249,12 +246,10 @@ function void render_DrawTriangleStrip(Arena *Arena, Vector2 *Points, S32 PointC
   }
 }
 
-function void render_DrawTriangleFan(Arena *Arena, Vector2 *Points, int PointCount, Color Color)
-{
-  render_command *Command = push_struct(Arena, render_command);
+function void render_DrawTriangleFan(Render_Context *rc, Vector2 *Points, int PointCount, Color Color) {
+  render_command *Command = create_render_command(rc);
 
-  if (Command && PointCount <= render_Max_Points)
-  {
+  if (Command && PointCount <= render_Max_Points) {
     Command->Kind = render_command_DrawTriangleFan;
     for (S32 i = 0; i < PointCount; ++i) {
       Command->Points[i] = Points[i];
@@ -264,12 +259,10 @@ function void render_DrawTriangleFan(Arena *Arena, Vector2 *Points, int PointCou
   }
 }
 
-function void render_DrawCircle(Arena *Arena, Vector2 center, F32 radius, Color color)
-{
-  render_command *Command = push_struct(Arena, render_command);
+function void render_DrawCircle(Render_Context *rc, Vector2 center, F32 radius, Color color) {
+  render_command *Command = create_render_command(rc);
 
-  if (Command)
-  {
+  if (Command) {
     Command->Kind = render_command_DrawCircle;
     Command->X = center.x;
     Command->Y = center.y;
@@ -278,12 +271,10 @@ function void render_DrawCircle(Arena *Arena, Vector2 center, F32 radius, Color 
   }
 }
 
-function void render_DrawCircleSector(Arena *Arena, Vector2 center, float radius, float startAngle, float endAngle, Color color)
-{
-  render_command *Command = push_struct(Arena, render_command);
+function void render_DrawCircleSector(Render_Context *rc, Vector2 center, float radius, float startAngle, float endAngle, Color color) {
+  render_command *Command = create_render_command(rc);
 
-  if (Command)
-  {
+  if (Command) {
     Command->Kind = render_command_DrawCircleSector;
     Command->X = center.x;
     Command->Y = center.y;
@@ -294,12 +285,10 @@ function void render_DrawCircleSector(Arena *Arena, Vector2 center, float radius
   }
 }
 
-function void render_DrawCircleLines(Arena *Arena, int centerX, int centerY, float radius, Color color)
-{
-  render_command *Command = push_struct(Arena, render_command);
+function void render_DrawCircleLines(Render_Context *rc, int centerX, int centerY, float radius, Color color) {
+  render_command *Command = create_render_command(rc);
 
-  if (Command)
-  {
+  if (Command) {
     Command->Kind = render_command_DrawCircleLines;
     Command->X = centerX;
     Command->Y = centerY;
@@ -308,12 +297,10 @@ function void render_DrawCircleLines(Arena *Arena, int centerX, int centerY, flo
   }
 }
 
-function void render_DrawCircleSectorLines(Arena *Arena, Vector2 center, float radius, float startAngle, float endAngle, Color color)
-{
-  render_command *Command = push_struct(Arena, render_command);
+function void render_DrawCircleSectorLines(Render_Context *rc, Vector2 center, float radius, float startAngle, float endAngle, Color color) {
+  render_command *Command = create_render_command(rc);
 
-  if (Command)
-  {
+  if (Command) {
     Command->Kind = render_command_DrawCircleSectorLines;
     Command->X = center.x;
     Command->Y = center.y;
@@ -326,18 +313,16 @@ function void render_DrawCircleSectorLines(Arena *Arena, Vector2 center, float r
 
 
 
-function void render_Commands(Context *context, Arena *arena)
-{
+function void render_Commands(Render_Context *rc) {
   // NOTE: Assume that the render commands get cleared every frame, so start from the start.
-  S32 CommandCount = (context->render_arena->chunk_pos - context->render_zero_pos)/sizeof(render_command);
-  render_command *Commands = (render_command *)(arena + 1);
+  /* S32 CommandCount = (context->render_arena->chunk_pos - context->render_zero_pos)/sizeof(render_command); */
+  /* render_command *Commands = (render_command *)(arena + 1); */
 
-  for (U32 i = 0; i < CommandCount; ++i)
-  {
-    render_command *C = Commands + i;
+  for (render_command *C = rc->command_list.first; C != 0; C = C->next) {
+    /* render_command *C = Commands + i; */
 
-    switch(C->Kind)
-    {
+    switch(C->Kind) {
+    case render_command__Null: /* nothing to do here */ break;
     case render_command_ClearBackground: { ClearBackground(C->Color); } break;
     case render_command_DrawRectangleRec: { DrawRectangleRec(C->Rectangle, C->Color); } break;
     case render_command_DrawText: { DrawText(C->Text, C->X, C->Y, C->FontSize, C->Color); } break;

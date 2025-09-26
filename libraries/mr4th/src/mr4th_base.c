@@ -3743,8 +3743,34 @@ os_memory_release(void *ptr, U64 size){
 
 MR4TH_SYMBOL B32
 os_file_write_list(String8 file_name, String8Node *first_node){
+  ProfBeginFunc();
   B32 result = 0;
-  Assert(!"TODO: Implement this.");
+
+  // get handle
+  U32 mode_if_creating_file = S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH;
+  S32 fd = open((char *)file_name.str, O_WRONLY|O_CREAT, mode_if_creating_file);
+
+  if (fd > -1) {
+    result = 1;
+
+    for (String8Node *node = first_node;
+         node != 0;
+         node = node->next){
+      U8 *ptr = node->string.str;
+      U8 *opl = ptr + node->string.size;
+      size_t total_to_write = (size_t)(opl - ptr);
+      ssize_t actual_write = write(fd, ptr, total_to_write);
+
+      if (actual_write == -1) {
+        result = 0;
+        break;
+      }
+    }
+
+    close(fd);
+  }
+
+  ProfEndFunc();
   return result;
 }
 

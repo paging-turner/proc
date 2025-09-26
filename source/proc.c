@@ -95,7 +95,7 @@
 #endif
 
 #include "../source/core.h"
-
+#include "../source/render.h"
 
 
 //////////////////////////////////////
@@ -162,6 +162,7 @@ struct Process {
   B32 flags;
   Vector2 position;
   Vector2 size;
+  U32 cold_index;
 
   union {
     struct {
@@ -281,7 +282,6 @@ struct Context {
   Arena *process_arena;
   Arena *ui_arena;
   Arena *temp_arena;
-  U64 render_zero_pos;
 
   U32 flags;
 
@@ -295,6 +295,9 @@ struct Context {
 
   /* Ui_Element_List ui_element_list; */
   Process_List ui_element_list;
+
+  Render_Context ui_render_context;
+  Render_Context process_render_context;
 
   Ui_State ui_state;
   Vector2 mouse_position; // TODO: move this to ui_state
@@ -313,7 +316,6 @@ struct Context {
 // Includes relying on Context
 //////////////////////////////////////
 
-#include "../source/render.h"
 #include "../source/keybind.h"
 
 
@@ -345,6 +347,11 @@ typedef struct {
 } Process_Shape;
 
 
+//////////////////////////////////////
+// Saves
+//////////////////////////////////////
+
+#include "../source/saves.h"
 
 
 
@@ -479,7 +486,7 @@ function void handle_label_editing(Context *context, Process_List ps) {
 
 
 function B32 do_button(Context *context, Process *button) {
-  Arena *ra = context->render_arena;
+  Render_Context *rc = &context->ui_render_context;
   // NOTE: Assumes label is null-terminated for now...
   F32 font_size = global_panel_font_size;
   S32 text_width = MeasureText((char *)button->label, font_size);
@@ -512,17 +519,16 @@ function B32 do_button(Context *context, Process *button) {
 
   Color bg_color = is_hot ? hot_bg_color : dormant_bg_color;
 
-  render_DrawRectangle(ra, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, bg_color);
-  render_DrawText(ra, (char *)button->label, button->position.x+padding.x+1.0f, button->position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 1);
-  render_DrawText(ra, (char *)button->label, button->position.x+padding.x, button->position.y+padding.y, font_size, font_color, 1);
+  render_DrawRectangle(rc, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, bg_color);
+  render_DrawText(rc, (char *)button->label, button->position.x+padding.x+1.0f, button->position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 1);
+  render_DrawText(rc, (char *)button->label, button->position.x+padding.x, button->position.y+padding.y, font_size, font_color, 1);
 
   return clicked;
 }
 
 
-function Process *create_button(Context *context, Vector2 position, String8 text) {
-  Arena *uia = context->ui_arena;
-  Process *button = push_struct(uia, Process);
+function Process *create_button(Arena *arena, Vector2 position, String8 text) {
+  Process *button = push_struct(arena, Process);
 
   if (button) {
     Set_Flag(button->flags, Process_Flag_Button);
@@ -539,7 +545,7 @@ function Process *create_button(Context *context, Vector2 position, String8 text
 
 
 function void do_dropdown_items(Context *context, Ui_Dropdown_Item *items, S32 item_count, Vector2 position) {
-  Arena *ra = context->render_arena;
+  Render_Context *rc = &context->ui_render_context;
   F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
 
   // get max text width
@@ -552,12 +558,12 @@ function void do_dropdown_items(Context *context, Ui_Dropdown_Item *items, S32 i
     }
   }
 
-  render_DrawRectangle(ra, position.x, position.y, (F32)max_text_width, button_height*item_count, global_button_dormant_bg_color);
+  render_DrawRectangle(rc, position.x, position.y, (F32)max_text_width, button_height*item_count, global_button_dormant_bg_color);
 
   for (S32 i = 0; i < item_count; ++i) {
     Ui_Dropdown_Item item = items[i];
     Vector2 action_position = (Vector2){position.x, position.y + button_height*(F32)i};
-    Process *file_action = create_button(context, action_position, item.name);
+    Process *file_action = create_button(context->temp_arena, action_position, item.name);
     file_action->size = (Vector2){max_text_width, button_height};
     file_action->ignore_label_size = 1;
     B32 clicked = do_button(context, file_action);
@@ -567,6 +573,8 @@ function void do_dropdown_items(Context *context, Ui_Dropdown_Item *items, S32 i
     }
   }
 }
+
+
 
 
 
@@ -617,7 +625,7 @@ function void set_menu_state_as_save_file_as(Context *context) {
   F32 input_height = 2.0f*global_button_padding.y + global_panel_font_size;
 
   String8 empty_text = Zero_Struct(String8);
-  Process *text_input = create_button(context, (Vector2){0}, empty_text);
+  Process *text_input = create_button(context->ui_arena, (Vector2){0}, empty_text);
   if (text_input) {
     // setup text input element
     Set_Flag(text_input->flags, Process_Flag_TextEdit|Process_Flag_CanBeActive);
@@ -671,16 +679,16 @@ function void handle_save_file_as(Context *context) {
     position.y += button_height;
   }
 
-  Process *cancel_button = create_button(context, position, str8_comptime_lit("cancel"));
+  Process *cancel_button = create_button(context->temp_arena, position, str8_comptime_lit("cancel"));
   position.y += button_height;
-  Process *save_button = create_button(context, position, str8_comptime_lit("save"));
+  Process *save_button = create_button(context->temp_arena, position, str8_comptime_lit("save"));
 
   if (do_button(context, cancel_button)) {
     clear_ui_state(context);
   } else if (do_button(context, save_button)) {
     if (file_name_element) {
-      // TODO: Actually save the file once we define the file-type.
-      printf("saving... '%s'\n", file_name_element->label);
+      String8 file_name = str8_lit(file_name_element->label);
+      write_save_file(context, context->temp_arena, file_name);
     }
     clear_ui_state(context);
   }
@@ -1631,7 +1639,7 @@ function Ui_State get_ui_state(Context *context) {
 
 
 function void handle_ui(Context *context) {
-  Process *file_button = create_button(context, (Vector2){0.0f, 0.0f}, str8_comptime_lit("File"));
+  Process *file_button = create_button(context->temp_arena, (Vector2){0.0f, 0.0f}, str8_comptime_lit("File"));
 
   if (do_button(context, file_button)) {
     // show file menu
@@ -1976,18 +1984,18 @@ function void handle_user_input(Context *context) {
 
 
 function void draw_circular_process(Context *context, Vector2 center, F32 radius, F32 thickness, Color bg_color, Color stroke_color) {
-  Arena *ra = context->render_arena;
+  Render_Context *rc = &context->process_render_context;
 
-  render_DrawCircle(ra, center, radius, bg_color);
+  render_DrawCircle(rc, center, radius, bg_color);
   F32 fudge = Half_Circle_Fudge*radius;
   Vector2 first_point = (Vector2){center.x-radius, center.y};
   Vector2 second_point = (Vector2){center.x+radius, center.y};
   Vector2 control0 = (Vector2){first_point.x, first_point.y-fudge};
   Vector2 control1 = (Vector2){second_point.x, second_point.y-fudge};
-  render_DrawLineBezierCubic(ra, first_point, second_point, control0, control1, thickness, stroke_color);
+  render_DrawLineBezierCubic(rc, first_point, second_point, control0, control1, thickness, stroke_color);
   Vector2 control2 = (Vector2){first_point.x, first_point.y+fudge};
   Vector2 control3 = (Vector2){second_point.x, second_point.y+fudge};
-  render_DrawLineBezierCubic(ra, first_point, second_point, control2, control3, thickness, stroke_color);
+  render_DrawLineBezierCubic(rc, first_point, second_point, control2, control3, thickness, stroke_color);
 }
 
 
@@ -1995,56 +2003,56 @@ function void draw_circular_process(Context *context, Vector2 center, F32 radius
 
 function void draw_process_with_triangle_fan(Context *context, Process_Shape shape, F32 thickness, Color bg_color, Color stroke_color) {
   Assert(shape.triangle_count == (shape.point_count - 2));
-  Arena *ra = context->render_arena;
+  Render_Context *rc = &context->process_render_context;
 
   // draw background
-  render_DrawTriangleFan(ra, shape.points, shape.point_count, bg_color);
+  render_DrawTriangleFan(rc, shape.points, shape.point_count, bg_color);
 
   // draw lines
   for (S32 i = 0; i < shape.point_count-1 && i < Process_Shape_Max_Points; ++i) {
     Vector2 p0 = shape.points[i];
     Vector2 p1 = shape.points[i+1];
-    render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
+    render_DrawLine(rc, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
   }
 
   // draw line from last point to first point
   Vector2 p0 = shape.points[0];
   Vector2 p1 = shape.points[shape.point_count-1];
-  render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
+  render_DrawLine(rc, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
 }
 
 
 
 function void draw_process_with_triangle_strip(Context *context, Process_Shape shape, F32 thickness, Color bg_color, Color stroke_color) {
-  Arena *ra = context->render_arena;
+  Render_Context *rc = &context->process_render_context;
   // draw process background
-  render_DrawTriangleStrip(ra, shape.points, shape.point_count, bg_color);
+  render_DrawTriangleStrip(rc, shape.points, shape.point_count, bg_color);
 
   if (shape.triangle_count) {
     // draw first two lines
     Vector2 p0 = shape.points[0];
     Vector2 p1 = shape.points[1];
     Vector2 p2 = shape.points[2];
-    render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
-    render_DrawLine(ra, p0.x, p0.y, p2.x, p2.y, thickness, stroke_color);
+    render_DrawLine(rc, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
+    render_DrawLine(rc, p0.x, p0.y, p2.x, p2.y, thickness, stroke_color);
 
     // draw in-between lines
     for (S32 i = 1; i < shape.triangle_count; ++i) {
       Vector2 p0 = shape.points[i];
       Vector2 p1 = shape.points[i+2];
-      render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
+      render_DrawLine(rc, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
     }
 
     // draw line connecting last two points
     p0 = shape.points[shape.point_count-1];
     p1 = shape.points[shape.point_count-2];
-    render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
+    render_DrawLine(rc, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
   }
 }
 
 
 function void draw_processes(Context *context) {
-  Arena *ra = context->render_arena;
+  Render_Context *rc = &context->process_render_context;
 
   Color bg_color = (Color){255, 255, 255, 255};
   Color invisible_bg_color = (Color){0, 0, 0, 0};
@@ -2100,7 +2108,7 @@ function void draw_processes(Context *context) {
               p1 = shape.points[2];
             }
           }
-          render_DrawLineBezierCubic(ra, p0, p1, p1, p0, thickness, stroke_color);
+          render_DrawLineBezierCubic(rc, p0, p1, p1, p0, thickness, stroke_color);
         } else if (!p->label[0]) {
           if (rounded) {
             draw_circular_process(context, shape.center, shape.radius, thickness, invisible_bg_color, invisible_stroke_color);
@@ -2114,19 +2122,19 @@ function void draw_processes(Context *context) {
         Vector2 pos1 = get_process_wire_position(context, p, shape, Process_Connection_Out, 1);
         Vector2 ctrl0 = (Vector2){pos0.x, pos0.y+cup_cap_control_offset};
         Vector2 ctrl1 = (Vector2){pos1.x, pos1.y+cup_cap_control_offset};
-        render_DrawLineBezierCubic(ra, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color);
+        render_DrawLineBezierCubic(rc, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color);
       } else if (Get_Flag(p->flags, Process_Flag_Cap)) {
         // draw cap
         Vector2 pos0 = get_process_wire_position(context, p, shape, Process_Connection_In, 0);
         Vector2 pos1 = get_process_wire_position(context, p, shape, Process_Connection_In, 1);
         Vector2 ctrl0 = (Vector2){pos0.x, pos0.y-cup_cap_control_offset};
         Vector2 ctrl1 = (Vector2){pos1.x, pos1.y-cup_cap_control_offset};
-        render_DrawLineBezierCubic(ra, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color);
+        render_DrawLineBezierCubic(rc, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color);
       } else if (Get_Flag(p->flags, Process_Flag_Identity)) {
         // draw "identity" process (just a wire)
         Vector2 pos0 = get_process_wire_position(context, p, shape, Process_Connection_In, 0);
         Vector2 pos1 = get_process_wire_position(context, p, shape, Process_Connection_Out, 0);
-        render_DrawLineBezierCubic(ra, pos0, pos1, pos1, pos0, thickness, stroke_color);
+        render_DrawLineBezierCubic(rc, pos0, pos1, pos1, pos0, thickness, stroke_color);
       } else {
         switch(shape.kind) {
         case Process_Shape_TriangleStrip: {
@@ -2140,15 +2148,15 @@ function void draw_processes(Context *context) {
         } break;
         case Process_Shape_HalfCircle: {
           // draw half-circle background
-          render_DrawTriangleFan(ra, shape.points, shape.point_count, bg_color);
+          render_DrawTriangleFan(rc, shape.points, shape.point_count, bg_color);
           // draw half-circle lines
           for (S32 i = 0; i < shape.point_count-1; ++i) {
             Vector2 p0 = shape.points[i];
             Vector2 p1 = shape.points[i+1];
-            render_DrawLine(ra, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
+            render_DrawLine(rc, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
           }
           // connect the line endpoints
-          render_DrawLine(ra,
+          render_DrawLine(rc,
                           shape.points[0].x,
                           shape.points[0].y,
                           shape.points[shape.point_count-1].x,
@@ -2171,7 +2179,7 @@ function void draw_processes(Context *context) {
           F32 offset = fudge * flip * (0.5f * shape.radius);
           text_y -= offset;
         }
-        render_DrawText(ra, text, text_x, text_y, font_size, text_color, 0);
+        render_DrawText(rc, text, text_x, text_y, font_size, text_color, 0);
       }
 
       // draw new-wire-box
@@ -2181,7 +2189,7 @@ function void draw_processes(Context *context) {
           (is_active && Get_Flag(context->flags, Context_Flag_NewWire)) ||
           rectangle_contains_point(new_wire_box, context->mouse_position));
         Color color = new_wire_box_is_active ? box_hover_color : box_color;
-        render_DrawRectangleRec(ra, new_wire_box, color);
+        render_DrawRectangleRec(rc, new_wire_box, color);
       }
     }
   }
@@ -2219,20 +2227,20 @@ function void draw_processes(Context *context) {
       thickness *= context->camera.zoom;
 
       // draw wire
-      render_DrawLineBezierCubic(ra, out_position, in_position, out_control, in_control, thickness, stroke_color);
+      render_DrawLineBezierCubic(rc, out_position, in_position, out_control, in_control, thickness, stroke_color);
 
       // draw out wire-box
       if (connected_out_active || is_active) {
         Rectangle box = get_wire_box(context, out_position);
         Color c = is_active ? box_hover_color : box_color;
-        render_DrawRectangleRec(ra, box, c);
+        render_DrawRectangleRec(rc, box, c);
       }
 
       // draw in wire-box
       if (connected_in_active || is_active) {
         Rectangle box = get_wire_box(context, in_position);
         Color c = is_active ? box_hover_color : box_color;
-        render_DrawRectangleRec(ra, box, c);
+        render_DrawRectangleRec(rc, box, c);
       }
     }
   }
@@ -2249,7 +2257,7 @@ function void draw_processes(Context *context) {
 
     F32 thickness = context->camera.zoom * global_line_thickness;
 
-    render_DrawLineBezierCubic(ra, position, context->mouse_position, from_control, to_control, thickness, stroke_color);
+    render_DrawLineBezierCubic(rc, position, context->mouse_position, from_control, to_control, thickness, stroke_color);
   }
 
   // draw selection rectangle
@@ -2257,7 +2265,7 @@ function void draw_processes(Context *context) {
     Rectangle selection_rect = get_selection_rectangle(context);
     Color selection_color = (Color){10, 30, 200, 50};
 
-    render_DrawRectangleRec(ra, selection_rect, selection_color);
+    render_DrawRectangleRec(rc, selection_rect, selection_color);
   }
 }
 
@@ -2280,7 +2288,7 @@ function S32 debug_process_active_list_count(Process_List list) {
 }
 
 function void draw_info_panel(Context *context) {
-  Arena *ra = context->render_arena;
+  Render_Context *rc = &context->ui_render_context;
   Color text_color = (Color){0, 0, 0, 255};
   F32 x = 5.0f;
   F32 y = 5.0f;
@@ -2291,23 +2299,34 @@ function void draw_info_panel(Context *context) {
     for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
       char *format = a == context->active_processes.first ? "active-id = %p" : "            %p";
       const char *text = TextFormat(format, a);
-      render_DrawText(ra, text, 5.0f, y, global_panel_font_size, text_color, 1);
+      render_DrawText(rc, text, 5.0f, y, global_panel_font_size, text_color, 1);
       y += global_panel_font_size + padding;
     }
   }
+#elif 0
+  render_DrawText(rc, TextFormat("process count %d\n", debug_process_list_count(context->processes)),
+                  x, y, global_panel_font_size, text_color, 1);
+  y += global_panel_font_size + padding;
+  render_DrawText(rc, TextFormat("active count %d\n", debug_process_active_list_count(context->active_processes)),
+                  x, y, global_panel_font_size, text_color, 1);
+  y += global_panel_font_size + padding;
+  render_DrawText(rc, TextFormat("free count %d\n", debug_process_list_count(context->free_processes)),
+                  x, y, global_panel_font_size, text_color, 1);
+  y += global_panel_font_size + padding;
+  render_DrawText(rc, TextFormat("copy count %d\n", debug_process_list_count(context->copy_processes)),
+                  x, y, global_panel_font_size, text_color, 1);
+  y += global_panel_font_size + padding;
 #elif 1
-  render_DrawText(ra, TextFormat("process count %d\n", debug_process_list_count(context->processes)),
-                  x, y, global_panel_font_size, text_color, 1);
-  y += global_panel_font_size + padding;
-  render_DrawText(ra, TextFormat("active count %d\n", debug_process_active_list_count(context->active_processes)),
-                  x, y, global_panel_font_size, text_color, 1);
-  y += global_panel_font_size + padding;
-  render_DrawText(ra, TextFormat("free count %d\n", debug_process_list_count(context->free_processes)),
-                  x, y, global_panel_font_size, text_color, 1);
-  y += global_panel_font_size + padding;
-  render_DrawText(ra, TextFormat("copy count %d\n", debug_process_list_count(context->copy_processes)),
-                  x, y, global_panel_font_size, text_color, 1);
-  y += global_panel_font_size + padding;
+  S32 arena_font_size = 12;
+  y = global_window_size.y - arena_font_size - padding;
+  render_DrawText(rc, TextFormat("ui arena %llu/%llu\n", context->ui_arena->chunk_pos, context->ui_arena->chunk_cap), x, y, arena_font_size, text_color, 1);
+  y -= arena_font_size + padding;
+  render_DrawText(rc, TextFormat("temp arena %llu/%llu\n", context->temp_arena->chunk_pos, context->temp_arena->chunk_cap), x, y, arena_font_size, text_color, 1);
+  y -= arena_font_size + padding;
+  render_DrawText(rc, TextFormat("render arena %llu/%llu\n", context->render_arena->chunk_pos, context->render_arena->chunk_cap), x, y, arena_font_size, text_color, 1);
+  y -= arena_font_size + padding;
+  render_DrawText(rc, TextFormat("process arena %llu/%llu\n", context->process_arena->chunk_pos, context->process_arena->chunk_cap), x, y, arena_font_size, text_color, 1);
+  y -= arena_font_size + padding;
 #endif
 }
 
@@ -2323,7 +2342,8 @@ function Context initialize_context(void) {
   context.temp_arena = arena_alloc_reserve(Megabytes(1), 0);
   context.ui_arena = arena_alloc_reserve(Megabytes(1), 0);
 
-  context.render_zero_pos = context.render_arena->chunk_pos;
+  context.ui_render_context.arena = context.render_arena;
+  context.process_render_context.arena = context.render_arena;
 
   context.camera.zoom = 1.0f;
 
@@ -2380,23 +2400,23 @@ int main(void) {
   initialize_globals(&context);
   SetWindowSize(global_window_size.x, global_window_size.y);
 
-  Arena *ra = context.render_arena;
-  Arena *ta = context.temp_arena;
-  render_Initialize(ta);
+  Render_Context *prc = &context.process_render_context;
+  render_Initialize(context.temp_arena);
 
   while (!WindowShouldClose()) {
     handle_user_input(&context);
 
-    render_ClearBackground(ra, global_background_color);
+    render_ClearBackground(prc, global_background_color);
     draw_processes(&context);
-#if 0
+#if 1
     draw_info_panel(&context);
 #endif
 
     BeginDrawing();
-    render_Commands(&context, ra);
-    arena_pop_to(ra, 0);
-    arena_pop_to(ta, 0);
+    render_Commands(&context.process_render_context);
+    render_Commands(&context.ui_render_context);
+    arena_pop_to(context.render_arena, 0);
+    arena_pop_to(context.temp_arena, 0);
     EndDrawing();
   }
 
