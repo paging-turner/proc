@@ -24,15 +24,19 @@ typedef struct {
 //////////////////////////////////////
 // Saves Functions
 //////////////////////////////////////
-function void write_save_file(Context *context, Arena *arena, String8 file_name);
+function void write_save_file(Context *context, Arena *arena, String_Chunk_List file_name_list);
 
 
 
 
 
+function void set_as_current_file(Context *context, String_Chunk_List file_name_list) {
+  Assert(!"TODO");
+  /* printf("set_as_current_file %llu\n", file_name_list.total_size); */
+  /* context->current_save_file_name = save_file; */
+}
 
-
-function void write_save_file(Context *context, Arena *arena, String8 file_name) {
+function void write_save_file(Context *context, Arena *arena, String_Chunk_List file_name_list) {
   // save-file sizing
   S32 process_count = 0;
   for (Process *p = context->processes.first; p != 0; p = p->next) {
@@ -41,6 +45,8 @@ function void write_save_file(Context *context, Arena *arena, String8 file_name)
   String8 save_file;
   save_file.size = Save_File_Size(process_count);
   save_file.str = arena_push(arena, save_file.size);
+
+  set_as_current_file(context, file_name_list);
 
   if (save_file.str) {
     Save_File_Header *header = (Save_File_Header *)save_file.str;
@@ -77,6 +83,7 @@ function void write_save_file(Context *context, Arena *arena, String8 file_name)
       cold_index += 1;
     }
 
-    os_file_write(file_name, save_file);
+    Assert(!"TODO: Merge save-file string-list into a c-string and pass to os_file_write");
+    /* os_file_write(file_name, save_file); */
   }
 }

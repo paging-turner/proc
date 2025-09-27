@@ -61,7 +61,7 @@
    [x] BUG: Connect a two processes. Make one process invisible. Delete the *other* process. The invisible process is still there but, well, you can't see it! Either delete the invisible one, or make it visible again. Probably just delete it??
    [x] Automatically show invisible processes. This should only apply to processes with no connections, set to invisible, and no text.
    === UI / Process-Interaction ===
-     [ ] Merge structs for ui-element and process. It will make memory management easier and give more use-cases of processes with different properties than what's covered in PQP.
+     [x] Merge structs for ui-element and process. It will make memory management easier and give more use-cases of processes with different properties than what's covered in PQP.
    [ ] New Arena Changes
      [x] Change how we loop through processes, so that we can enable growable arenas.
      [x] Right now we have to make sure the Process struct is a size that's a multiple of a pointer. We should fix that :(
@@ -118,6 +118,8 @@ global_variable String8 Saves_Filepath = str8_comptime_lit(".."_"saves"_);
 //////////////////////////////////////
 
 typedef struct Context Context;
+
+
 
 
 //////////////////////////////////////
@@ -193,9 +195,7 @@ struct Process {
 
   Process *to_copied;
 
-  // TODO: Use a growable structure for strings.
-#define Process_Label_Size 256
-  U8 label[Process_Label_Size];
+  String_Chunk_List label;
   U32 label_cursor;
   B32 ignore_label_size;
 };
@@ -236,9 +236,10 @@ typedef struct {
 //////////////////////////////////////
 
 typedef struct {
-  String8 name;
+  String_Chunk_List name;
   void (*func)(Context*);
 } Ui_Dropdown_Item;
+
 
 
 
@@ -279,7 +280,7 @@ typedef enum {
 
 struct Context {
   Arena *render_arena;
-  Arena *process_arena;
+  Arena *permanent_arena;
   Arena *ui_arena;
   Arena *temp_arena;
 
@@ -287,13 +288,13 @@ struct Context {
 
   Process_List processes;
   Process_List free_processes;
+  String_Chunk_List free_strings;
 
   Process *hot_process;
   Process_List active_processes;
 
   Process_List copy_processes;
 
-  /* Ui_Element_List ui_element_list; */
   Process_List ui_element_list;
 
   Render_Context ui_render_context;
@@ -304,6 +305,8 @@ struct Context {
   Vector2 active_position;
   Vector2 copy_center;
   Menu_State menu_state;
+
+  String_Chunk_List save_file_name;
 
   Camera2D camera;
 };
@@ -389,9 +392,16 @@ global_variable Color global_button_dormant_bg_color = {90, 70, 90, 255};
 global_variable Color global_button_hot_bg_color = {100, 80, 100, 255};
 global_variable Color global_button_font_color = {220, 220, 160, 255};
 
+global_variable String_Chunk_List global_open_button_label;
+global_variable String_Chunk_List global_save_button_label;
+global_variable String_Chunk_List global_save_as_button_label;
+global_variable String_Chunk_List global_cancel_button_label;
+global_variable String_Chunk_List global_file_button_label;
 
 global_variable Process global_null_process;
+global_variable String_Chunk global_null_string_chunk;
 #define The_Null_Process() (global_null_process=(Process){0}, &global_null_process)
+#define The_Null_String_Chunk() (global_null_string_chunk=(String_Chunk){0}, &global_null_string_chunk)
 
 #define Half_Circle_Fudge 1.32f
 #define Half_Circle_Radius_Fudge 1.0f
@@ -407,13 +417,86 @@ function B32 rectangle_contains_point(Rectangle r, Vector2 p) {
 }
 
 
+function U8 *c_string_from_string_chunk_list(Arena *arena, String_Chunk_List *scl) {
+  U64 total_size = 0;
+  for (String_Chunk *sc = scl->first; sc != 0; sc = sc->next) {
+    if (sc == scl->last) {
+      S32 char_count = 1;
+      for (;; ++char_count) {
+        if (sc->str_array[char_count-1] == 0) {
+          break;
+        }
+      }
+      total_size += char_count;
+    } else {
+      total_size += String_Chunk_Size;
+    }
+  }
+
+  U8 *c_string;
+
+  if (total_size) {
+    c_string = arena_push_no_zero(arena, total_size);
+    U64 c_string_index = 0;
+
+    for (String_Chunk *sc = scl->first; sc != 0; sc = sc->next) {
+      for (S32 i = 0; i < String_Chunk_Size; ++i) {
+        if (c_string_index > total_size) {
+          printf("[ Error ] creating c-string from string-chunk-list: c_string_index exceeds total size of string-chunk-list.\n");
+          break;
+        }
+
+        c_string[c_string_index] = sc->str_array[i];
+
+        if (c_string[c_string_index] == 0) {
+          break;
+        }
+
+        c_string_index += 1;
+      }
+    }
+  } else {
+    c_string = (U8 *)"";
+  }
+
+  return c_string;
+}
+
+
+function String_Chunk_List string_chunk_list_from_string8(Context *context, String8 string8) {
+  String_Chunk_List list = (String_Chunk_List){0};
+
+  Assert(!"TODO");
+
+  return list;
+}
+
+
+function String_Chunk *create_string_chunk(Context *context) {
+  String_Chunk *c = context->free_strings.first;
+
+  if (c) {
+    SLLQueuePop(context->free_strings.first,context->free_strings.last);
+  } else {
+    c = push_struct(context->permanent_arena, String_Chunk);
+  }
+
+  if (c) {
+    *c = (String_Chunk){0};
+  } else {
+    c = The_Null_String_Chunk();
+  }
+
+  return c;
+}
+
 function Process *create_detached_process(Context *context) {
   Process *p = context->free_processes.first;
 
   if (p) {
     SLLQueuePop(context->free_processes.first, context->free_processes.last);
   } else {
-    p = push_struct(context->process_arena, Process);
+    p = push_struct(context->permanent_arena, Process);
   }
 
   if (p) {
@@ -472,12 +555,48 @@ function void handle_label_editing(Context *context, Process_List ps) {
       if (Get_Flag(a->flags, Process_Flag_TextEdit)) {
         B32 is_ascii = key > 0 && key < 256;
         U8 c = ascii_char_lookup[key&0xff][shift_down];
-        if (is_ascii && c != 0 && a->label_cursor < Process_Label_Size-1) {
-          a->label[a->label_cursor] = c;
+        if (is_ascii && c != 0) {
+          // push string-chunk if string list is empty
+          if (a->label.last == 0) {
+            String_Chunk *sc = create_string_chunk(context);
+            SLLQueuePush(a->label.first, a->label.last, sc);
+            a->label_cursor = 0;
+          }
+          // add char to label
+          a->label.last->str_array[a->label_cursor] = c;
           a->label_cursor += 1;
-        } else if (key == KEY_BACKSPACE && a->label_cursor > 0) {
-          a->label_cursor -= 1;
-          a->label[a->label_cursor] = 0;
+          // push string-chunk if at the end of current chunk
+          if (a->label_cursor == String_Chunk_Size) {
+            String_Chunk *sc = create_string_chunk(context);
+            SLLQueuePush(a->label.first, a->label.last, sc);
+            a->label_cursor = 0;
+          }
+        } else if (key == KEY_BACKSPACE) {
+          if (a->label_cursor == 0) {
+            // only free string-chunk if it is _not_ the only chunk
+            if (a->label.first != a->label.last) {
+              String_Chunk *free_chunk = a->label.last;
+              if (free_chunk) {
+                a->label_cursor = String_Chunk_Size - 1;
+                // remove last string-chunk
+                for (String_Chunk *chunk = a->label.first; chunk != 0; chunk = chunk->next) {
+                  if (chunk->next == a->label.last) {
+                    chunk->next = 0;
+                    a->label.last = chunk;
+                    break;
+                  }
+                }
+                // add unused string-chunk to free-list
+                SLLQueuePush(context->free_strings.first, context->free_strings.last, free_chunk);
+                // zero current character
+                a->label.last->str_array[a->label_cursor] = 0;
+              }
+            }
+          } else if (a->label.last) {
+            // decrement and zero current character
+            a->label_cursor -= 1;
+            a->label.last->str_array[a->label_cursor] = 0;
+          }
         }
       }
     }
@@ -489,7 +608,8 @@ function B32 do_button(Context *context, Process *button) {
   Render_Context *rc = &context->ui_render_context;
   // NOTE: Assumes label is null-terminated for now...
   F32 font_size = global_panel_font_size;
-  S32 text_width = MeasureText((char *)button->label, font_size);
+  U8 *label_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &button->label);
+  S32 text_width = MeasureText((char *)label_c_string, font_size);
   Vector2 padding = global_button_padding;
   Color dormant_bg_color = global_button_dormant_bg_color;
   Color hot_bg_color = global_button_hot_bg_color;
@@ -520,23 +640,20 @@ function B32 do_button(Context *context, Process *button) {
   Color bg_color = is_hot ? hot_bg_color : dormant_bg_color;
 
   render_DrawRectangle(rc, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, bg_color);
-  render_DrawText(rc, (char *)button->label, button->position.x+padding.x+1.0f, button->position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 1);
-  render_DrawText(rc, (char *)button->label, button->position.x+padding.x, button->position.y+padding.y, font_size, font_color, 1);
+  render_DrawText(rc, (char *)label_c_string, button->position.x+padding.x+1.0f, button->position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
+  render_DrawText(rc, (char *)label_c_string, button->position.x+padding.x, button->position.y+padding.y, font_size, font_color, 0);
 
   return clicked;
 }
 
 
-function Process *create_button(Arena *arena, Vector2 position, String8 text) {
+function Process *create_button(Arena *arena, Vector2 position, String_Chunk_List label) {
   Process *button = push_struct(arena, Process);
 
   if (button) {
     Set_Flag(button->flags, Process_Flag_Button);
     button->position = position;
-
-    for (S32 i = 0; i < text.size && i < Process_Label_Size-1; ++i) {
-      button->label[i] = text.str[i];
-    }
+    button->label = label;
   }
 
   return button;
@@ -551,7 +668,8 @@ function void do_dropdown_items(Context *context, Ui_Dropdown_Item *items, S32 i
   // get max text width
   F32 max_text_width = 0.0f;
   for (S32 i = 0; i < item_count; ++i) {
-    S32 text_width_raw = MeasureText((char *)items[i].name.str, global_panel_font_size);
+    U8 *text_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &items[i].name);
+    S32 text_width_raw = MeasureText((char *)text_c_string, global_panel_font_size);
     F32 text_width = 2.0f*global_button_padding.x + (F32)text_width_raw;
     if (text_width > max_text_width) {
       max_text_width = text_width;
@@ -598,11 +716,7 @@ function void collect_save_files(Context *context) {
     if (!Get_Flag(file_props.flags, FilePropertyFlag_IsFolder)) {
       Process *element = push_struct(uia, Process);
       Set_Flag(element->flags, Process_Flag_Button);
-      /* element->kind = Ui_Element_Kind_Button; */
-
-      for (S32 i = 0; i < file_name.size && i < Process_Label_Size-1; ++i) {
-        element->label[i] = file_name.str[i];
-      }
+      element->label = string_chunk_list_from_string8(context, file_name);
 
       if (element) {
         SLLQueuePush(context->ui_element_list.first, context->ui_element_list.last, element);
@@ -624,7 +738,7 @@ function void set_menu_state_as_save_file_as(Context *context) {
 
   F32 input_height = 2.0f*global_button_padding.y + global_panel_font_size;
 
-  String8 empty_text = Zero_Struct(String8);
+  String_Chunk_List empty_text = Zero_Struct(String_Chunk_List);
   Process *text_input = create_button(context->ui_arena, (Vector2){0}, empty_text);
   if (text_input) {
     // setup text input element
@@ -636,7 +750,10 @@ function void set_menu_state_as_save_file_as(Context *context) {
 }
 
 function void save_file(Context *context) {
-  printf("save_file\n");
+  printf("saving '");
+  print_string_chunk_list(context->save_file_name);
+  printf("'\n");
+  write_save_file(context, context->temp_arena, context->save_file_name);
 }
 
 function void handle_open_file(Context *context) {
@@ -679,16 +796,15 @@ function void handle_save_file_as(Context *context) {
     position.y += button_height;
   }
 
-  Process *cancel_button = create_button(context->temp_arena, position, str8_comptime_lit("cancel"));
+  Process *cancel_button = create_button(context->temp_arena, position, global_cancel_button_label);
   position.y += button_height;
-  Process *save_button = create_button(context->temp_arena, position, str8_comptime_lit("save"));
+  Process *save_button = create_button(context->temp_arena, position, global_save_button_label);
 
   if (do_button(context, cancel_button)) {
     clear_ui_state(context);
   } else if (do_button(context, save_button)) {
     if (file_name_element) {
-      String8 file_name = str8_lit(file_name_element->label);
-      write_save_file(context, context->temp_arena, file_name);
+      write_save_file(context, context->temp_arena, file_name_element->label);
     }
     clear_ui_state(context);
   }
@@ -1291,8 +1407,11 @@ fill_out_half_circle_shape(Context *context, Process_Shape *shape, Process *p, V
 function Process_Shape
 get_process_shape(Context *context, Process *p) {
   Process_Shape shape = {0};
+  U64 arena_pop_pos = arena_current_pos(context->temp_arena);
+
   F32 font_size = context->camera.zoom * global_process_font_size;
-  S32 text_width = MeasureText((char *)p->label, font_size);
+  U8 *label_c_string = c_string_from_string_chunk_list(context->temp_arena, &p->label);
+  S32 text_width = MeasureText((char *)label_c_string, font_size);
 
   Vector2 position = get_process_position(context, p);
   position = GetWorldToScreen2D(position, context->camera);
@@ -1408,6 +1527,8 @@ get_process_shape(Context *context, Process *p) {
       shape.new_wire_position = shape.points[0];
     }
   }
+
+  arena_pop_to(context->temp_arena, arena_pop_pos);
 
   return shape;
 }
@@ -1639,7 +1760,7 @@ function Ui_State get_ui_state(Context *context) {
 
 
 function void handle_ui(Context *context) {
-  Process *file_button = create_button(context->temp_arena, (Vector2){0.0f, 0.0f}, str8_comptime_lit("File"));
+  Process *file_button = create_button(context->temp_arena, (Vector2){0.0f, 0.0f}, global_file_button_label);
 
   if (do_button(context, file_button)) {
     // show file menu
@@ -1649,9 +1770,9 @@ function void handle_ui(Context *context) {
   switch(context->menu_state) {
   case Menu_State_File: {
     Ui_Dropdown_Item file_dropdown_items[] = {
-      {str8_comptime_lit("Open"), set_menu_state_as_open_file},
-      {str8_comptime_lit("Save"), save_file},
-      {str8_comptime_lit("Save As"), set_menu_state_as_save_file_as},
+      {global_open_button_label, set_menu_state_as_open_file},
+      {global_save_button_label, save_file},
+      {global_save_as_button_label, set_menu_state_as_save_file_as},
     };
     F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
     Vector2 position = (Vector2){file_button->position.x, button_height};
@@ -2071,7 +2192,8 @@ function void draw_processes(Context *context) {
   // draw processes
   for (Process *p = context->processes.first; p != 0; p = p->next) {
     B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
-    S32 text_width = MeasureText((char *)p->label, font_size);
+    U8 *label_c_string = c_string_from_string_chunk_list(context->temp_arena, &p->label);
+    S32 text_width = MeasureText((char *)label_c_string, font_size);
 
     if (!is_wire) {
       Process_Shape shape = get_process_shape(context, p);
@@ -2109,7 +2231,7 @@ function void draw_processes(Context *context) {
             }
           }
           render_DrawLineBezierCubic(rc, p0, p1, p1, p0, thickness, stroke_color);
-        } else if (!p->label[0]) {
+        } else if (!label_c_string[0]) {
           if (rounded) {
             draw_circular_process(context, shape.center, shape.radius, thickness, invisible_bg_color, invisible_stroke_color);
           } else {
@@ -2168,9 +2290,7 @@ function void draw_processes(Context *context) {
       }
 
       // draw label
-      if (p->label[0]) {
-        const char *text = (char *)p->label;
-        F32 text_width = (F32)MeasureText(text, font_size);
+      if (label_c_string[0]) {
         F32 text_x = shape.center.x-0.5f*text_width;
         F32 text_y = shape.center.y-0.5f*font_size;
         if (shape.kind == Process_Shape_HalfCircle) {
@@ -2179,7 +2299,7 @@ function void draw_processes(Context *context) {
           F32 offset = fudge * flip * (0.5f * shape.radius);
           text_y -= offset;
         }
-        render_DrawText(rc, text, text_x, text_y, font_size, text_color, 0);
+        render_DrawText(rc, (char *)label_c_string, text_x, text_y, font_size, text_color, 0);
       }
 
       // draw new-wire-box
@@ -2325,7 +2445,7 @@ function void draw_info_panel(Context *context) {
   y -= arena_font_size + padding;
   render_DrawText(rc, TextFormat("render arena %llu/%llu\n", context->render_arena->chunk_pos, context->render_arena->chunk_cap), x, y, arena_font_size, text_color, 1);
   y -= arena_font_size + padding;
-  render_DrawText(rc, TextFormat("process arena %llu/%llu\n", context->process_arena->chunk_pos, context->process_arena->chunk_cap), x, y, arena_font_size, text_color, 1);
+  render_DrawText(rc, TextFormat("process arena %llu/%llu\n", context->permanent_arena->chunk_pos, context->permanent_arena->chunk_cap), x, y, arena_font_size, text_color, 1);
   y -= arena_font_size + padding;
 #endif
 }
@@ -2338,7 +2458,7 @@ function Context initialize_context(void) {
   Context context = (Context){0};
 
   context.render_arena = arena_alloc_reserve(Megabytes(1), 0);
-  context.process_arena = arena_alloc_reserve(Megabytes(1), 0);
+  context.permanent_arena = arena_alloc_reserve(Megabytes(1), 0);
   context.temp_arena = arena_alloc_reserve(Megabytes(1), 0);
   context.ui_arena = arena_alloc_reserve(Megabytes(1), 0);
 
@@ -2355,8 +2475,33 @@ function Context initialize_context(void) {
 
 
 
+typedef struct {
+  char *c_string;
+  String_Chunk_List *string_chunk_list;
+} Init_String_Chunk;
 
+function void initialize_global_string_chunk_lists(Context *context) {
+  Init_String_Chunk inits[] = {
+    {"open", &global_open_button_label},
+    {"cancel", &global_cancel_button_label},
+    {"save", &global_save_button_label},
+    {"File", &global_file_button_label},
+  };
 
+  for (S32 i = 0; i < ArrayCount(inits); ++i) {
+    Init_String_Chunk init = inits[i];
+    String_Chunk *sc = push_struct(context->permanent_arena, String_Chunk);
+    SLLQueuePush(init.string_chunk_list->first, init.string_chunk_list->last, sc);
+    S32 char_index = 0;
+    for (;;) {
+      sc->str_array[char_index] = init.c_string[char_index];
+      if (init.c_string[char_index] == 0) {
+        break;
+      }
+      char_index += 1;
+    }
+  }
+}
 
 function void initialize_globals(Context *context) {
   S32 monitor_id = GetCurrentMonitor();
@@ -2382,6 +2527,8 @@ function void initialize_globals(Context *context) {
 
   global_line_thickness = 0.05f*global_shape_size;
   global_active_line_thickness = 0.1f*global_shape_size;
+
+  initialize_global_string_chunk_lists(context);
 
   load_keybinds(context);
 }

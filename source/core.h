@@ -2,6 +2,8 @@
 
 
 
+
+
 #define function static
 #define global_variable static
 #define Kilobytes(n) (1024 * (n))
@@ -14,6 +16,31 @@
 #define Toggle_Flag(flags, flag) ((flags) ^=  (flag))
 
 #define Zero_Struct(type) (type){0}
+
+
+
+//////////////////////////////////////
+// String Chunks
+//////////////////////////////////////
+
+#define String_Chunk_Size 8
+
+typedef struct String_Chunk String_Chunk;
+struct String_Chunk {
+  String_Chunk *next;
+  U8 str_array[String_Chunk_Size];
+};
+
+typedef struct String_Chunk_List String_Chunk_List;
+struct String_Chunk_List {
+  String_Chunk *first;
+  String_Chunk *last;
+  // TODO: Add in node_count and total_size so we don't have to calculate them on use of the list
+  /* U64 node_count; */
+  /* U64 total_size; */
+};
+
+
 
 
 ///////////////////////////////////////
@@ -74,7 +101,27 @@ function void print_string8(String8 string) {
   }
 }
 
+function void print_string8_list(String8List string_list) {
+  for (String8Node *node = string_list.first;
+       node != 0;
+       node = node->next){
+    print_string8(node->string);
+  }
+}
 
+function void print_string_chunk_list(String_Chunk_List list) {
+  for (String_Chunk *chunk = list.first; chunk != 0; chunk = chunk->next) {
+    for (S32 i = 0; i < String_Chunk_Size; ++i) {
+      char c = chunk->str_array[i];
+      if (c == 0) {
+        goto dblbreak;
+      } else {
+        printf("%c", c);
+      }
+    }
+  }
+  dblbreak:;
+}
 
 
 
