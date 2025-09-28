@@ -417,59 +417,6 @@ function B32 rectangle_contains_point(Rectangle r, Vector2 p) {
 }
 
 
-function U8 *c_string_from_string_chunk_list(Arena *arena, String_Chunk_List *scl) {
-  U64 total_size = 0;
-  for (String_Chunk *sc = scl->first; sc != 0; sc = sc->next) {
-    if (sc == scl->last) {
-      S32 char_count = 1;
-      for (;; ++char_count) {
-        if (sc->str_array[char_count-1] == 0) {
-          break;
-        }
-      }
-      total_size += char_count;
-    } else {
-      total_size += String_Chunk_Size;
-    }
-  }
-
-  U8 *c_string;
-
-  if (total_size) {
-    c_string = arena_push_no_zero(arena, total_size);
-    U64 c_string_index = 0;
-
-    for (String_Chunk *sc = scl->first; sc != 0; sc = sc->next) {
-      for (S32 i = 0; i < String_Chunk_Size; ++i) {
-        if (c_string_index > total_size) {
-          printf("[ Error ] creating c-string from string-chunk-list: c_string_index exceeds total size of string-chunk-list.\n");
-          break;
-        }
-
-        c_string[c_string_index] = sc->str_array[i];
-
-        if (c_string[c_string_index] == 0) {
-          break;
-        }
-
-        c_string_index += 1;
-      }
-    }
-  } else {
-    c_string = (U8 *)"";
-  }
-
-  return c_string;
-}
-
-
-function String_Chunk_List string_chunk_list_from_string8(Context *context, String8 string8) {
-  String_Chunk_List list = (String_Chunk_List){0};
-
-  Assert(!"TODO");
-
-  return list;
-}
 
 
 function String_Chunk *create_string_chunk(Context *context) {
@@ -489,6 +436,46 @@ function String_Chunk *create_string_chunk(Context *context) {
 
   return c;
 }
+
+function void free_string_chunk(Context *context, String_Chunk *chunk) {
+  SLLQueuePush(context->free_strings.first, context->free_strings.last, chunk);
+  chunk->next = 0;
+}
+
+
+function String_Chunk_List string_chunk_list_from_string8(Context *context, String8 string8) {
+  String_Chunk_List list = (String_Chunk_List){0};
+
+  U64 remaining_size = string8.size;
+  U64 string8_index = 0;
+
+  for (;;) {
+    if (remaining_size == 0) {
+      break;
+    }
+
+    String_Chunk *chunk = create_string_chunk(context);
+    SLLQueuePush(list.first, list.last, chunk);
+
+    U64 amount_to_write = Min(remaining_size, String_Chunk_Size);
+    remaining_size -= amount_to_write;
+
+    for (S32 i = 0; i < amount_to_write; ++i) {
+      chunk->str_array[i] = string8.str[string8_index];
+      string8_index += 1;
+    }
+  }
+
+  // add null-termination chunk if the last byte is not 0
+  if (list.last && list.last->str_array[String_Chunk_Size-1] != 0) {
+    String_Chunk *chunk = create_string_chunk(context);
+    SLLQueuePush(list.first, list.last, chunk);
+  }
+
+  return list;
+}
+
+
 
 function Process *create_detached_process(Context *context) {
   Process *p = context->free_processes.first;
@@ -717,6 +704,7 @@ function void collect_save_files(Context *context) {
       Process *element = push_struct(uia, Process);
       Set_Flag(element->flags, Process_Flag_Button);
       element->label = string_chunk_list_from_string8(context, file_name);
+      U8 *cstring = c_string_from_string_chunk_list(context->temp_arena, &element->label);
 
       if (element) {
         SLLQueuePush(context->ui_element_list.first, context->ui_element_list.last, element);
@@ -2485,6 +2473,7 @@ function void initialize_global_string_chunk_lists(Context *context) {
     {"open", &global_open_button_label},
     {"cancel", &global_cancel_button_label},
     {"save", &global_save_button_label},
+    {"save as", &global_save_as_button_label},
     {"File", &global_file_button_label},
   };
 

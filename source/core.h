@@ -125,6 +125,88 @@ function void print_string_chunk_list(String_Chunk_List list) {
 
 
 
+function U64 get_total_size_of_string_chunk_list(String_Chunk_List *scl) {
+  // @Speed
+  // get the total size
+  U64 total_size = 0;
+  for (String_Chunk *sc = scl->first; sc != 0; sc = sc->next) {
+    if (sc == scl->last) {
+      S32 char_count = 1;
+      for (;; ++char_count) {
+        if (sc->str_array[char_count-1] == 0) {
+          break;
+        }
+      }
+      total_size += char_count;
+    } else {
+      total_size += String_Chunk_Size;
+    }
+  }
+
+  return total_size;
+}
+
+
+
+function U8 *c_string_from_string_chunk_list(Arena *arena, String_Chunk_List *scl) {
+  U64 total_size = get_total_size_of_string_chunk_list(scl);
+  // add 1 byte for null-terminator
+  total_size += 1;
+
+  U8 *c_string;
+
+  if (total_size) {
+    c_string = arena_push_no_zero(arena, total_size);
+    U64 c_string_index = 0;
+
+    for (String_Chunk *sc = scl->first; sc != 0; sc = sc->next) {
+      for (S32 i = 0; i < String_Chunk_Size; ++i) {
+        if (c_string_index > total_size) {
+          printf("[ Error ] creating c-string from string-chunk-list: c_string_index exceeds total size of string-chunk-list.\n");
+          break;
+        }
+
+        c_string[c_string_index] = sc->str_array[i];
+
+        if (c_string[c_string_index] == 0) {
+          break;
+        }
+
+        c_string_index += 1;
+      }
+    }
+
+    // null-terminate
+    c_string[total_size-1] = 0;
+  } else {
+    c_string = (U8 *)"";
+  }
+
+  return c_string;
+}
+
+function String8 string8_from_string_chunk_list(Arena *arena, String_Chunk_List *scl) {
+  U64 total_size = get_total_size_of_string_chunk_list(scl);
+  // add 1 byte for null-terminator
+  total_size += 1;
+
+  String8 string8;
+  string8.size = total_size;
+  string8.str = arena_push_no_zero(arena, total_size);
+
+  U64 string_index = 0;
+
+  for (String_Chunk *sc = scl->first; sc != 0; sc = sc->next) {
+    for (S32 i = 0; i < String_Chunk_Size; ++i) {
+      string8.str[string_index] = sc->str_array[i];
+      string_index += 1;
+    }
+  }
+
+  return string8;
+}
+
+
 
 /*
   Figure out which "side" of the line "p" is at. This is useful for collision/bounds checking.

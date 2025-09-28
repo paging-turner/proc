@@ -24,32 +24,30 @@ typedef struct {
 //////////////////////////////////////
 // Saves Functions
 //////////////////////////////////////
-function void write_save_file(Context *context, Arena *arena, String_Chunk_List file_name_list);
+function void write_save_file(Context *context, Arena *arena, String_Chunk_List file_name);
 
 
 
 
 
-function void set_as_current_file(Context *context, String_Chunk_List file_name_list) {
-  Assert(!"TODO");
-  /* printf("set_as_current_file %llu\n", file_name_list.total_size); */
-  /* context->current_save_file_name = save_file; */
+function void set_as_current_file(Context *context, String_Chunk_List file_name) {
+  context->save_file_name = file_name;
 }
 
-function void write_save_file(Context *context, Arena *arena, String_Chunk_List file_name_list) {
+function void write_save_file(Context *context, Arena *arena, String_Chunk_List file_name) {
   // save-file sizing
   S32 process_count = 0;
   for (Process *p = context->processes.first; p != 0; p = p->next) {
     process_count += 1;
   }
-  String8 save_file;
-  save_file.size = Save_File_Size(process_count);
-  save_file.str = arena_push(arena, save_file.size);
+  String8 save_file_data;
+  save_file_data.size = Save_File_Size(process_count);
+  save_file_data.str = arena_push(arena, save_file_data.size);
 
-  set_as_current_file(context, file_name_list);
+  set_as_current_file(context, file_name);
 
-  if (save_file.str) {
-    Save_File_Header *header = (Save_File_Header *)save_file.str;
+  if (save_file_data.str) {
+    Save_File_Header *header = (Save_File_Header *)save_file_data.str;
     header->magic_number = Save_File_Magic_Number;
     header->version = Save_File_Version;
     header->process_count = process_count;
@@ -83,7 +81,7 @@ function void write_save_file(Context *context, Arena *arena, String_Chunk_List 
       cold_index += 1;
     }
 
-    Assert(!"TODO: Merge save-file string-list into a c-string and pass to os_file_write");
-    /* os_file_write(file_name, save_file); */
+    String8 file_name_str8 = string8_from_string_chunk_list(context->temp_arena, &file_name);
+    os_file_write(file_name_str8, save_file_data);
   }
 }
