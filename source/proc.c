@@ -522,6 +522,34 @@ function void clear_active_processes(Context *context) {
   context->active_processes.last = 0;
 }
 
+function void remove_process_from_process_list(Context *context, Process_List *list, Process *p) {
+  if (list->first == p) {
+    SLLQueuePop(list->first, list->last);
+  } else {
+    for (Process *test_p = list->first; test_p != 0; test_p = test_p->next) {
+      if (test_p->next == p) {
+        test_p->next = p->next;
+        if (p == list->last) {
+          list->last = test_p;
+        }
+        break;
+      }
+    }
+  }
+
+  SLLQueuePush(context->free_processes.first, context->free_processes.last, p);
+}
+
+function void clear_processes(Context *context) {
+  clear_active_processes(context);
+
+  for (Process *p = context->processes.first; p != 0;) {
+    Process *next_process = p->next;
+    remove_process_from_process_list(context, &context->processes, p);
+    p = next_process;
+  }
+}
+
 
 
 ////////////////////////////////////////
@@ -742,17 +770,56 @@ function void set_menu_state_as_save_file_as(Context *context) {
 }
 
 function void save_file(Context *context) {
-  printf("saving '");
-  print_string_chunk_list(context->save_file_name);
-  printf("'\n");
   write_save_file(context, context->temp_arena, context->save_file_name);
 }
 
 function void open_file_and_replace_processes(Context *context, String_Chunk_List file_name_list) {
+  os_set_current_directory(Saves_Filepath);
   String8 file_name = string8_from_string_chunk_list(context->temp_arena, &file_name_list);
   String8 file_data = os_file_read(context->temp_arena, file_name);
 
-  Assert(!"TODO: Read header and load processes");
+  if (file_data.str && file_data.size > sizeof(Save_File_Header)) {
+    Save_File_Header *header = (Save_File_Header *)file_data.str;
+    if (header->magic_number == Save_File_Magic_Number) {
+      U64 process_array_size = file_data.size - sizeof(Save_File_Header);
+      if (process_array_size == sizeof(Process) * header->process_count) {
+        Process *cold_processes = (Process *)(header + 1);
+        Process *previous_process = 0;
+        clear_processes(context);
+
+        // create new processes
+        for (S32 i = 0; i < header->process_count; ++i) {
+          Process cold_process = cold_processes[i];
+          Process *new_process = create_process(context);
+          *new_process = cold_process;
+
+          if (previous_process) {
+            previous_process->next = new_process;
+          }
+
+          previous_process = new_process;
+        }
+
+        // @Speed
+        // convert cold-indices to pointers
+        for (Process *p = context->processes.first; p != 0; p = p->next) {
+          for (Process *r = context->processes.first; r != 0; r = r->next) {
+            if (IntFromPtr(p->in) == r->cold_index) {
+              p->in = r;
+            }
+
+            if (IntFromPtr(p->out) == r->cold_index) {
+              p->out = r;
+            }
+          }
+        }
+      } else {
+        printf("[ Error ] Mismatched size of process array in save-file. Header says %d processes for a size of %lu, but the actual size is %llu.\n", header->process_count, sizeof(Process) * header->process_count, process_array_size);
+      }
+    }
+  }
+
+  os_set_current_directory(Build_Filepath);
 }
 
 function void handle_open_file(Context *context) {
@@ -980,24 +1047,6 @@ function Process *get_process_wire_by_selection(Context *context, Process_Select
 
 
 
-
-function void remove_process_from_process_list(Context *context, Process_List *list, Process *p) {
-  if (list->first == p) {
-    SLLQueuePop(list->first, list->last);
-  } else {
-    for (Process *test_p = list->first; test_p != 0; test_p = test_p->next) {
-      if (test_p->next == p) {
-        test_p->next = p->next;
-        if (p == list->last) {
-          list->last = test_p;
-        }
-        break;
-      }
-    }
-  }
-
-  SLLQueuePush(context->free_processes.first, context->free_processes.last, p);
-}
 
 function void remove_copy_process_list(Context *context, Process_List *list) {
   // TODO: @Speed can probably do some fancy stuff with just the ends of the list?
