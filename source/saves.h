@@ -35,6 +35,7 @@ function void set_as_current_file(Context *context, String_Chunk_List file_name)
 }
 
 function void write_save_file(Context *context, Arena *arena, String_Chunk_List file_name) {
+  os_set_current_directory(Saves_Filepath);
   // save-file sizing
   S32 process_count = 0;
   for (Process *p = context->processes.first; p != 0; p = p->next) {
@@ -84,4 +85,6 @@ function void write_save_file(Context *context, Arena *arena, String_Chunk_List 
     String8 file_name_str8 = string8_from_string_chunk_list(context->temp_arena, &file_name);
     os_file_write(file_name_str8, save_file_data);
   }
+
+  os_set_current_directory(Build_Filepath);
 }

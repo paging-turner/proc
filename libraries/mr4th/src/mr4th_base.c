@@ -3442,6 +3442,20 @@ os_file_path(Arena *arena, OS_SystemPath path){
   return(result);
 }
 
+MR4TH_SYMBOL String8
+os_get_absolute_path_from_str8_list(Arena *arena, String8List rel_path_parts){
+  String8 result = (String8){0};
+  Assert(!"TODO");
+  return result;
+}
+
+MR4TH_SYMBOL String8
+os_get_absolute_path(Arena *arena, String8 rel_path){
+  String8 result = (String8){0};
+  Assert(!"TODO");
+  return result;
+}
+
 MR4TH_SYMBOL void
 os_set_current_directory(String8 path){
   ArenaTemp scratch = arena_get_scratch(0, 0);
@@ -3741,6 +3755,46 @@ os_memory_release(void *ptr, U64 size){
   munmap(ptr, size);
 }
 
+
+MR4TH_SYMBOL String8
+os_file_read(Arena *arena, String8 file_name){
+  ProfBeginFunc();
+
+  String8 result = {0};
+  S32 fd = open((char *)file_name.str, O_RDONLY);
+
+  if (fd > -1) {
+    B32 success = 1;
+    struct stat file_stats;
+
+    if (fstat(fd, &file_stats) == 0) {
+      U64 total_size = file_stats.st_size;
+      ArenaTemp restore_point = arena_begin_temp(arena);
+      U8 *buffer = arena_push_no_zero(arena, total_size + 1);
+
+      if (buffer) {
+        if (!read(fd, buffer, file_stats.st_size)) {
+          success = 0;
+        }
+      } else {
+        success = 0;
+      }
+
+      if (success){
+        buffer[total_size] = 0;
+        result.str = buffer;
+        result.size = total_size;
+      }
+      else{
+        arena_end_temp(&restore_point);
+      }
+    }
+  }
+
+  ProfEndFunc();
+  return(result);
+}
+
 MR4TH_SYMBOL B32
 os_file_write_list(String8 file_name, String8Node *first_node){
   ProfBeginFunc();
@@ -3772,6 +3826,100 @@ os_file_write_list(String8 file_name, String8Node *first_node){
 
   ProfEndFunc();
   return result;
+}
+
+
+MR4TH_SYMBOL String8
+os_file_path(Arena *arena, OS_SystemPath path){
+  ProfBeginFunc();
+
+  String8 result = {0};
+
+  switch (path){
+    case OS_SystemPath_CurrentDirectory:
+    {
+      S32 cap = PATH_MAX;
+      U8 *buffer = arena_push(arena, cap);
+      char *path_pointer = getcwd((char *)buffer, cap);
+      if (path_pointer) {
+        result.str = (U8 *)path_pointer;
+        // figure out the path size
+        for (S32 i = 0; i < cap; ++i) {
+          if (result.str[i] == 0) {
+            break;
+          }
+          result.size += 1;
+        }
+      }
+    }break;
+
+    case OS_SystemPath_Binary:
+    {
+      Assert(!"TODO");
+      /* result = str8_push_copy(arena, w32_binary_path); */
+    }break;
+
+    case OS_SystemPath_UserData:
+    {
+      Assert(!"TODO");
+      /* result = str8_push_copy(arena, w32_user_path); */
+    }break;
+
+    case OS_SystemPath_TempData:
+    {
+      Assert(!"TODO");
+      /* result = str8_push_copy(arena, w32_temp_path); */
+    }break;
+  }
+
+  ProfEndFunc();
+  return(result);
+}
+
+MR4TH_SYMBOL String8
+os_get_absolute_path_from_str8_list(Arena *arena, String8List rel_path_parts){
+  String8 result = (String8){0};
+  ArenaTemp scratch = arena_get_scratch(0, 0);
+
+  String8Node null_node = (String8Node){0};
+  str8_list_push_explicit(&rel_path_parts, str8_lit("\0"), &null_node);
+  String8 rel_path = str8_join(scratch.arena, &rel_path_parts, 0);
+
+  U8 *abs_path = arena_push(arena, PATH_MAX);
+  char *resolved_path = realpath((char *)rel_path.str, (char *)abs_path);
+
+  if (resolved_path) {
+    result.str = (U8 *)resolved_path;
+    // figure out the path size
+    for (S32 i = 0; i < PATH_MAX; ++i) {
+      if (result.str[i] == 0) {
+        break;
+      }
+      result.size += 1;
+    }
+  }
+
+  arena_release_scratch(&scratch);
+  return result;
+}
+
+MR4TH_SYMBOL String8
+os_get_absolute_path(Arena *arena, String8 rel_path){
+  String8List list;
+  String8Node node;
+  node.next = 0;
+  node.string = rel_path;
+  list.first = &node;
+  list.last = &node;
+  list.node_count = 1;
+  list.total_size = rel_path.size;
+
+  return os_get_absolute_path_from_str8_list(arena, list);
+}
+
+MR4TH_SYMBOL void
+os_set_current_directory(String8 path){
+  chdir((char *)path.str);
 }
 
 

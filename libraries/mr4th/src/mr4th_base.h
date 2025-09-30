@@ -1384,6 +1384,9 @@ MR4TH_SYMBOL void os_file_iter_end(OS_FileIter *iter);
 
 MR4TH_SYMBOL String8 os_file_path(Arena *arena, OS_SystemPath path);
 
+MR4TH_SYMBOL String8 os_get_absolute_path_from_str8_list(Arena *arena, String8List path_parts);
+MR4TH_SYMBOL String8 os_get_absolute_path(Arena *arena, String8 path);
+
 MR4TH_SYMBOL void    os_set_current_directory(String8 path);
 
 ////////////////////////////////
@@ -1507,6 +1510,7 @@ MR4TH_SYMBOL DataAccessFlags   w32_access_from_attributes(DWORD attribs);
 
 #if OS_MAC && !MR4TH_NO_INCLUDES
 
+#include <stdlib.h> // realpath
 #include <fcntl.h> // open
 #include <dlfcn.h> // dlopen, dlsym, etc.
 // TODO: We no longer use "getsectbyname" because we finally introspect mach-o files! I guess we can delete the include and be happy?
@@ -1515,6 +1519,7 @@ MR4TH_SYMBOL DataAccessFlags   w32_access_from_attributes(DWORD attribs);
 #include <dirent.h> // opendir, readdir, closedir
 #include <sys/stat.h> // lstat, stat struct
 #include <unistd.h> // write
+#include <sys/syslimits.h> // PATH_MAX
 
 typedef struct Mac_FileIter{
   String8 base_path;

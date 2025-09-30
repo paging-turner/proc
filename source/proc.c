@@ -109,6 +109,7 @@
 
 global_variable String8 Keybind_Config_Filepath = str8_comptime_lit(".."_"config"_"keybind.txt");
 global_variable String8 Saves_Filepath = str8_comptime_lit(".."_"saves"_);
+global_variable String8 Build_Filepath = str8_comptime_lit(".."_"build"_);
 
 #undef _
 
@@ -195,7 +196,10 @@ struct Process {
 
   Process *to_copied;
 
-  String_Chunk_List label;
+  union {
+    String_Chunk_List label;
+    Cold_String cold_label;
+  };
   U32 label_cursor;
   B32 ignore_label_size;
 };
@@ -744,6 +748,13 @@ function void save_file(Context *context) {
   write_save_file(context, context->temp_arena, context->save_file_name);
 }
 
+function void open_file_and_replace_processes(Context *context, String_Chunk_List file_name_list) {
+  String8 file_name = string8_from_string_chunk_list(context->temp_arena, &file_name_list);
+  String8 file_data = os_file_read(context->temp_arena, file_name);
+
+  Assert(!"TODO: Read header and load processes");
+}
+
 function void handle_open_file(Context *context) {
   Arena *ra = context->render_arena;
   F32 font_size = global_panel_font_size;
@@ -756,7 +767,9 @@ function void handle_open_file(Context *context) {
   // show existing save files
   for (Process *element = context->ui_element_list.first; element; element = element->next) {
     element->position = position;
-    do_button(context, element);
+    if (do_button(context, element)) {
+      open_file_and_replace_processes(context, element->label);
+    }
     position.y += button_height;
   }
 

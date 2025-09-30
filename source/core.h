@@ -40,6 +40,10 @@ struct String_Chunk_List {
   /* U64 total_size; */
 };
 
+typedef struct {
+  U64 size;
+  U64 offset;
+} Cold_String;
 
 
 
