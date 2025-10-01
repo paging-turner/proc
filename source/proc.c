@@ -118,8 +118,11 @@ global_variable String8 Build_Filepath = str8_comptime_lit(".."_"build"_);
 // Forward Declarations
 //////////////////////////////////////
 
+typedef struct Process Process;
 typedef struct Context Context;
-
+function void clear_processes(Context *context);
+function Process *create_process(Context *context);
+function String_Chunk *create_string_chunk(Context *context);
 
 
 
@@ -128,14 +131,13 @@ typedef struct Context Context;
 //////////////////////////////////////
 
 typedef enum {
-  Process_Flag_Wire      = 1 << 0,
-  Process_Flag_Empty     = 1 << 1,
-  Process_Flag_Cup       = 1 << 2,
-  Process_Flag_Cap       = 1 << 3,
-  Process_Flag_Identity  = 1 << 4,
-  Process_Flag_Drag_In   = 1 << 5,
-  Process_Flag_Drag_Out  = 1 << 6,
-
+  Process_Flag_Wire        = 1 << 0,
+  Process_Flag_Empty       = 1 << 1,
+  Process_Flag_Cup         = 1 << 2,
+  Process_Flag_Cap         = 1 << 3,
+  Process_Flag_Identity    = 1 << 4,
+  Process_Flag_Drag_In     = 1 << 5,
+  Process_Flag_Drag_Out    = 1 << 6,
   // UI features
   Process_Flag_Button      = 1 << 7,
   Process_Flag_TextEdit    = 1 << 8,
@@ -160,7 +162,7 @@ typedef enum {
 #undef X
 } Process_Connection_Flag;
 
-typedef struct Process Process;
+
 struct Process {
   B32 flags;
   Vector2 position;
@@ -196,13 +198,11 @@ struct Process {
 
   Process *to_copied;
 
-  union {
-    String_Chunk_List label;
-    Cold_String cold_label;
-  };
+  String_Chunk_List label;
   U32 label_cursor;
   B32 ignore_label_size;
 };
+
 
 typedef enum {
   Process_Selection__Null,
@@ -540,12 +540,26 @@ function void remove_process_from_process_list(Context *context, Process_List *l
   SLLQueuePush(context->free_processes.first, context->free_processes.last, p);
 }
 
+function void remove_string_chunk_list(Context *context, String_Chunk_List *scl) {
+  if (context->free_strings.first && context->free_strings.last) {
+    context->free_strings.last->next = scl->first;
+    context->free_strings.last = scl->last;
+  } else {
+    context->free_strings.first = scl->first;
+    context->free_strings.last = scl->last;
+  }
+}
+
 function void clear_processes(Context *context) {
   clear_active_processes(context);
 
   for (Process *p = context->processes.first; p != 0;) {
     Process *next_process = p->next;
     remove_process_from_process_list(context, &context->processes, p);
+
+    // remove string-chunks
+    remove_string_chunk_list(context, &p->label);
+
     p = next_process;
   }
 }
@@ -771,55 +785,6 @@ function void set_menu_state_as_save_file_as(Context *context) {
 
 function void save_file(Context *context) {
   write_save_file(context, context->temp_arena, context->save_file_name);
-}
-
-function void open_file_and_replace_processes(Context *context, String_Chunk_List file_name_list) {
-  os_set_current_directory(Saves_Filepath);
-  String8 file_name = string8_from_string_chunk_list(context->temp_arena, &file_name_list);
-  String8 file_data = os_file_read(context->temp_arena, file_name);
-
-  if (file_data.str && file_data.size > sizeof(Save_File_Header)) {
-    Save_File_Header *header = (Save_File_Header *)file_data.str;
-    if (header->magic_number == Save_File_Magic_Number) {
-      U64 process_array_size = file_data.size - sizeof(Save_File_Header);
-      if (process_array_size == sizeof(Process) * header->process_count) {
-        Process *cold_processes = (Process *)(header + 1);
-        Process *previous_process = 0;
-        clear_processes(context);
-
-        // create new processes
-        for (S32 i = 0; i < header->process_count; ++i) {
-          Process cold_process = cold_processes[i];
-          Process *new_process = create_process(context);
-          *new_process = cold_process;
-
-          if (previous_process) {
-            previous_process->next = new_process;
-          }
-
-          previous_process = new_process;
-        }
-
-        // @Speed
-        // convert cold-indices to pointers
-        for (Process *p = context->processes.first; p != 0; p = p->next) {
-          for (Process *r = context->processes.first; r != 0; r = r->next) {
-            if (IntFromPtr(p->in) == r->cold_index) {
-              p->in = r;
-            }
-
-            if (IntFromPtr(p->out) == r->cold_index) {
-              p->out = r;
-            }
-          }
-        }
-      } else {
-        printf("[ Error ] Mismatched size of process array in save-file. Header says %d processes for a size of %lu, but the actual size is %llu.\n", header->process_count, sizeof(Process) * header->process_count, process_array_size);
-      }
-    }
-  }
-
-  os_set_current_directory(Build_Filepath);
 }
 
 function void handle_open_file(Context *context) {

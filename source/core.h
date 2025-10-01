@@ -28,6 +28,7 @@
 typedef struct String_Chunk String_Chunk;
 struct String_Chunk {
   String_Chunk *next;
+  U64 cold_index;
   U8 str_array[String_Chunk_Size];
 };
 
