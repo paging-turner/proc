@@ -101,17 +101,9 @@
 //////////////////////////////////////
 // Paths
 //////////////////////////////////////
-#if OS_WINDOWS
-# define _ "\\"
-#else
-# define _ "/"
-#endif
-
-global_variable String8 Keybind_Config_Filepath = str8_comptime_lit(".."_"config"_"keybind.txt");
-global_variable String8 Saves_Filepath = str8_comptime_lit(".."_"saves"_);
-global_variable String8 Build_Filepath = str8_comptime_lit(".."_"build"_);
-
-#undef _
+global_variable String8 Keybind_Config_Filepath;
+global_variable String8 Saves_Filepath;
+global_variable String8 Build_Filepath;
 
 
 //////////////////////////////////////
@@ -391,10 +383,10 @@ global_variable Color global_background_color;
 
 global_variable S32 global_shape_fan_triangle_count = 12;
 
-global_variable Vector2 global_button_padding = (Vector2){12.0f, 5.0f};
-global_variable Color global_button_dormant_bg_color = {90, 70, 90, 255};
-global_variable Color global_button_hot_bg_color = {100, 80, 100, 255};
-global_variable Color global_button_font_color = {220, 220, 160, 255};
+global_variable Vector2 global_button_padding;
+global_variable Color global_button_dormant_bg_color;
+global_variable Color global_button_hot_bg_color;
+global_variable Color global_button_font_color;
 
 global_variable String_Chunk_List global_open_button_label;
 global_variable String_Chunk_List global_save_button_label;
@@ -2543,6 +2535,21 @@ function void initialize_globals(Context *context) {
 
   global_line_thickness = 0.05f*global_shape_size;
   global_active_line_thickness = 0.1f*global_shape_size;
+
+  global_button_padding = (Vector2){12.0f, 5.0f};
+  global_button_dormant_bg_color = (Color){90, 70, 90, 255};
+  global_button_hot_bg_color = (Color){100, 80, 100, 255};
+  global_button_font_color = (Color){220, 220, 160, 255};
+
+#if OS_WINDOWS
+# define _ "\\"
+#else
+# define _ "/"
+#endif
+  Keybind_Config_Filepath = str8_comptime_lit(".."_"config"_"keybind.txt");
+  Saves_Filepath = str8_comptime_lit(".."_"saves"_);
+  Build_Filepath = str8_comptime_lit(".."_"build"_);
+#undef _
 
   initialize_global_string_chunk_lists(context);
 

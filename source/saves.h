@@ -44,7 +44,9 @@ function void set_as_current_file(Context *context, String_Chunk_List file_name)
 }
 
 function void write_save_file(Context *context, Arena *arena, String_Chunk_List file_name) {
+  // TODO: ensure that the Saves_Filepath directory exists before writing a file into it.
   os_set_current_directory(Saves_Filepath);
+
   // save-file sizing and cold-indexing
   U64 process_cold_index = 0;
   U64 string_cold_index = 0;
