@@ -1123,6 +1123,9 @@ function void delete_process(Context *context, Process *p) {
     // remove p from processes
     remove_process_from_process_list(context, &context->processes, p);
 
+    // free string-chunks from label
+    remove_string_chunk_list(context, &p->label);
+
     // check for wires connected to the deleted process, and delete those also
     for (Process *wire = context->processes.first; wire != 0;) {
       B32 in_match = wire->in == p;
