@@ -3828,6 +3828,20 @@ os_file_write_list(String8 file_name, String8Node *first_node){
   return result;
 }
 
+MR4TH_SYMBOL B32
+os_file_make_directory(String8 path){
+  ProfBeginFunc();
+
+  // make directory
+  U32 mode = S_IRWXU | S_IRGRP|S_IXGRP | S_IROTH|S_IXOTH;
+  S32 mkdir_result = mkdir((char *)path.str, mode);
+
+  B32 success = (mkdir_result == 0) ? 1 : 0;
+
+  ProfEndFunc();
+  return(success);
+}
+
 
 MR4TH_SYMBOL String8
 os_file_path(Arena *arena, OS_SystemPath path){

@@ -533,12 +533,14 @@ function void remove_process_from_process_list(Context *context, Process_List *l
 }
 
 function void remove_string_chunk_list(Context *context, String_Chunk_List *scl) {
-  if (context->free_strings.first && context->free_strings.last) {
-    context->free_strings.last->next = scl->first;
-    context->free_strings.last = scl->last;
-  } else {
-    context->free_strings.first = scl->first;
-    context->free_strings.last = scl->last;
+  if (scl->first && scl->last) {
+    if (context->free_strings.first && context->free_strings.last) {
+      context->free_strings.last->next = scl->first;
+      context->free_strings.last = scl->last;
+    } else {
+      context->free_strings.first = scl->first;
+      context->free_strings.last = scl->last;
+    }
   }
 }
 
@@ -564,6 +566,11 @@ function void clear_processes(Context *context) {
 
 function void clear_ui_state(Context *context) {
   context->menu_state = 0;
+
+  // free string-chunks
+  for (Process *e = context->ui_element_list.first; e != 0; e = e->next) {
+    remove_string_chunk_list(context, &e->label);
+  }
 
   context->ui_element_list.first = 0;
   context->ui_element_list.last = 0;
@@ -2452,7 +2459,7 @@ function void draw_info_panel(Context *context) {
   y -= arena_font_size + padding;
   render_DrawText(rc, TextFormat("render arena %llu/%llu\n", context->render_arena->chunk_pos, context->render_arena->chunk_cap), x, y, arena_font_size, text_color, 1);
   y -= arena_font_size + padding;
-  render_DrawText(rc, TextFormat("process arena %llu/%llu\n", context->permanent_arena->chunk_pos, context->permanent_arena->chunk_cap), x, y, arena_font_size, text_color, 1);
+  render_DrawText(rc, TextFormat("permanent arena %llu/%llu\n", context->permanent_arena->chunk_pos, context->permanent_arena->chunk_cap), x, y, arena_font_size, text_color, 1);
   y -= arena_font_size + padding;
 #endif
 }
@@ -2541,6 +2548,7 @@ function void initialize_globals(Context *context) {
   global_button_hot_bg_color = (Color){100, 80, 100, 255};
   global_button_font_color = (Color){220, 220, 160, 255};
 
+  // init common filepaths
 #if OS_WINDOWS
 # define _ "\\"
 #else
@@ -2552,6 +2560,9 @@ function void initialize_globals(Context *context) {
 #undef _
 
   initialize_global_string_chunk_lists(context);
+
+  // ensure saves directory exists
+  os_file_make_directory(Saves_Filepath);
 
   load_keybinds(context);
 }
