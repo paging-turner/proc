@@ -192,7 +192,6 @@ struct Process {
 
   String_Chunk_List label;
   U32 label_cursor;
-  B32 ignore_label_size;
 };
 
 
@@ -636,21 +635,17 @@ function void handle_label_editing(Context *context, Process_List ps) {
 }
 
 
+
 function B32 do_button(Context *context, Process *button) {
   Render_Context *rc = &context->ui_render_context;
   // NOTE: Assumes label is null-terminated for now...
   F32 font_size = global_panel_font_size;
   U8 *label_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &button->label);
-  S32 text_width = MeasureText((char *)label_c_string, font_size);
   Vector2 padding = global_button_padding;
   Color dormant_bg_color = global_button_dormant_bg_color;
   Color hot_bg_color = global_button_hot_bg_color;
   Color font_color = global_button_font_color;
-  Rectangle bg_rect = (Rectangle){button->position.x, button->position.y, (F32)text_width+2.0f*padding.x, font_size+2.0f*padding.y};
-  if (button->ignore_label_size) {
-    bg_rect.width = button->size.x;
-    bg_rect.height = button->size.y;
-  }
+  Rectangle bg_rect = (Rectangle){button->position.x, button->position.y, button->size.x, button->size.y};
   B32 is_hot = 0;
   B32 clicked = 0;
 
@@ -681,8 +676,16 @@ function B32 do_button(Context *context, Process *button) {
 
 function Process *create_button(Arena *arena, Vector2 position, String_Chunk_List label) {
   Process *button = push_struct(arena, Process);
+  Vector2 padding = global_button_padding;
+  F32 font_size = global_panel_font_size;
 
   if (button) {
+    button->label = label;
+    U8 *label_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &button->label);
+    S32 text_width = MeasureText((char *)label_c_string, font_size);
+    button->size.x = text_width + 2.0f*padding.x;
+    button->size.y = font_size + 2.0f*padding.y;
+
     Set_Flag(button->flags, Process_Flag_Button);
     button->position = position;
     button->label = label;
@@ -715,7 +718,6 @@ function void do_dropdown_items(Context *context, Ui_Dropdown_Item *items, S32 i
     Vector2 action_position = (Vector2){position.x, position.y + button_height*(F32)i};
     Process *file_action = create_button(context->temp_arena, action_position, item.name);
     file_action->size = (Vector2){max_text_width, button_height};
-    file_action->ignore_label_size = 1;
     B32 clicked = do_button(context, file_action);
     if (clicked) {
       context->menu_state = 0;
@@ -746,10 +748,8 @@ function void collect_save_files(Context *context) {
   OS_FileIter file_iter = os_file_iter_init(Saves_Filepath);
   while(os_file_iter_next(uia, &file_iter, &file_name, &file_props)) {
     if (!Get_Flag(file_props.flags, FilePropertyFlag_IsFolder)) {
-      Process *element = push_struct(uia, Process);
-      Set_Flag(element->flags, Process_Flag_Button);
-      element->label = string_chunk_list_from_string8(context, file_name);
-      U8 *cstring = c_string_from_string_chunk_list(context->temp_arena, &element->label);
+      String_Chunk_List label = string_chunk_list_from_string8(context, file_name);
+      Process *element = create_button(uia, (Vector2){0}, label);
 
       if (element) {
         SLLQueuePush(context->ui_element_list.first, context->ui_element_list.last, element);
@@ -776,7 +776,6 @@ function void set_menu_state_as_save_file_as(Context *context) {
   if (text_input) {
     // setup text input element
     Set_Flag(text_input->flags, Process_Flag_TextEdit|Process_Flag_CanBeActive);
-    text_input->ignore_label_size = 1;
     text_input->size = (Vector2){300.0f, input_height};
     SLLQueuePushFront(context->ui_element_list.first, context->ui_element_list.last, text_input);
   }
