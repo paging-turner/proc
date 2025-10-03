@@ -386,6 +386,7 @@ global_variable Vector2 global_button_padding;
 global_variable Color global_button_dormant_bg_color;
 global_variable Color global_button_hot_bg_color;
 global_variable Color global_button_font_color;
+global_variable Color global_container_bg_color;
 
 global_variable String_Chunk_List global_open_button_label;
 global_variable String_Chunk_List global_save_button_label;
@@ -786,7 +787,6 @@ function void save_file(Context *context) {
 }
 
 function void handle_open_file(Context *context) {
-  Arena *ra = context->render_arena;
   F32 font_size = global_panel_font_size;
   Vector2 size = (Vector2){ 400.0f, 300.0f };
   Vector2 position = Vector2Scale(Vector2Subtract(global_window_size, size), 0.5f);
@@ -810,31 +810,57 @@ function void handle_open_file(Context *context) {
 }
 
 function void handle_save_file_as(Context *context) {
-  Arena *ra = context->render_arena;
+  Render_Context *uirc = &context->ui_render_context;
+
+  Vector2 padding = global_button_padding;
   F32 font_size = global_panel_font_size;
-  Vector2 size = (Vector2){ 400.0f, 300.0f };
-  Vector2 position = Vector2Scale(Vector2Subtract(global_window_size, size), 0.5f);
+  F32 button_height = 2.0f*padding.y + global_panel_font_size;
+
   Color dormant_bg_color = global_button_dormant_bg_color;
   Color font_color = global_button_font_color;
-  F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
 
+  Vector2 min_container_size = (Vector2){400.0f, 300.0f};
+  Vector2 size = Vector2Min(min_container_size,
+                            Vector2Scale(global_window_size, 0.5));
+  Vector2 position = Vector2Scale(Vector2Subtract(global_window_size, size), 0.5f);
+  Vector2 button_position = Vector2Add(position, size);
+  button_position.y -= button_height;
+
+  // draw container
+  F32 container_padding = 6.0f;
+  Rectangle bg_rect = (Rectangle){position.x-container_padding,
+                                  position.y-container_padding,
+                                  size.x + 2.0f*container_padding,
+                                  size.y + 2.0f*container_padding};
+  render_DrawRectangle(uirc, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, global_container_bg_color);
+
+  // file-name element
   Process *file_name_element = context->ui_element_list.first;
+  file_name_element->position = position;
+  do_button(context, file_name_element);
+  position.y += button_height + padding.y;
 
-  // show existing save files
-  for (Process *element = context->ui_element_list.first; element; element = element->next) {
-    element->position = position;
-    do_button(context, element);
-    position.y += button_height;
+  if (context->ui_element_list.first) {
+    // show existing save files
+    for (Process *element = context->ui_element_list.first->next; element; element = element->next) {
+      element->position = position;
+      do_button(context, element);
+      position.y += button_height;
+    }
   }
 
-  Process *cancel_button = create_button(context->temp_arena, position, global_cancel_button_label);
-  position.y += button_height;
-  Process *save_button = create_button(context->temp_arena, position, global_save_button_label);
+  // setup save/cancel buttons
+  Process *save_button = create_button(context->temp_arena, button_position, global_save_button_label);
+  save_button->position.x -= save_button->size.x;
+  button_position.x -= save_button->size.x + padding.x;
+  Process *cancel_button = create_button(context->temp_arena, button_position, global_cancel_button_label);
+  cancel_button->position.x -= cancel_button->size.x;
 
+  // handle save/cancel buttons
   if (do_button(context, cancel_button)) {
     clear_ui_state(context);
   } else if (do_button(context, save_button)) {
-    if (file_name_element) {
+    if (file_name_element && file_name_element->label.first) {
       write_save_file(context, context->temp_arena, file_name_element->label);
     }
     clear_ui_state(context);
@@ -2549,6 +2575,8 @@ function void initialize_globals(Context *context) {
   global_button_dormant_bg_color = (Color){90, 70, 90, 255};
   global_button_hot_bg_color = (Color){100, 80, 100, 255};
   global_button_font_color = (Color){220, 220, 160, 255};
+  global_container_bg_color = (Color){170, 170, 170, 255};
+
 
   // init common filepaths
 #if OS_WINDOWS
