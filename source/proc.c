@@ -544,6 +544,20 @@ function void remove_string_chunk_list(Context *context, String_Chunk_List *scl)
   }
 }
 
+function String_Chunk_List copy_string_chunk_list(Context *context, String_Chunk_List *scl) {
+  String_Chunk_List result = (String_Chunk_List){0};
+
+  for (String_Chunk *sc = scl->first; sc != 0; sc = sc->next) {
+    String_Chunk *new_sc = create_string_chunk(context);
+    if (new_sc) {
+      *new_sc = *sc;
+      SLLQueuePush(result.first, result.last, new_sc);
+    }
+  }
+
+  return result;
+}
+
 function void clear_processes(Context *context) {
   clear_active_processes(context);
 
@@ -728,6 +742,31 @@ function void do_dropdown_items(Context *context, Ui_Dropdown_Item *items, S32 i
 }
 
 
+function Process *do_button_list(Context *context, Process_List *buttons, Rectangle rect) {
+  // NOTE: For now, this only does vertical buttons.
+  // TODO: Allow caller to specify horizontal/vertical listing.
+  // TODO: Clip buttons to rect, and allow for scrolling.
+  Process *clicked_button = 0;
+
+  Vector2 padding = global_button_padding;
+  F32 font_size = global_panel_font_size;
+  F32 button_height = 2.5f*padding.y + global_panel_font_size;
+
+  Vector2 position = (Vector2){rect.x, rect.y};
+
+  // show existing save files
+  for (Process *element = buttons->first; element; element = element->next) {
+    element->position = position;
+    if (do_button(context, element)) {
+      clicked_button = element;
+    }
+    position.y += button_height;
+  }
+
+  return clicked_button;
+}
+
+
 
 
 
@@ -794,13 +833,10 @@ function void handle_open_file(Context *context) {
   Color font_color = global_button_font_color;
   F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
 
-  // show existing save files
-  for (Process *element = context->ui_element_list.first; element; element = element->next) {
-    element->position = position;
-    if (do_button(context, element)) {
-      open_file_and_replace_processes(context, element->label);
-    }
-    position.y += button_height;
+  Rectangle button_list_rect = (Rectangle){ position.x, position.y, size.x, size.y};
+  Process *clicked_button = do_button_list(context, &context->ui_element_list, button_list_rect);
+  if (clicked_button) {
+    open_file_and_replace_processes(context, clicked_button->label);
   }
 
   // TODO: replace this with handling of input, or detect if the user has clicked "away"
@@ -840,12 +876,19 @@ function void handle_save_file_as(Context *context) {
   do_button(context, file_name_element);
   position.y += button_height + padding.y;
 
+  // show existing save files
   if (context->ui_element_list.first) {
-    // show existing save files
-    for (Process *element = context->ui_element_list.first->next; element; element = element->next) {
-      element->position = position;
-      do_button(context, element);
-      position.y += button_height;
+    F32 button_list_height = size.y - 2.0f*button_height;
+    Rectangle button_list_rect = (Rectangle){ position.x, position.y, size.x, button_list_height};
+    Process_List list;
+    list.first = context->ui_element_list.first->next;
+    list.last = context->ui_element_list.last;
+    Process *clicked_button = do_button_list(context, &list, button_list_rect);
+    // set save-as name as the clicked name
+    if (clicked_button) {
+      remove_string_chunk_list(context, &file_name_element->label);
+      String_Chunk_List new_label = copy_string_chunk_list(context, &clicked_button->label);
+      file_name_element->label = new_label;
     }
   }
 
