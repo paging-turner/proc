@@ -705,6 +705,26 @@ function void handle_label_editing(Context *context, Process_List ps) {
 
 
 
+function Vector2 get_ui_element_size(Context *context, Process *element, B32 fit_to_text) {
+  Vector2 size = element->size;
+  U8 *label_c_string = 0;
+  F32 font_size = global_panel_font_size;
+  Vector2 padding = global_button_padding;
+
+  if (element->label.first && element->label.last) {
+    label_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &element->label);
+  }
+
+  if (fit_to_text) {
+    size.x = (F32)MeasureText((char *)label_c_string, font_size) + 2.0f*padding.x;
+    size.y = font_size + 2.0f*padding.y;
+  }
+
+  return size;
+}
+
+
+
 function B32 do_ui_element(Context *context, Process *element) {
   Render_Context *rc = &context->ui_render_context;
 
@@ -718,14 +738,13 @@ function B32 do_ui_element(Context *context, Process *element) {
   B32 is_hot = 0;
   B32 clicked = 0;
 
+  // TODO: @Speed This also gets called when calling get_ui_element_size
   if (element->label.first && element->label.last) {
     label_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &element->label);
   }
 
-  if (Get_Flag(element->flags, Process_Flag_FitToText)) {
-    element->size.x = (F32)MeasureText((char *)label_c_string, font_size) + 2.0f*padding.x;
-    element->size.y = font_size + 2.0f*padding.y;
-  }
+  B32 fit_to_text = Get_Flag(element->flags, Process_Flag_FitToText);
+  element->size = get_ui_element_size(context, element, fit_to_text);
 
   Rectangle bg_rect = (Rectangle){element->position.x, element->position.y, element->size.x, element->size.y};
 
@@ -1975,10 +1994,42 @@ function void toggle_open_ui_element(Context *context, Process *ie) {
   Toggle_Flag(ie->flags, Process_Flag_IsOpen);
 }
 
+function Vector2 get_parent_element_size(Context *context, Process *parent_element) {
+  // @Copypasta   v-------------------v
+  Vector2 size = (Vector2){0.0f, 0.0f};
+
+  for (Process *e = parent_element; e != 0; e = e->in) {
+    Vector2 e_size = get_ui_element_size(context, e, 1);
+
+    size.x = Max(size.x, e_size.x);
+    size.y = Max(size.y, e_size.y);
+  }
+
+  return size;
+}
+
+function Vector2 get_container_size(Context *context, Process *first_sub_element) {
+  // @Copypasta   ^-------------------^
+  Vector2 size = (Vector2){0.0f, 0.0f};
+
+  for (Process *e = first_sub_element; e != 0; e = e->next) {
+    Vector2 e_size = get_ui_element_size(context, e, 1);
+
+    size.x = Max(size.x, e_size.x);
+    size.y = Max(size.y, e_size.y);
+
+    if (Get_Flag(e->flags, Process_Flag_ContainerEnd)) {
+      break;
+    }
+  }
+
+  return size;
+}
 
 
 function void handle_ui(Context *context) {
   Vector2 position = (Vector2){0.0f, 0.0f};
+  Vector2 size = (Vector2){0.0f, 0.0f};
   Process *container = context->ui_stack.first;
 
   for (Process *b = context->ui_elements.first; b != 0; b = b->next) {
@@ -1987,6 +2038,7 @@ function void handle_ui(Context *context) {
       container = b;
       position = container->position;
       SLLQueuePushFront_NZ(context->ui_stack.first, context->ui_stack.last, container, in, 0);
+      size = get_container_size(context, container);
     } else if (Get_Flag(b->flags, Process_Flag_ContainerEnd)) {
       // ui-stack pop
       container = context->ui_stack.first;
@@ -1994,6 +2046,7 @@ function void handle_ui(Context *context) {
       SLLQueuePop_NZ(context->ui_stack.first, context->ui_stack.last, in, 0);
     } else {
       b->position = position;
+      b->size = size;
 
       // handle element interaction
       if (do_ui_element(context, b) && b->func) {
@@ -2003,6 +2056,8 @@ function void handle_ui(Context *context) {
       // handle nested ui elements
       if (Get_Flag(b->flags, Process_Flag_IsOpen)) {
         Vector2 sub_position = (Vector2){position.x, position.y+b->size.y};
+        Vector2 sub_size = get_parent_element_size(context, b);
+
         if (Get_Flag(b->flags, Process_Flag_Horizontal)) {
           sub_position = (Vector2){position.x+b->size.x, position.y};
         }
@@ -2010,6 +2065,7 @@ function void handle_ui(Context *context) {
         // handle sub-elements
         for (Process *sb = b->in; sb != 0; sb = sb->in) {
           sb->position = sub_position;
+          sb->size = sub_size;
 
           // handle sub-element interaction
           if (do_ui_element(context, sb) && sb->func) {
@@ -2859,12 +2915,15 @@ function void initialize_ui(Context *context) {
       Process *file_sub_button = file_button;
       // open
       Process *open_button = create_menu_button(context, str8_lit("Open..."));
+      Unset_Flag(open_button->flags, Process_Flag_FitToText);
       file_sub_button = file_sub_button->in = open_button;
       // save
       Process *save_button = create_menu_button(context, str8_lit("Save"));
+      Unset_Flag(save_button->flags, Process_Flag_FitToText);
       file_sub_button = file_sub_button->in = save_button;
       // save as
       Process *save_as_button = create_menu_button(context, str8_lit("Save As..."));
+      Unset_Flag(save_as_button->flags, Process_Flag_FitToText);
       file_sub_button = file_sub_button->in = save_as_button;
     }
 
@@ -2876,9 +2935,11 @@ function void initialize_ui(Context *context) {
       Process *edit_sub_button = edit_button;
       // copy
       Process *copy_button = create_menu_button(context, str8_lit("Copy"));
+      Unset_Flag(copy_button->flags, Process_Flag_FitToText);
       edit_sub_button = edit_sub_button->in = copy_button;
       // paste
       Process *paste_button = create_menu_button(context, str8_lit("Paste"));
+      Unset_Flag(paste_button->flags, Process_Flag_FitToText);
       edit_sub_button = edit_sub_button->in = paste_button;
     }
   }
