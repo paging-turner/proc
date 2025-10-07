@@ -152,7 +152,6 @@ function U64 get_total_size_of_string_chunk_list(String_Chunk_List *scl) {
 }
 
 
-
 function U8 *c_string_from_string_chunk_list(Arena *arena, String_Chunk_List *scl) {
   U64 total_size = get_total_size_of_string_chunk_list(scl);
   // add 1 byte for null-terminator
@@ -189,6 +188,7 @@ function U8 *c_string_from_string_chunk_list(Arena *arena, String_Chunk_List *sc
 
   return c_string;
 }
+
 
 function String8 string8_from_string_chunk_list(Arena *arena, String_Chunk_List *scl) {
   U64 total_size = get_total_size_of_string_chunk_list(scl);

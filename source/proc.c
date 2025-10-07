@@ -131,9 +131,15 @@ typedef enum {
   Process_Flag_Drag_In     = 1 << 5,
   Process_Flag_Drag_Out    = 1 << 6,
   // UI features
-  Process_Flag_Button      = 1 << 7,
-  Process_Flag_TextEdit    = 1 << 8,
-  Process_Flag_CanBeActive = 1 << 9,
+  /* Process_Flag_Button         = 1 << 7, */
+  /* Process_Flag_ContainerBegin = 1 << 8, */
+  /* Process_Flag_ContainerEnd   = 1 << 9, */
+  Process_Flag_TextEdit       = 1 << 7,
+  Process_Flag_CanBeActive    = 1 << 8,
+  Process_Flag_ScrollY        = 1 << 9,
+  Process_Flag_Clickable      = 1 << 10,
+  Process_Flag_Horizontal     = 1 << 11,
+  Process_Flag_FitToText      = 1 << 12,
 } Process_Flag;
 
 #define Process_Connection_Xlist\
@@ -236,8 +242,6 @@ typedef struct {
 } Ui_Dropdown_Item;
 
 
-
-
 //////////////////////////////////////
 // Context
 //////////////////////////////////////
@@ -278,11 +282,13 @@ struct Context {
   Arena *permanent_arena;
   Arena *ui_arena;
   Arena *temp_arena;
+  Arena *per_frame_arena;
 
   U32 flags;
 
   Process_List processes;
   Process_List free_processes;
+  Process_List free_ui_elements;
   String_Chunk_List free_strings;
 
   Process *hot_process;
@@ -290,7 +296,9 @@ struct Context {
 
   Process_List copy_processes;
 
-  Process_List ui_element_list;
+  Process_List save_file_list;
+  /* Process_List per_frame_ui_elements; */
+  Process_List ui_elements;
 
   Render_Context ui_render_context;
   Render_Context process_render_context;
@@ -472,6 +480,30 @@ function String_Chunk_List string_chunk_list_from_string8(Context *context, Stri
 }
 
 
+function void free_ui_element(Context *context, Process *e) {
+  SLLQueuePush(context->free_ui_elements.first, context->free_ui_elements.last, e);
+  e->next = 0;
+}
+
+function Process *create_ui_element(Context *context) {
+  Process *e = context->free_ui_elements.first;
+
+  if (e) {
+    SLLQueuePop(context->free_ui_elements.first, context->free_ui_elements.last);
+  } else {
+    e = push_struct(context->permanent_arena, Process);
+  }
+
+  if (e) {
+    *e = (Process){0};
+  } else {
+    e = The_Null_Process();
+  }
+
+  return e;
+}
+
+
 
 function Process *create_detached_process(Context *context) {
   Process *p = context->free_processes.first;
@@ -544,6 +576,24 @@ function void remove_string_chunk_list(Context *context, String_Chunk_List *scl)
   }
 }
 
+function void free_ui_element_list(Context *context, Process_List *l) {
+  // free the string-chunks
+  for (Process *e = l->first; e != 0; e = e->next) {
+    remove_string_chunk_list(context, &e->label);
+  }
+
+  // free the element-list
+  if (l->first && l->last) {
+    if (context->free_ui_elements.first && context->free_ui_elements.last) {
+      context->free_ui_elements.last->next = l->first;
+      context->free_ui_elements.last = l->last;
+    } else {
+      context->free_ui_elements.first = l->first;
+      context->free_ui_elements.last = l->last;
+    }
+  }
+}
+
 function String_Chunk_List copy_string_chunk_list(Context *context, String_Chunk_List *scl) {
   String_Chunk_List result = (String_Chunk_List){0};
 
@@ -582,15 +632,16 @@ function void clear_ui_state(Context *context) {
   context->menu_state = 0;
 
   // free string-chunks
-  for (Process *e = context->ui_element_list.first; e != 0; e = e->next) {
+  for (Process *e = context->save_file_list.first; e != 0; e = e->next) {
     remove_string_chunk_list(context, &e->label);
   }
 
-  context->ui_element_list.first = 0;
-  context->ui_element_list.last = 0;
+  context->save_file_list.first = 0;
+  context->save_file_list.last = 0;
 
   arena_pop_to(context->ui_arena, 0);
 }
+
 
 function void handle_label_editing(Context *context, Process_List ps) {
   U32 key = 0;
@@ -651,20 +702,32 @@ function void handle_label_editing(Context *context, Process_List ps) {
 
 
 
-function B32 do_button(Context *context, Process *button) {
+function B32 do_ui_element(Context *context, Process *element) {
   Render_Context *rc = &context->ui_render_context;
-  // NOTE: Assumes label is null-terminated for now...
+
   F32 font_size = global_panel_font_size;
-  U8 *label_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &button->label);
   Vector2 padding = global_button_padding;
   Color dormant_bg_color = global_button_dormant_bg_color;
   Color hot_bg_color = global_button_hot_bg_color;
   Color font_color = global_button_font_color;
-  Rectangle bg_rect = (Rectangle){button->position.x, button->position.y, button->size.x, button->size.y};
+
+  U8 *label_c_string = 0;
   B32 is_hot = 0;
   B32 clicked = 0;
 
-  if (!context->ui_state.action_occured &&
+  if (element->label.first && element->label.last) {
+    label_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &element->label);
+  }
+
+  if (Get_Flag(element->flags, Process_Flag_FitToText)) {
+    element->size.x = (F32)MeasureText((char *)label_c_string, font_size) + 2.0f*padding.x;
+    element->size.y = font_size + 2.0f*padding.y;
+  }
+
+  Rectangle bg_rect = (Rectangle){element->position.x, element->position.y, element->size.x, element->size.y};
+
+  if (Get_Flag(element->flags, Process_Flag_Clickable) &&
+      !context->ui_state.action_occured &&
       rectangle_contains_point(bg_rect, context->mouse_position)) {
     context->hot_process = 0;
     is_hot = 1;
@@ -672,9 +735,9 @@ function B32 do_button(Context *context, Process *button) {
     if (IsMouseButtonPressed(0)) {
       clicked = 1;
       context->ui_state.action_occured = 1;
-      if (Get_Flag(button->flags, Process_Flag_CanBeActive)) {
+      if (Get_Flag(element->flags, Process_Flag_CanBeActive)) {
         clear_active_processes(context);
-        SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, button, next_active, 0);
+        SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, element, next_active, 0);
       }
     }
   }
@@ -682,8 +745,11 @@ function B32 do_button(Context *context, Process *button) {
   Color bg_color = is_hot ? hot_bg_color : dormant_bg_color;
 
   render_DrawRectangle(rc, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, bg_color);
-  render_DrawText(rc, (char *)label_c_string, button->position.x+padding.x+1.0f, button->position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
-  render_DrawText(rc, (char *)label_c_string, button->position.x+padding.x, button->position.y+padding.y, font_size, font_color, 0);
+
+  if (label_c_string) {
+    render_DrawText(rc, (char *)label_c_string, element->position.x+padding.x+1.0f, element->position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
+    render_DrawText(rc, (char *)label_c_string, element->position.x+padding.x, element->position.y+padding.y, font_size, font_color, 0);
+  }
 
   return clicked;
 }
@@ -701,7 +767,7 @@ function Process *create_button(Arena *arena, Vector2 position, String_Chunk_Lis
     button->size.x = text_width + 2.0f*padding.x;
     button->size.y = font_size + 2.0f*padding.y;
 
-    Set_Flag(button->flags, Process_Flag_Button);
+    Set_Flag(button->flags, Process_Flag_Clickable);
     button->position = position;
     button->label = label;
   }
@@ -733,7 +799,8 @@ function void do_dropdown_items(Context *context, Ui_Dropdown_Item *items, S32 i
     Vector2 action_position = (Vector2){position.x, position.y + button_height*(F32)i};
     Process *file_action = create_button(context->temp_arena, action_position, item.name);
     file_action->size = (Vector2){max_text_width, button_height};
-    B32 clicked = do_button(context, file_action);
+
+    B32 clicked = do_ui_element(context, file_action);
     if (clicked) {
       context->menu_state = 0;
       item.func(context);
@@ -753,11 +820,16 @@ function Process *do_button_list(Context *context, Process_List *buttons, Rectan
   F32 button_height = 2.5f*padding.y + global_panel_font_size;
 
   Vector2 position = (Vector2){rect.x, rect.y};
+  F32 total_height = 0.0f;
 
   // show existing save files
   for (Process *element = buttons->first; element; element = element->next) {
+    total_height += button_height;
+    if (total_height > rect.height) {
+      break;
+    }
     element->position = position;
-    if (do_button(context, element)) {
+    if (do_ui_element(context, element)) {
       clicked_button = element;
     }
     position.y += button_height;
@@ -775,12 +847,9 @@ function Process *do_button_list(Context *context, Process_List *buttons, Rectan
 // File actions
 ////////////////////////////////////////
 
-function void collect_save_files(Context *context) {
+function S32 collect_save_files(Context *context) {
   Arena *uia = context->ui_arena;
-
-  // clear old potentially old ui-element-list
-  context->ui_element_list.first = 0;
-  context->ui_element_list.last = 0;
+  S32 save_file_count = 0;
 
   // gather the current files in the "saves" folder
   FileProperties file_props = Zero_Struct(FileProperties);
@@ -792,40 +861,69 @@ function void collect_save_files(Context *context) {
       Process *element = create_button(uia, (Vector2){0}, label);
 
       if (element) {
-        SLLQueuePush(context->ui_element_list.first, context->ui_element_list.last, element);
+        SLLQueuePush(context->save_file_list.first, context->save_file_list.last, element);
+        save_file_count += 1;
       }
     }
   }
+
+  return save_file_count;
 }
 
+
 function void set_menu_state_as_open_file(Context *context) {
+#if 0
   context->menu_state = Menu_State_OpenFile;
 
   collect_save_files(context);
+#endif
 }
 
-function void set_menu_state_as_save_file_as(Context *context) {
-  context->menu_state = Menu_State_SaveFileAs;
 
-  collect_save_files(context);
+function void set_menu_state_as_save_file_as(Context *context) {
+#if 0
+  context->menu_state = Menu_State_SaveFileAs;
 
   F32 input_height = 2.0f*global_button_padding.y + global_panel_font_size;
 
+  // file-name input element
   String_Chunk_List empty_text = Zero_Struct(String_Chunk_List);
   Process *text_input = create_button(context->ui_arena, (Vector2){0}, empty_text);
   if (text_input) {
     // setup text input element
     Set_Flag(text_input->flags, Process_Flag_TextEdit|Process_Flag_CanBeActive);
     text_input->size = (Vector2){300.0f, input_height};
-    SLLQueuePushFront(context->ui_element_list.first, context->ui_element_list.last, text_input);
+    SLLQueuePush(context->save_file_list.first, context->save_file_list.last, text_input);
   }
+
+  // begin save-file container
+  Process *container_begin = push_struct(context->ui_arena, Process);
+  if (container_begin) {
+    container_begin->size = (Vector2){500.0f, 300.0f};
+    Set_Flag(container_begin->flags, Process_Flag_ContainerBegin|Process_Flag_ScrollY);
+    SLLQueuePush(context->save_file_list.first, context->save_file_list.last, container_begin);
+  }
+
+  // push save-files
+  collect_save_files(context);
+
+  // end save-file container
+  Process *container_end = push_struct(context->ui_arena, Process);
+  if (container_end) {
+    Set_Flag(container_end->flags, Process_Flag_ContainerEnd);
+    SLLQueuePush(context->save_file_list.first, context->save_file_list.last, container_end);
+  }
+#endif
 }
+
 
 function void save_file(Context *context) {
   write_save_file(context, context->temp_arena, context->save_file_name);
 }
 
+
 function void handle_open_file(Context *context) {
+#if 0
   F32 font_size = global_panel_font_size;
   Vector2 size = (Vector2){ 400.0f, 300.0f };
   Vector2 position = Vector2Scale(Vector2Subtract(global_window_size, size), 0.5f);
@@ -834,7 +932,7 @@ function void handle_open_file(Context *context) {
   F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
 
   Rectangle button_list_rect = (Rectangle){ position.x, position.y, size.x, size.y};
-  Process *clicked_button = do_button_list(context, &context->ui_element_list, button_list_rect);
+  Process *clicked_button = do_button_list(context, &context->save_file_list, button_list_rect);
   if (clicked_button) {
     open_file_and_replace_processes(context, clicked_button->label);
   }
@@ -843,9 +941,12 @@ function void handle_open_file(Context *context) {
   if (IsMouseButtonPressed(0)) {
     clear_ui_state(context);
   }
+#endif
 }
 
+
 function void handle_save_file_as(Context *context) {
+#if 0
   Render_Context *uirc = &context->ui_render_context;
 
   Vector2 padding = global_button_padding;
@@ -863,27 +964,34 @@ function void handle_save_file_as(Context *context) {
   button_position.y -= button_height;
 
   // draw container
+  // TODO: Create some kind of container ui-element to handle this ui processing.
   F32 container_padding = 6.0f;
   Rectangle bg_rect = (Rectangle){position.x-container_padding,
                                   position.y-container_padding,
                                   size.x + 2.0f*container_padding,
                                   size.y + 2.0f*container_padding};
   render_DrawRectangle(uirc, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, global_container_bg_color);
+  if (rectangle_contains_point(bg_rect, context->mouse_position)) {
+    context->ui_state.hot_id_assigned = 1;
+    context->hot_process = 0;
+  }
 
   // file-name element
-  Process *file_name_element = context->ui_element_list.first;
+  Process *file_name_element = context->save_file_list.first;
   file_name_element->position = position;
-  do_button(context, file_name_element);
+  do_ui_element(context, file_name_element);
   position.y += button_height + padding.y;
 
   // show existing save files
-  if (context->ui_element_list.first) {
+  if (context->save_file_list.first) {
     F32 button_list_height = size.y - 2.0f*button_height;
     Rectangle button_list_rect = (Rectangle){ position.x, position.y, size.x, button_list_height};
     Process_List list;
-    list.first = context->ui_element_list.first->next;
-    list.last = context->ui_element_list.last;
+    list.first = context->save_file_list.first->next;
+    list.last = context->save_file_list.last;
+
     Process *clicked_button = do_button_list(context, &list, button_list_rect);
+
     // set save-as name as the clicked name
     if (clicked_button) {
       remove_string_chunk_list(context, &file_name_element->label);
@@ -900,9 +1008,9 @@ function void handle_save_file_as(Context *context) {
   cancel_button->position.x -= cancel_button->size.x;
 
   // handle save/cancel buttons
-  if (do_button(context, cancel_button)) {
+  if (do_ui_element(context, cancel_button)) {
     clear_ui_state(context);
-  } else if (do_button(context, save_button)) {
+  } else if (do_ui_element(context, save_button)) {
     if (file_name_element && file_name_element->label.first) {
       write_save_file(context, context->temp_arena, file_name_element->label);
     }
@@ -913,6 +1021,7 @@ function void handle_save_file_as(Context *context) {
   if (IsKeyPressed(KEY_ESCAPE)) {
     clear_ui_state(context);
   }
+#endif
 }
 
 
@@ -1705,33 +1814,19 @@ get_process_selection(Context *context, Process *p) {
   Process_Shape shape = get_process_shape(context, p);
   Rectangle new_wire_box = get_new_wire_box(context, p, shape);
 
-  if (rectangle_contains_point(new_wire_box, context->mouse_position)) {
-    // check new-wire-box
-    selection.type = Process_Selection_NewWire;
-    context->hot_process = p;
-    selection.hot_id_assigned = 1;
-  } else {
-    // check in wire-boxes
-    for (U32 i = 0; i < p->in_count; ++i) {
-      Vector2 in_position = get_process_wire_position(context, p, shape, Process_Connection_In, i);
-      Rectangle r = get_wire_box(context, in_position);
-      if (rectangle_contains_point(r, context->mouse_position)) {
-        selection.type = Process_Selection_In;
-        selection.index = i;
-        Process *wire = get_process_wire_by_selection(context, selection);
-        context->hot_process = wire;
-        selection.hot_id_assigned = 1;
-        break;
-      }
-    }
-
-    if (selection.type == 0) {
-      // check out wire-boxes
-      for (U32 i = 0; i < p->out_count; ++i) {
-        Vector2 out_position = get_process_wire_position(context, p, shape, Process_Connection_Out, i);
-        Rectangle r = get_wire_box(context, out_position);
+  if (!context->ui_state.hot_id_assigned) {
+    if (rectangle_contains_point(new_wire_box, context->mouse_position)) {
+      // check new-wire-box
+      selection.type = Process_Selection_NewWire;
+      context->hot_process = p;
+      selection.hot_id_assigned = 1;
+    } else {
+      // check in wire-boxes
+      for (U32 i = 0; i < p->in_count; ++i) {
+        Vector2 in_position = get_process_wire_position(context, p, shape, Process_Connection_In, i);
+        Rectangle r = get_wire_box(context, in_position);
         if (rectangle_contains_point(r, context->mouse_position)) {
-          selection.type = Process_Selection_Out;
+          selection.type = Process_Selection_In;
           selection.index = i;
           Process *wire = get_process_wire_by_selection(context, selection);
           context->hot_process = wire;
@@ -1739,14 +1834,30 @@ get_process_selection(Context *context, Process *p) {
           break;
         }
       }
-    }
 
-    if (selection.type == 0 && !Get_Flag(p->flags, Process_Flag_Wire)) {
-      if (process_shape_contains_point(context, shape, context->mouse_position)) {
-        // process selection
-        selection.type = Process_Selection_Process;
-        context->hot_process = p;
-        selection.hot_id_assigned = 1;
+      if (selection.type == 0) {
+        // check out wire-boxes
+        for (U32 i = 0; i < p->out_count; ++i) {
+          Vector2 out_position = get_process_wire_position(context, p, shape, Process_Connection_Out, i);
+          Rectangle r = get_wire_box(context, out_position);
+          if (rectangle_contains_point(r, context->mouse_position)) {
+            selection.type = Process_Selection_Out;
+            selection.index = i;
+            Process *wire = get_process_wire_by_selection(context, selection);
+            context->hot_process = wire;
+            selection.hot_id_assigned = 1;
+            break;
+          }
+        }
+      }
+
+      if (selection.type == 0 && !Get_Flag(p->flags, Process_Flag_Wire)) {
+        if (process_shape_contains_point(context, shape, context->mouse_position)) {
+          // process selection
+          selection.type = Process_Selection_Process;
+          context->hot_process = p;
+          selection.hot_id_assigned = 1;
+        }
       }
     }
   }
@@ -1844,10 +1955,20 @@ function Ui_State get_ui_state(Context *context) {
 
 
 
+
+
 function void handle_ui(Context *context) {
+  Vector2 position = (Vector2){0.0f, 0.0f};
+
+  for (Process *m = context->ui_elements.first; m != 0; m = m->next) {
+    m->position = position;
+    do_ui_element(context, m);
+    position.x += m->size.x;
+  }
+#if 0
   Process *file_button = create_button(context->temp_arena, (Vector2){0.0f, 0.0f}, global_file_button_label);
 
-  if (do_button(context, file_button)) {
+  if (do_ui_element(context, file_button)) {
     // show file menu
     context->menu_state = context->menu_state == Menu_State_File ? 0 : Menu_State_File;
   }
@@ -1871,6 +1992,7 @@ function void handle_ui(Context *context) {
     handle_save_file_as(context);
   } break;
   }
+#endif
 }
 
 
@@ -2524,6 +2646,8 @@ function void draw_info_panel(Context *context) {
 #elif 1
   S32 arena_font_size = 12;
   y = global_window_size.y - arena_font_size - padding;
+  render_DrawText(rc, TextFormat("per-frame arena %llu/%llu\n", context->per_frame_arena->chunk_pos, context->per_frame_arena->chunk_cap), x, y, arena_font_size, text_color, 1);
+  y -= arena_font_size + padding;
   render_DrawText(rc, TextFormat("ui arena %llu/%llu\n", context->ui_arena->chunk_pos, context->ui_arena->chunk_cap), x, y, arena_font_size, text_color, 1);
   y -= arena_font_size + padding;
   render_DrawText(rc, TextFormat("temp arena %llu/%llu\n", context->temp_arena->chunk_pos, context->temp_arena->chunk_cap), x, y, arena_font_size, text_color, 1);
@@ -2546,6 +2670,7 @@ function Context initialize_context(void) {
   context.permanent_arena = arena_alloc_reserve(Megabytes(1), 0);
   context.temp_arena = arena_alloc_reserve(Megabytes(1), 0);
   context.ui_arena = arena_alloc_reserve(Megabytes(1), 0);
+  context.per_frame_arena = arena_alloc_reserve(Megabytes(1), 0);
 
   context.ui_render_context.arena = context.render_arena;
   context.process_render_context.arena = context.render_arena;
@@ -2642,6 +2767,49 @@ function void initialize_globals(Context *context) {
 
 
 
+function Process *create_menu_button(Context *context, String8 label_str) {
+  Process *button = create_ui_element(context);
+
+  U32 button_flags = Process_Flag_Clickable | Process_Flag_FitToText;
+  Set_Flag(button->flags, button_flags);
+  button->label = string_chunk_list_from_string8(context, label_str);
+
+  return button;
+}
+
+
+function void initialize_ui(Context *context) {
+  // file
+  Process *file_button = create_menu_button(context, str8_lit("File"));
+  SLLQueuePush(context->ui_elements.first, context->ui_elements.last, file_button);
+  {
+    Process *file_sub_button = file_button;
+    // open
+    Process *open_button = create_menu_button(context, str8_lit("Open..."));
+    SLLStackPush_N(file_sub_button, open_button, in);
+    // save
+    Process *save_button = create_menu_button(context, str8_lit("Save"));
+    SLLStackPush_N(file_sub_button, save_button, in);
+    // save as
+    Process *save_as_button = create_menu_button(context, str8_lit("Save As..."));
+    SLLStackPush_N(file_sub_button, save_as_button, in);
+  }
+
+  // edit
+  Process *edit_button = create_menu_button(context, str8_lit("Edit"));
+  SLLQueuePush(context->ui_elements.first, context->ui_elements.last, edit_button);
+  {
+    Process *edit_sub_button = edit_button;
+    // copy
+    Process *copy_button = create_menu_button(context, str8_lit("Copy"));
+    SLLStackPush_N(edit_sub_button, copy_button, in);
+    // paste
+    Process *Paste_button = create_menu_button(context, str8_lit("Paste"));
+    SLLStackPush_N(edit_sub_button, Paste_button, in);
+  }
+}
+
+
 
 
 int main(void) {
@@ -2652,6 +2820,7 @@ int main(void) {
 
   Context context = initialize_context();
   initialize_globals(&context);
+  initialize_ui(&context);
   SetWindowSize(global_window_size.x, global_window_size.y);
 
   Render_Context *prc = &context.process_render_context;
@@ -2662,6 +2831,7 @@ int main(void) {
 
     render_ClearBackground(prc, global_background_color);
     draw_processes(&context);
+    draw_ui(&context);
 #if 1
     draw_info_panel(&context);
 #endif
@@ -2673,10 +2843,13 @@ int main(void) {
     // clear out per-frame stuff
     arena_pop_to(context.render_arena, 0);
     arena_pop_to(context.temp_arena, 0);
+    arena_pop_to(context.per_frame_arena, 0);
     context.ui_render_context.command_list.first = 0;
     context.ui_render_context.command_list.last = 0;
     context.process_render_context.command_list.first = 0;
     context.process_render_context.command_list.last = 0;
+    /* context.per_frame_ui_elements.first = 0; */
+    /* context.per_frame_ui_elements.last = 0; */
 
     EndDrawing();
   }
