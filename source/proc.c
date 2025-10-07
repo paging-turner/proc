@@ -131,15 +131,15 @@ typedef enum {
   Process_Flag_Drag_In     = 1 << 5,
   Process_Flag_Drag_Out    = 1 << 6,
   // UI features
-  /* Process_Flag_Button         = 1 << 7, */
-  /* Process_Flag_ContainerBegin = 1 << 8, */
-  /* Process_Flag_ContainerEnd   = 1 << 9, */
   Process_Flag_TextEdit       = 1 << 7,
   Process_Flag_CanBeActive    = 1 << 8,
   Process_Flag_ScrollY        = 1 << 9,
   Process_Flag_Clickable      = 1 << 10,
   Process_Flag_Horizontal     = 1 << 11,
   Process_Flag_FitToText      = 1 << 12,
+  Process_Flag_IsOpen         = 1 << 13,
+  Process_Flag_ContainerBegin = 1 << 14,
+  Process_Flag_ContainerEnd   = 1 << 15,
 } Process_Flag;
 
 #define Process_Connection_Xlist\
@@ -166,6 +166,8 @@ struct Process {
   Vector2 position;
   Vector2 size;
   U32 cold_index;
+
+  void (*func)(Context*, Process*);
 
   union {
     struct {
@@ -299,6 +301,7 @@ struct Context {
   Process_List save_file_list;
   /* Process_List per_frame_ui_elements; */
   Process_List ui_elements;
+  Process_List ui_stack;
 
   Render_Context ui_render_context;
   Render_Context process_render_context;
@@ -1955,15 +1958,79 @@ function Ui_State get_ui_state(Context *context) {
 
 
 
+function void toggle_open_ui_element(Context *context, Process *ie) {
+  // unset any other is-open flag
+  for (Process *e = context->ui_elements.first; e != 0; e = e->next) {
+    if (e != ie) {
+      Unset_Flag(e->flags, Process_Flag_IsOpen);
+    }
+    for (Process *se = e->in; se != 0; se = se->in) {
+      if (se != ie) {
+        Unset_Flag(se->flags, Process_Flag_IsOpen);
+      }
+    }
+  }
+
+  // toggle flag for interacted-element
+  Toggle_Flag(ie->flags, Process_Flag_IsOpen);
+}
+
 
 
 function void handle_ui(Context *context) {
   Vector2 position = (Vector2){0.0f, 0.0f};
+  Process *container = context->ui_stack.first;
 
-  for (Process *m = context->ui_elements.first; m != 0; m = m->next) {
-    m->position = position;
-    do_ui_element(context, m);
-    position.x += m->size.x;
+  for (Process *b = context->ui_elements.first; b != 0; b = b->next) {
+    if (Get_Flag(b->flags, Process_Flag_ContainerBegin)) {
+      // ui-stack push
+      container = b;
+      position = container->position;
+      SLLQueuePushFront_NZ(context->ui_stack.first, context->ui_stack.last, container, in, 0);
+    } else if (Get_Flag(b->flags, Process_Flag_ContainerEnd)) {
+      // ui-stack pop
+      container = context->ui_stack.first;
+      position = container->position;
+      SLLQueuePop_NZ(context->ui_stack.first, context->ui_stack.last, in, 0);
+    } else {
+      b->position = position;
+
+      // handle element interaction
+      if (do_ui_element(context, b) && b->func) {
+        b->func(context, b);
+      }
+
+      // handle nested ui elements
+      if (Get_Flag(b->flags, Process_Flag_IsOpen)) {
+        Vector2 sub_position = (Vector2){position.x, position.y+b->size.y};
+        if (Get_Flag(b->flags, Process_Flag_Horizontal)) {
+          sub_position = (Vector2){position.x+b->size.x, position.y};
+        }
+
+        // handle sub-elements
+        for (Process *sb = b->in; sb != 0; sb = sb->in) {
+          sb->position = sub_position;
+
+          // handle sub-element interaction
+          if (do_ui_element(context, sb) && sb->func) {
+            b->func(context, sb);
+          }
+          if (Get_Flag(b->flags, Process_Flag_Horizontal)) {
+            sub_position.x += sb->size.x;
+          } else {
+            sub_position.y += sb->size.y;
+          }
+        }
+      }
+
+      if (container) {
+        if (Get_Flag(container->flags, Process_Flag_Horizontal)) {
+          position.x += b->size.x;
+        } else {
+          position.y += b->size.y;
+        }
+      }
+    }
   }
 #if 0
   Process *file_button = create_button(context->temp_arena, (Vector2){0.0f, 0.0f}, global_file_button_label);
@@ -2779,34 +2846,46 @@ function Process *create_menu_button(Context *context, String8 label_str) {
 
 
 function void initialize_ui(Context *context) {
-  // file
-  Process *file_button = create_menu_button(context, str8_lit("File"));
-  SLLQueuePush(context->ui_elements.first, context->ui_elements.last, file_button);
+  // menu container begin
+  Process *container = create_ui_element(context);
+  Set_Flag(container->flags, Process_Flag_ContainerBegin|Process_Flag_Horizontal);
+  SLLQueuePush(context->ui_elements.first, context->ui_elements.last, container);
   {
-    Process *file_sub_button = file_button;
-    // open
-    Process *open_button = create_menu_button(context, str8_lit("Open..."));
-    SLLStackPush_N(file_sub_button, open_button, in);
-    // save
-    Process *save_button = create_menu_button(context, str8_lit("Save"));
-    SLLStackPush_N(file_sub_button, save_button, in);
-    // save as
-    Process *save_as_button = create_menu_button(context, str8_lit("Save As..."));
-    SLLStackPush_N(file_sub_button, save_as_button, in);
-  }
+    // file
+    Process *file_button = create_menu_button(context, str8_lit("File"));
+    file_button->func = toggle_open_ui_element;
+    SLLQueuePush(context->ui_elements.first, context->ui_elements.last, file_button);
+    {
+      Process *file_sub_button = file_button;
+      // open
+      Process *open_button = create_menu_button(context, str8_lit("Open..."));
+      file_sub_button = file_sub_button->in = open_button;
+      // save
+      Process *save_button = create_menu_button(context, str8_lit("Save"));
+      file_sub_button = file_sub_button->in = save_button;
+      // save as
+      Process *save_as_button = create_menu_button(context, str8_lit("Save As..."));
+      file_sub_button = file_sub_button->in = save_as_button;
+    }
 
-  // edit
-  Process *edit_button = create_menu_button(context, str8_lit("Edit"));
-  SLLQueuePush(context->ui_elements.first, context->ui_elements.last, edit_button);
-  {
-    Process *edit_sub_button = edit_button;
-    // copy
-    Process *copy_button = create_menu_button(context, str8_lit("Copy"));
-    SLLStackPush_N(edit_sub_button, copy_button, in);
-    // paste
-    Process *Paste_button = create_menu_button(context, str8_lit("Paste"));
-    SLLStackPush_N(edit_sub_button, Paste_button, in);
+    // edit
+    Process *edit_button = create_menu_button(context, str8_lit("Edit"));
+    edit_button->func = toggle_open_ui_element;
+    SLLQueuePush(context->ui_elements.first, context->ui_elements.last, edit_button);
+    {
+      Process *edit_sub_button = edit_button;
+      // copy
+      Process *copy_button = create_menu_button(context, str8_lit("Copy"));
+      edit_sub_button = edit_sub_button->in = copy_button;
+      // paste
+      Process *paste_button = create_menu_button(context, str8_lit("Paste"));
+      edit_sub_button = edit_sub_button->in = paste_button;
+    }
   }
+  // menu container end
+  Process *container_end = create_ui_element(context);
+  Set_Flag(container_end->flags, Process_Flag_ContainerEnd);
+  SLLQueuePush(context->ui_elements.first, context->ui_elements.last, container_end);
 }
 
 
@@ -2831,7 +2910,6 @@ int main(void) {
 
     render_ClearBackground(prc, global_background_color);
     draw_processes(&context);
-    draw_ui(&context);
 #if 1
     draw_info_panel(&context);
 #endif
