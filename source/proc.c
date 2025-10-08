@@ -234,14 +234,6 @@ typedef struct {
 
 
 
-//////////////////////////////////////
-// UI Structs
-//////////////////////////////////////
-
-typedef struct {
-  String_Chunk_List name;
-  void (*func)(Context*);
-} Ui_Dropdown_Item;
 
 
 //////////////////////////////////////
@@ -301,6 +293,8 @@ struct Context {
   Process_List save_file_list;
   /* Process_List per_frame_ui_elements; */
   Process_List ui_elements;
+  Process_List open_file_ui_elements;
+  Process_List save_file_as_ui_elements;
   Process_List ui_stack;
 
   Render_Context ui_render_context;
@@ -799,37 +793,6 @@ function Process *create_button(Arena *arena, Vector2 position, String_Chunk_Lis
 
 
 
-function void do_dropdown_items(Context *context, Ui_Dropdown_Item *items, S32 item_count, Vector2 position) {
-  Render_Context *rc = &context->ui_render_context;
-  F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
-
-  // get max text width
-  F32 max_text_width = 0.0f;
-  for (S32 i = 0; i < item_count; ++i) {
-    U8 *text_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &items[i].name);
-    S32 text_width_raw = MeasureText((char *)text_c_string, global_panel_font_size);
-    F32 text_width = 2.0f*global_button_padding.x + (F32)text_width_raw;
-    if (text_width > max_text_width) {
-      max_text_width = text_width;
-    }
-  }
-
-  render_DrawRectangle(rc, position.x, position.y, (F32)max_text_width, button_height*item_count, global_button_dormant_bg_color);
-
-  for (S32 i = 0; i < item_count; ++i) {
-    Ui_Dropdown_Item item = items[i];
-    Vector2 action_position = (Vector2){position.x, position.y + button_height*(F32)i};
-    Process *file_action = create_button(context->temp_arena, action_position, item.name);
-    file_action->size = (Vector2){max_text_width, button_height};
-
-    B32 clicked = do_ui_element(context, file_action);
-    if (clicked) {
-      context->menu_state = 0;
-      item.func(context);
-    }
-  }
-}
-
 
 function Process *do_button_list(Context *context, Process_List *buttons, Rectangle rect) {
   // NOTE: For now, this only does vertical buttons.
@@ -893,7 +856,7 @@ function S32 collect_save_files(Context *context) {
 }
 
 
-function void set_menu_state_as_open_file(Context *context) {
+function void set_menu_state_as_open_file(Context *context, Process *element) {
 #if 0
   context->menu_state = Menu_State_OpenFile;
 
@@ -902,7 +865,7 @@ function void set_menu_state_as_open_file(Context *context) {
 }
 
 
-function void set_menu_state_as_save_file_as(Context *context) {
+function void set_menu_state_as_save_file_as(Context *context, Process *element) {
 #if 0
   context->menu_state = Menu_State_SaveFileAs;
 
@@ -939,7 +902,7 @@ function void set_menu_state_as_save_file_as(Context *context) {
 }
 
 
-function void save_file(Context *context) {
+function void save_file(Context *context, Process *element) {
   write_save_file(context, context->temp_arena, context->save_file_name);
 }
 
@@ -2901,11 +2864,45 @@ function Process *create_menu_button(Context *context, String8 label_str) {
 }
 
 
+
+function Process *add_container_begin(Context *context, U32 flags, Process_List *list) {
+  Process *container_begin = create_ui_element(context);
+  Set_Flag(container_begin->flags, Process_Flag_ContainerBegin | flags);
+  SLLQueuePush(list->first, list->last, container_begin);
+  return container_begin;
+}
+
+function Process *add_container_end(Context *context, Process_List *list) {
+  Process *container_begin = create_ui_element(context);
+  Set_Flag(container_begin->flags, Process_Flag_ContainerEnd);
+  SLLQueuePush(list->first, list->last, container_begin);
+  return container_begin;
+}
+
+function Process *add_button(Context *context, String8 label, U32 flags, Process_List *list) {
+  Process *button = create_ui_element(context);
+
+  Set_Flag(button->flags, Process_Flag_Clickable | flags);
+  button->label = string_chunk_list_from_string8(context, label);
+  SLLQueuePush(list->first, list->last, button);
+
+  return button;
+}
+
+function Process *add_sub_button(Context *context, String8 label, U32 flags, Process **prev) {
+  Process *button = create_ui_element(context);
+
+  Set_Flag(button->flags, Process_Flag_Clickable | flags);
+  button->label = string_chunk_list_from_string8(context, label);
+  (*prev) = (*prev)->in = button;
+
+  return button;
+}
+
+
 function void initialize_ui(Context *context) {
-  // menu container begin
-  Process *container = create_ui_element(context);
-  Set_Flag(container->flags, Process_Flag_ContainerBegin|Process_Flag_Horizontal);
-  SLLQueuePush(context->ui_elements.first, context->ui_elements.last, container);
+  // top menu container begin
+  Process *container = add_container_begin(context, Process_Flag_Horizontal, &context->ui_elements);
   {
     // file
     Process *file_button = create_menu_button(context, str8_lit("File"));
@@ -2914,17 +2911,16 @@ function void initialize_ui(Context *context) {
     {
       Process *file_sub_button = file_button;
       // open
-      Process *open_button = create_menu_button(context, str8_lit("Open..."));
-      Unset_Flag(open_button->flags, Process_Flag_FitToText);
-      file_sub_button = file_sub_button->in = open_button;
+      Process *open_button = add_sub_button(context, str8_lit("Open..."), 0, &file_sub_button);
+      open_button->func = set_menu_state_as_open_file;
+
       // save
-      Process *save_button = create_menu_button(context, str8_lit("Save"));
-      Unset_Flag(save_button->flags, Process_Flag_FitToText);
-      file_sub_button = file_sub_button->in = save_button;
+      Process *save_button = add_sub_button(context, str8_lit("Save"), 0, &file_sub_button);
+      save_button->func = save_file;
+
       // save as
-      Process *save_as_button = create_menu_button(context, str8_lit("Save As..."));
-      Unset_Flag(save_as_button->flags, Process_Flag_FitToText);
-      file_sub_button = file_sub_button->in = save_as_button;
+      Process *save_as_button = add_sub_button(context, str8_lit("Save As..."), 0, &file_sub_button);
+      save_as_button->func = set_menu_state_as_save_file_as;
     }
 
     // edit
@@ -2934,19 +2930,41 @@ function void initialize_ui(Context *context) {
     {
       Process *edit_sub_button = edit_button;
       // copy
-      Process *copy_button = create_menu_button(context, str8_lit("Copy"));
-      Unset_Flag(copy_button->flags, Process_Flag_FitToText);
-      edit_sub_button = edit_sub_button->in = copy_button;
+      Process *copy_button = add_sub_button(context, str8_lit("Copy"), 0, &edit_sub_button);
       // paste
-      Process *paste_button = create_menu_button(context, str8_lit("Paste"));
-      Unset_Flag(paste_button->flags, Process_Flag_FitToText);
-      edit_sub_button = edit_sub_button->in = paste_button;
+      Process *paste_button = add_sub_button(context, str8_lit("Paste"), 0, &edit_sub_button);
     }
   }
-  // menu container end
-  Process *container_end = create_ui_element(context);
-  Set_Flag(container_end->flags, Process_Flag_ContainerEnd);
-  SLLQueuePush(context->ui_elements.first, context->ui_elements.last, container_end);
+  // top menu container end
+  Process *container_end = add_container_end(context, &context->ui_elements);
+
+  { // open file container begin
+    Process_List *list = &context->open_file_ui_elements;
+    Process *container_begin = add_container_begin(context, 0, list);
+    {
+      Process *button_container_begin = add_container_begin(context, Process_Flag_Horizontal, list);
+      {
+        Process *cancel_button = add_button(context, str8_lit("Cancel"), Process_Flag_FitToText, list);
+        Process *open_button = add_button(context, str8_lit("Open"), Process_Flag_FitToText, list);
+      }
+      Process *button_container_end = add_container_end(context, list);
+    }
+    Process *container_end = add_container_end(context, list);
+  } // open file container end
+
+  { // save file as container begin
+    Process_List *list = &context->save_file_as_ui_elements;
+    Process *container_begin = add_container_begin(context, 0, list);
+    {
+      Process *button_container_begin = add_container_begin(context, Process_Flag_Horizontal, list);
+      {
+        Process *cancel_button = add_button(context, str8_lit("Cancel"), Process_Flag_FitToText, list);
+        Process *save_button = add_button(context, str8_lit("Save"), Process_Flag_FitToText, list);
+      }
+      Process *button_container_end = add_container_end(context, list);
+    }
+    Process *container_end = add_container_end(context, list);
+  } // save file as container end
 }
 
 
