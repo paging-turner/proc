@@ -60,6 +60,7 @@ typedef struct Render_Command_List {
 typedef struct Render_Context {
   Arena *arena;
   Render_Command_List command_list;
+  B32 reverse_commands;
 } Render_Context;
 
 global_variable Arena *render_GlobalTempArena;
@@ -71,7 +72,13 @@ function void render_Initialize(Arena *TempArena) {
 
 function render_command *create_render_command(Render_Context *rc) {
   render_command *command = push_struct(rc->arena, render_command);
-  SLLQueuePush(rc->command_list.first, rc->command_list.last, command);
+
+  if (rc->reverse_commands) {
+    SLLQueuePushFront(rc->command_list.first, rc->command_list.last, command);
+  } else {
+    SLLQueuePush(rc->command_list.first, rc->command_list.last, command);
+  }
+
   return command;
 }
 

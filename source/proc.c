@@ -138,8 +138,9 @@ typedef enum {
   Process_Flag_Horizontal     = 1 << 11,
   Process_Flag_FitToText      = 1 << 12,
   Process_Flag_IsOpen         = 1 << 13,
-  Process_Flag_ContainerBegin = 1 << 14,
-  Process_Flag_ContainerEnd   = 1 << 15,
+  Process_Flag_Container      = 1 << 14,
+  Process_Flag_FitChildX      = 1 << 15,
+  Process_Flag_FitChildY      = 1 << 16,
 } Process_Flag;
 
 #define Process_Connection_Xlist\
@@ -234,6 +235,55 @@ typedef struct {
 
 
 
+//////////////////////////////////////
+// UI
+//////////////////////////////////////
+
+typedef enum {
+  Ui_Align_Top,
+  Ui_Align_TopLeft,
+  Ui_Align_Left,
+  Ui_Align_BottomLeft,
+  Ui_Align_Bottom,
+  Ui_Align_BottomRight,
+  Ui_Align_Right,
+  Ui_Align_TopRight,
+} Ui_Align;
+
+typedef enum {
+  Ui_Layout_None,
+  Ui_Layout_Vertical,
+  Ui_Layout_Horizontal,
+} Ui_Layout;
+
+typedef struct Ui_Box Ui_Box;
+struct Ui_Box {
+  Ui_Box *next;
+  Vector2 position;
+  Vector2 offset;
+  Ui_Align align;
+  Ui_Layout layout;
+};
+
+typedef struct {
+  Ui_Box *first;
+  Ui_Box *last;
+} Ui_Box_List;
+
+#define Create_Ui_Box(x_pos, y_pos, align, layout)\
+  (Ui_Box){\
+    0,\
+    (Vector2){(x_pos), (y_pos)},\
+    (Vector2){0.0f, 0.0f},\
+    Ui_Align_##align,\
+    Ui_Layout_##layout\
+  }
+
+#define Ui_Default_Position (Vector2){0.0f, 0.0f}
+#define Ui_Default_Offset   (Vector2){0.0f, 0.0f}
+#define Ui_Default_Align    Ui_Align_TopLeft
+#define Ui_Default_Layout   Ui_Layout_None
+
 
 
 //////////////////////////////////////
@@ -291,11 +341,7 @@ struct Context {
   Process_List copy_processes;
 
   Process_List save_file_list;
-  /* Process_List per_frame_ui_elements; */
-  Process_List ui_elements;
-  Process_List open_file_ui_elements;
-  Process_List save_file_as_ui_elements;
-  Process_List ui_stack;
+  Ui_Box_List ui_box_stack;
 
   Render_Context ui_render_context;
   Render_Context process_render_context;
@@ -304,7 +350,7 @@ struct Context {
   Vector2 mouse_position; // TODO: move this to ui_state
   Vector2 active_position;
   Vector2 copy_center;
-  Menu_State menu_state;
+  Process *active_menu_element;
 
   String_Chunk_List save_file_name;
 
@@ -320,6 +366,8 @@ struct Context {
 //////////////////////////////////////
 
 #include "../source/keybind.h"
+#include "../source/saves.h"
+
 
 
 
@@ -348,13 +396,6 @@ typedef struct {
   B32 downward;
   Vector2 new_wire_position;
 } Process_Shape;
-
-
-//////////////////////////////////////
-// Saves
-//////////////////////////////////////
-
-#include "../source/saves.h"
 
 
 
@@ -626,8 +667,6 @@ function void clear_processes(Context *context) {
 ////////////////////////////////////////
 
 function void clear_ui_state(Context *context) {
-  context->menu_state = 0;
-
   // free string-chunks
   for (Process *e = context->save_file_list.first; e != 0; e = e->next) {
     remove_string_chunk_list(context, &e->label);
@@ -699,20 +738,24 @@ function void handle_label_editing(Context *context, Process_List ps) {
 
 
 
-function Vector2 get_ui_element_size(Context *context, Process *element, B32 fit_to_text) {
+function Vector2 get_ui_element_size(Context *context, Process *element, B32 fit_to_text, U8 *label_c_string) {
   Vector2 size = element->size;
-  U8 *label_c_string = 0;
+  U8 *label = label_c_string;
   F32 font_size = global_panel_font_size;
   Vector2 padding = global_button_padding;
 
-  if (element->label.first && element->label.last) {
-    label_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &element->label);
+  if (label == 0 && element->label.first && element->label.last) {
+    label = c_string_from_string_chunk_list(render_GlobalTempArena, &element->label);
   }
 
   if (fit_to_text) {
-    size.x = (F32)MeasureText((char *)label_c_string, font_size) + 2.0f*padding.x;
+    size.x = (F32)MeasureText((char *)label, font_size) + 2.0f*padding.x;
     size.y = font_size + 2.0f*padding.y;
   }
+
+  // HACK: Round up because having values close to integers can cause visual "gaps" between rectangles and stuff...
+  size.x = ceil_F32(size.x);
+  size.y = ceil_F32(size.y);
 
   return size;
 }
@@ -730,15 +773,14 @@ function B32 do_ui_element(Context *context, Process *element) {
 
   U8 *label_c_string = 0;
   B32 is_hot = 0;
-  B32 clicked = 0;
+  B32 interacted = 0;
 
-  // TODO: @Speed This also gets called when calling get_ui_element_size
   if (element->label.first && element->label.last) {
     label_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &element->label);
   }
 
   B32 fit_to_text = Get_Flag(element->flags, Process_Flag_FitToText);
-  element->size = get_ui_element_size(context, element, fit_to_text);
+  element->size = get_ui_element_size(context, element, fit_to_text, label_c_string);
 
   Rectangle bg_rect = (Rectangle){element->position.x, element->position.y, element->size.x, element->size.y};
 
@@ -749,7 +791,7 @@ function B32 do_ui_element(Context *context, Process *element) {
     is_hot = 1;
 
     if (IsMouseButtonPressed(0)) {
-      clicked = 1;
+      interacted = 1;
       context->ui_state.action_occured = 1;
       if (Get_Flag(element->flags, Process_Flag_CanBeActive)) {
         clear_active_processes(context);
@@ -767,7 +809,7 @@ function B32 do_ui_element(Context *context, Process *element) {
     render_DrawText(rc, (char *)label_c_string, element->position.x+padding.x, element->position.y+padding.y, font_size, font_color, 0);
   }
 
-  return clicked;
+  return interacted;
 }
 
 
@@ -794,43 +836,15 @@ function Process *create_button(Arena *arena, Vector2 position, String_Chunk_Lis
 
 
 
-function Process *do_button_list(Context *context, Process_List *buttons, Rectangle rect) {
-  // NOTE: For now, this only does vertical buttons.
-  // TODO: Allow caller to specify horizontal/vertical listing.
-  // TODO: Clip buttons to rect, and allow for scrolling.
-  Process *clicked_button = 0;
-
-  Vector2 padding = global_button_padding;
-  F32 font_size = global_panel_font_size;
-  F32 button_height = 2.5f*padding.y + global_panel_font_size;
-
-  Vector2 position = (Vector2){rect.x, rect.y};
-  F32 total_height = 0.0f;
-
-  // show existing save files
-  for (Process *element = buttons->first; element; element = element->next) {
-    total_height += button_height;
-    if (total_height > rect.height) {
-      break;
-    }
-    element->position = position;
-    if (do_ui_element(context, element)) {
-      clicked_button = element;
-    }
-    position.y += button_height;
-  }
-
-  return clicked_button;
-}
-
-
-
 
 
 
 ////////////////////////////////////////
 // File actions
 ////////////////////////////////////////
+
+function void clear_save_files(Context *context) {
+}
 
 function S32 collect_save_files(Context *context) {
   Arena *uia = context->ui_arena;
@@ -857,48 +871,10 @@ function S32 collect_save_files(Context *context) {
 
 
 function void set_menu_state_as_open_file(Context *context, Process *element) {
-#if 0
-  context->menu_state = Menu_State_OpenFile;
-
-  collect_save_files(context);
-#endif
 }
 
 
 function void set_menu_state_as_save_file_as(Context *context, Process *element) {
-#if 0
-  context->menu_state = Menu_State_SaveFileAs;
-
-  F32 input_height = 2.0f*global_button_padding.y + global_panel_font_size;
-
-  // file-name input element
-  String_Chunk_List empty_text = Zero_Struct(String_Chunk_List);
-  Process *text_input = create_button(context->ui_arena, (Vector2){0}, empty_text);
-  if (text_input) {
-    // setup text input element
-    Set_Flag(text_input->flags, Process_Flag_TextEdit|Process_Flag_CanBeActive);
-    text_input->size = (Vector2){300.0f, input_height};
-    SLLQueuePush(context->save_file_list.first, context->save_file_list.last, text_input);
-  }
-
-  // begin save-file container
-  Process *container_begin = push_struct(context->ui_arena, Process);
-  if (container_begin) {
-    container_begin->size = (Vector2){500.0f, 300.0f};
-    Set_Flag(container_begin->flags, Process_Flag_ContainerBegin|Process_Flag_ScrollY);
-    SLLQueuePush(context->save_file_list.first, context->save_file_list.last, container_begin);
-  }
-
-  // push save-files
-  collect_save_files(context);
-
-  // end save-file container
-  Process *container_end = push_struct(context->ui_arena, Process);
-  if (container_end) {
-    Set_Flag(container_end->flags, Process_Flag_ContainerEnd);
-    SLLQueuePush(context->save_file_list.first, context->save_file_list.last, container_end);
-  }
-#endif
 }
 
 
@@ -908,105 +884,10 @@ function void save_file(Context *context, Process *element) {
 
 
 function void handle_open_file(Context *context) {
-#if 0
-  F32 font_size = global_panel_font_size;
-  Vector2 size = (Vector2){ 400.0f, 300.0f };
-  Vector2 position = Vector2Scale(Vector2Subtract(global_window_size, size), 0.5f);
-  Color dormant_bg_color = global_button_dormant_bg_color;
-  Color font_color = global_button_font_color;
-  F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
-
-  Rectangle button_list_rect = (Rectangle){ position.x, position.y, size.x, size.y};
-  Process *clicked_button = do_button_list(context, &context->save_file_list, button_list_rect);
-  if (clicked_button) {
-    open_file_and_replace_processes(context, clicked_button->label);
-  }
-
-  // TODO: replace this with handling of input, or detect if the user has clicked "away"
-  if (IsMouseButtonPressed(0)) {
-    clear_ui_state(context);
-  }
-#endif
 }
 
 
 function void handle_save_file_as(Context *context) {
-#if 0
-  Render_Context *uirc = &context->ui_render_context;
-
-  Vector2 padding = global_button_padding;
-  F32 font_size = global_panel_font_size;
-  F32 button_height = 2.0f*padding.y + global_panel_font_size;
-
-  Color dormant_bg_color = global_button_dormant_bg_color;
-  Color font_color = global_button_font_color;
-
-  Vector2 min_container_size = (Vector2){400.0f, 300.0f};
-  Vector2 size = Vector2Min(min_container_size,
-                            Vector2Scale(global_window_size, 0.5));
-  Vector2 position = Vector2Scale(Vector2Subtract(global_window_size, size), 0.5f);
-  Vector2 button_position = Vector2Add(position, size);
-  button_position.y -= button_height;
-
-  // draw container
-  // TODO: Create some kind of container ui-element to handle this ui processing.
-  F32 container_padding = 6.0f;
-  Rectangle bg_rect = (Rectangle){position.x-container_padding,
-                                  position.y-container_padding,
-                                  size.x + 2.0f*container_padding,
-                                  size.y + 2.0f*container_padding};
-  render_DrawRectangle(uirc, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, global_container_bg_color);
-  if (rectangle_contains_point(bg_rect, context->mouse_position)) {
-    context->ui_state.hot_id_assigned = 1;
-    context->hot_process = 0;
-  }
-
-  // file-name element
-  Process *file_name_element = context->save_file_list.first;
-  file_name_element->position = position;
-  do_ui_element(context, file_name_element);
-  position.y += button_height + padding.y;
-
-  // show existing save files
-  if (context->save_file_list.first) {
-    F32 button_list_height = size.y - 2.0f*button_height;
-    Rectangle button_list_rect = (Rectangle){ position.x, position.y, size.x, button_list_height};
-    Process_List list;
-    list.first = context->save_file_list.first->next;
-    list.last = context->save_file_list.last;
-
-    Process *clicked_button = do_button_list(context, &list, button_list_rect);
-
-    // set save-as name as the clicked name
-    if (clicked_button) {
-      remove_string_chunk_list(context, &file_name_element->label);
-      String_Chunk_List new_label = copy_string_chunk_list(context, &clicked_button->label);
-      file_name_element->label = new_label;
-    }
-  }
-
-  // setup save/cancel buttons
-  Process *save_button = create_button(context->temp_arena, button_position, global_save_button_label);
-  save_button->position.x -= save_button->size.x;
-  button_position.x -= save_button->size.x + padding.x;
-  Process *cancel_button = create_button(context->temp_arena, button_position, global_cancel_button_label);
-  cancel_button->position.x -= cancel_button->size.x;
-
-  // handle save/cancel buttons
-  if (do_ui_element(context, cancel_button)) {
-    clear_ui_state(context);
-  } else if (do_ui_element(context, save_button)) {
-    if (file_name_element && file_name_element->label.first) {
-      write_save_file(context, context->temp_arena, file_name_element->label);
-    }
-    clear_ui_state(context);
-  }
-
-  // TODO: replace this with handling of input, or detect if the user has clicked "away"
-  if (IsKeyPressed(KEY_ESCAPE)) {
-    clear_ui_state(context);
-  }
-#endif
 }
 
 
@@ -1940,145 +1821,209 @@ function Ui_State get_ui_state(Context *context) {
 
 
 
-function void toggle_open_ui_element(Context *context, Process *ie) {
-  // unset any other is-open flag
-  for (Process *e = context->ui_elements.first; e != 0; e = e->next) {
-    if (e != ie) {
-      Unset_Flag(e->flags, Process_Flag_IsOpen);
-    }
-    for (Process *se = e->in; se != 0; se = se->in) {
-      if (se != ie) {
-        Unset_Flag(se->flags, Process_Flag_IsOpen);
+function B32 do_new_ui_element(Context *context, Process *element) {
+  B32 interacted = 0;
+  B32 is_hot = 0;
+  U8 *label_c_string = 0;
+
+  Render_Context *rc = &context->ui_render_context;
+
+  F32 font_size = global_panel_font_size;
+  Vector2 padding = global_button_padding;
+  Color dormant_bg_color = global_button_dormant_bg_color;
+  Color hot_bg_color = global_button_hot_bg_color;
+  Color font_color = global_button_font_color;
+
+  Ui_Box *box = context->ui_box_stack.first;
+  Ui_Align align = (box == 0) ? Ui_Default_Align : box->align;
+  Ui_Layout layout = (box == 0) ? Ui_Default_Layout : box->layout;
+  Vector2 box_position = (box == 0) ? Ui_Default_Position : box->position;
+  Vector2 box_offset = (box == 0) ? Ui_Default_Offset : box->offset;
+
+  if (element->label.first && element->label.last) {
+    label_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &element->label);
+  }
+
+  /* Vector2 element_position; */
+  B32 fit_to_text = Get_Flag(element->flags, Process_Flag_FitToText);
+  element->size = get_ui_element_size(context, element, fit_to_text, label_c_string);
+
+  Vector2 next_offset;
+
+  switch (align) {
+  case Ui_Align_Top: {
+    box_position.x -= 0.5f * element->size.x;
+  } break;
+  case Ui_Align_TopLeft: {
+  } break;
+  case Ui_Align_Left: {
+    box_position.y -= 0.5f * element->size.y;
+  } break;
+  case Ui_Align_BottomLeft: {
+    box_position.y -= element->size.y;
+  } break;
+  case Ui_Align_Bottom: {
+    box_position.x -= 0.5f * element->size.x;
+    box_position.y -= element->size.y;
+  } break;
+  case Ui_Align_BottomRight: {
+    box_position.x -= element->size.x;
+    box_position.y -= element->size.y;
+  } break;
+  case Ui_Align_Right: {
+    box_position.x -= element->size.x;
+    box_position.y -= 0.5f * element->size.y;
+  } break;
+  case Ui_Align_TopRight: {
+    box_position.x -= element->size.x;
+  } break;
+  }
+
+  switch (layout) {
+  default:
+  case Ui_Layout_None: {
+    next_offset = Zero_Struct(Vector2);
+  } break;
+  case Ui_Layout_Vertical: {
+    next_offset = (Vector2){0.0f, element->size.y};
+    element->position = Vector2Add(box_position, box_offset);
+  } break;
+  case Ui_Layout_Horizontal: {
+    element->position = Vector2Add(box_position, box_offset);
+    next_offset = (Vector2){element->size.x, 0.0f};
+  } break;
+  }
+
+  box->offset = Vector2Add(box->offset, next_offset);
+
+  Rectangle bg_rect = (Rectangle){element->position.x, element->position.y, element->size.x, element->size.y};
+
+  if (Get_Flag(element->flags, Process_Flag_Clickable) &&
+      !context->ui_state.action_occured &&
+      rectangle_contains_point(bg_rect, context->mouse_position)) {
+    context->hot_process = 0;
+    is_hot = 1;
+
+    if (IsMouseButtonPressed(0)) {
+      interacted = 1;
+      context->ui_state.action_occured = 1;
+      if (Get_Flag(element->flags, Process_Flag_CanBeActive)) {
+        clear_active_processes(context);
+        SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, element, next_active, 0);
       }
     }
   }
 
-  // toggle flag for interacted-element
-  Toggle_Flag(ie->flags, Process_Flag_IsOpen);
-}
-
-function Vector2 get_parent_element_size(Context *context, Process *parent_element) {
-  // @Copypasta   v-------------------v
-  Vector2 size = (Vector2){0.0f, 0.0f};
-
-  for (Process *e = parent_element; e != 0; e = e->in) {
-    Vector2 e_size = get_ui_element_size(context, e, 1);
-
-    size.x = Max(size.x, e_size.x);
-    size.y = Max(size.y, e_size.y);
+  Color bg_color = is_hot ? hot_bg_color : dormant_bg_color;
+  if (is_hot) {
+    context->hot_process = element;
   }
 
-  return size;
+  render_DrawRectangle(rc, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, bg_color);
+
+  if (label_c_string) {
+    render_DrawText(rc, (char *)label_c_string, element->position.x+padding.x+1.0f, element->position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
+    render_DrawText(rc, (char *)label_c_string, element->position.x+padding.x, element->position.y+padding.y, font_size, font_color, 0);
+  }
+
+  return interacted;
 }
 
-function Vector2 get_container_size(Context *context, Process *first_sub_element) {
-  // @Copypasta   ^-------------------^
-  Vector2 size = (Vector2){0.0f, 0.0f};
 
-  for (Process *e = first_sub_element; e != 0; e = e->next) {
-    Vector2 e_size = get_ui_element_size(context, e, 1);
 
-    size.x = Max(size.x, e_size.x);
-    size.y = Max(size.y, e_size.y);
+function Process create_lit_button(Context *context, char *label, F32 x_pos, F32 y_pos) {
+  Process button = Zero_Struct(Process);
 
-    if (Get_Flag(e->flags, Process_Flag_ContainerEnd)) {
-      break;
+  U32 flags = Process_Flag_Clickable | Process_Flag_FitToText;
+  Set_Flag(button.flags, flags);
+
+  button.position.x = x_pos;
+  button.position.y = y_pos;
+
+  button.label = string_chunk_list_from_string8(context, str8_lit(label));
+
+  return button;
+}
+
+global_variable Ui_Box top_menu_box = Create_Ui_Box(0.0f, 0.0f, TopLeft, Horizontal);
+global_variable Ui_Box sub_menu_box = Create_Ui_Box(0.0f, 0.0f, TopLeft, Vertical);
+
+global_variable Process file_menu_button;
+global_variable Process open_file_button;
+global_variable Process save_file_button;
+global_variable Process save_as_file_button;
+global_variable Process edit_menu_button;
+global_variable Process copy_button;
+global_variable Process paste_button;
+
+
+function void ui_box_begin(Context *context, Ui_Box *box) {
+  box->offset = (Vector2){0.0f, 0.0f};
+  SLLQueuePushFront(context->ui_box_stack.first, context->ui_box_stack.last, box);
+}
+
+function void ui_box_end(Context *context, Ui_Box *box) {
+  if (box != context->ui_box_stack.first) {
+    printf("[ Error ] Popping ui-box off of stack but given box does not match. Box passed in is %p while the box popped of the stack is %p .\n", box, context->ui_box_stack.first);
+  }
+
+  SLLQueuePop(context->ui_box_stack.first, context->ui_box_stack.last);
+}
+
+function void test_ui(Context *context) {
+  Process *menu_buttons[] = { &file_menu_button, &edit_menu_button };
+  Process *file_submenu[] = { &open_file_button, &save_file_button, &save_as_file_button };
+  Process *edit_submenu[] = { &copy_button, &paste_button };
+  Process **sub_menus[] = { file_submenu, edit_submenu };
+  U32 sub_menu_counts[] = { ArrayCount(file_submenu), ArrayCount(edit_submenu) };
+  Assert(ArrayCount(menu_buttons) == ArrayCount(sub_menus) &&
+         ArrayCount(sub_menus) == ArrayCount(sub_menu_counts));
+
+  ui_box_begin(context, &top_menu_box);
+  {
+    for (U32 i = 0; i < ArrayCount(menu_buttons); ++i) {
+      Process *menu_button = menu_buttons[i];
+      if (do_new_ui_element(context, menu_button)) {
+        if (context->active_menu_element == menu_button) {
+          context->active_menu_element = 0;
+        } else {
+          context->active_menu_element = menu_button;
+        }
+      }
+
+      if (context->hot_process == menu_button && context->active_menu_element != 0) {
+        context->active_menu_element = menu_button;
+      }
+    }
+
+    for (U32 i = 0; i < ArrayCount(sub_menus); ++i) {
+      Process *menu_button = menu_buttons[i];
+      if (context->active_menu_element == menu_button) {
+        Process **sub_menu = sub_menus[i];
+
+        ui_box_begin(context, &sub_menu_box);
+        sub_menu_box.position = menu_button->position;
+        sub_menu_box.position.y += menu_button->size.y;
+        {
+          for (U32 j = 0; j < sub_menu_counts[i]; ++j) {
+            Process *sub_menu_button = sub_menu[j];
+            do_new_ui_element(context, sub_menu_button);
+          }
+        }
+        ui_box_end(context, &sub_menu_box);
+      }
     }
   }
-
-  return size;
+  ui_box_end(context, &top_menu_box);
 }
+
 
 
 function void handle_ui(Context *context) {
-  Vector2 position = (Vector2){0.0f, 0.0f};
-  Vector2 size = (Vector2){0.0f, 0.0f};
-  Process *container = context->ui_stack.first;
-
-  for (Process *b = context->ui_elements.first; b != 0; b = b->next) {
-    if (Get_Flag(b->flags, Process_Flag_ContainerBegin)) {
-      // ui-stack push
-      container = b;
-      position = container->position;
-      SLLQueuePushFront_NZ(context->ui_stack.first, context->ui_stack.last, container, in, 0);
-      size = get_container_size(context, container);
-    } else if (Get_Flag(b->flags, Process_Flag_ContainerEnd)) {
-      // ui-stack pop
-      container = context->ui_stack.first;
-      position = container->position;
-      SLLQueuePop_NZ(context->ui_stack.first, context->ui_stack.last, in, 0);
-    } else {
-      b->position = position;
-      b->size = size;
-
-      // handle element interaction
-      if (do_ui_element(context, b) && b->func) {
-        b->func(context, b);
-      }
-
-      // handle nested ui elements
-      if (Get_Flag(b->flags, Process_Flag_IsOpen)) {
-        Vector2 sub_position = (Vector2){position.x, position.y+b->size.y};
-        Vector2 sub_size = get_parent_element_size(context, b);
-
-        if (Get_Flag(b->flags, Process_Flag_Horizontal)) {
-          sub_position = (Vector2){position.x+b->size.x, position.y};
-        }
-
-        // handle sub-elements
-        for (Process *sb = b->in; sb != 0; sb = sb->in) {
-          sb->position = sub_position;
-          sb->size = sub_size;
-
-          // handle sub-element interaction
-          if (do_ui_element(context, sb) && sb->func) {
-            b->func(context, sb);
-          }
-          if (Get_Flag(b->flags, Process_Flag_Horizontal)) {
-            sub_position.x += sb->size.x;
-          } else {
-            sub_position.y += sb->size.y;
-          }
-        }
-      }
-
-      if (container) {
-        if (Get_Flag(container->flags, Process_Flag_Horizontal)) {
-          position.x += b->size.x;
-        } else {
-          position.y += b->size.y;
-        }
-      }
-    }
+  // TODO: delete this test function once we are done with it
+  {
+    test_ui(context);
   }
-#if 0
-  Process *file_button = create_button(context->temp_arena, (Vector2){0.0f, 0.0f}, global_file_button_label);
-
-  if (do_ui_element(context, file_button)) {
-    // show file menu
-    context->menu_state = context->menu_state == Menu_State_File ? 0 : Menu_State_File;
-  }
-
-  switch(context->menu_state) {
-  case Menu_State_File: {
-    Ui_Dropdown_Item file_dropdown_items[] = {
-      {global_open_button_label, set_menu_state_as_open_file},
-      {global_save_button_label, save_file},
-      {global_save_as_button_label, set_menu_state_as_save_file_as},
-    };
-    F32 button_height = 2.0f*global_button_padding.y + global_panel_font_size;
-    Vector2 position = (Vector2){file_button->position.x, button_height};
-
-    do_dropdown_items(context, file_dropdown_items, ArrayCount(file_dropdown_items), position);
-  } break;
-  case Menu_State_OpenFile: {
-    handle_open_file(context);
-  } break;
-  case Menu_State_SaveFileAs: {
-    handle_save_file_as(context);
-  } break;
-  }
-#endif
 }
 
 
@@ -2832,6 +2777,15 @@ function void initialize_globals(Context *context) {
   global_container_bg_color = (Color){170, 170, 170, 255};
 
 
+  // init ui elements
+  file_menu_button = create_lit_button(context, "File", 0, 0);
+  open_file_button = create_lit_button(context, "Open...", 0, 0);
+  save_file_button = create_lit_button(context, "Save", 0, 0);
+  save_as_file_button = create_lit_button(context, "Save As...", 0, 0);
+  edit_menu_button = create_lit_button(context, "Edit", 0, 0);
+  copy_button = create_lit_button(context, "Copy", 0, 0);
+  paste_button = create_lit_button(context, "Paste", 0, 0);
+
   // init common filepaths
 #if OS_WINDOWS
 # define _ "\\"
@@ -2847,6 +2801,8 @@ function void initialize_globals(Context *context) {
 
   // ensure saves directory exists
   os_file_make_directory(Saves_Filepath);
+
+
 
   load_keybinds(context);
 }
@@ -2864,20 +2820,6 @@ function Process *create_menu_button(Context *context, String8 label_str) {
 }
 
 
-
-function Process *add_container_begin(Context *context, U32 flags, Process_List *list) {
-  Process *container_begin = create_ui_element(context);
-  Set_Flag(container_begin->flags, Process_Flag_ContainerBegin | flags);
-  SLLQueuePush(list->first, list->last, container_begin);
-  return container_begin;
-}
-
-function Process *add_container_end(Context *context, Process_List *list) {
-  Process *container_begin = create_ui_element(context);
-  Set_Flag(container_begin->flags, Process_Flag_ContainerEnd);
-  SLLQueuePush(list->first, list->last, container_begin);
-  return container_begin;
-}
 
 function Process *add_button(Context *context, String8 label, U32 flags, Process_List *list) {
   Process *button = create_ui_element(context);
@@ -2900,72 +2842,6 @@ function Process *add_sub_button(Context *context, String8 label, U32 flags, Pro
 }
 
 
-function void initialize_ui(Context *context) {
-  // top menu container begin
-  Process *container = add_container_begin(context, Process_Flag_Horizontal, &context->ui_elements);
-  {
-    // file
-    Process *file_button = create_menu_button(context, str8_lit("File"));
-    file_button->func = toggle_open_ui_element;
-    SLLQueuePush(context->ui_elements.first, context->ui_elements.last, file_button);
-    {
-      Process *file_sub_button = file_button;
-      // open
-      Process *open_button = add_sub_button(context, str8_lit("Open..."), 0, &file_sub_button);
-      open_button->func = set_menu_state_as_open_file;
-
-      // save
-      Process *save_button = add_sub_button(context, str8_lit("Save"), 0, &file_sub_button);
-      save_button->func = save_file;
-
-      // save as
-      Process *save_as_button = add_sub_button(context, str8_lit("Save As..."), 0, &file_sub_button);
-      save_as_button->func = set_menu_state_as_save_file_as;
-    }
-
-    // edit
-    Process *edit_button = create_menu_button(context, str8_lit("Edit"));
-    edit_button->func = toggle_open_ui_element;
-    SLLQueuePush(context->ui_elements.first, context->ui_elements.last, edit_button);
-    {
-      Process *edit_sub_button = edit_button;
-      // copy
-      Process *copy_button = add_sub_button(context, str8_lit("Copy"), 0, &edit_sub_button);
-      // paste
-      Process *paste_button = add_sub_button(context, str8_lit("Paste"), 0, &edit_sub_button);
-    }
-  }
-  // top menu container end
-  Process *container_end = add_container_end(context, &context->ui_elements);
-
-  { // open file container begin
-    Process_List *list = &context->open_file_ui_elements;
-    Process *container_begin = add_container_begin(context, 0, list);
-    {
-      Process *button_container_begin = add_container_begin(context, Process_Flag_Horizontal, list);
-      {
-        Process *cancel_button = add_button(context, str8_lit("Cancel"), Process_Flag_FitToText, list);
-        Process *open_button = add_button(context, str8_lit("Open"), Process_Flag_FitToText, list);
-      }
-      Process *button_container_end = add_container_end(context, list);
-    }
-    Process *container_end = add_container_end(context, list);
-  } // open file container end
-
-  { // save file as container begin
-    Process_List *list = &context->save_file_as_ui_elements;
-    Process *container_begin = add_container_begin(context, 0, list);
-    {
-      Process *button_container_begin = add_container_begin(context, Process_Flag_Horizontal, list);
-      {
-        Process *cancel_button = add_button(context, str8_lit("Cancel"), Process_Flag_FitToText, list);
-        Process *save_button = add_button(context, str8_lit("Save"), Process_Flag_FitToText, list);
-      }
-      Process *button_container_end = add_container_end(context, list);
-    }
-    Process *container_end = add_container_end(context, list);
-  } // save file as container end
-}
 
 
 
@@ -2978,7 +2854,6 @@ int main(void) {
 
   Context context = initialize_context();
   initialize_globals(&context);
-  initialize_ui(&context);
   SetWindowSize(global_window_size.x, global_window_size.y);
 
   Render_Context *prc = &context.process_render_context;
