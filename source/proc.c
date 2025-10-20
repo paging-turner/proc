@@ -200,6 +200,7 @@ struct Process {
   Process *to_copied;
 
   String_Chunk_List label;
+  U8 *label_c_string;
   U32 label_cursor;
 };
 
@@ -1821,10 +1822,9 @@ function Ui_State get_ui_state(Context *context) {
 
 
 
-function B32 do_new_ui_element(Context *context, Process *element) {
+function B32 do_new_ui_element(Context *context, Process *element, B32 sizing) {
   B32 interacted = 0;
   B32 is_hot = 0;
-  U8 *label_c_string = 0;
 
   Render_Context *rc = &context->ui_render_context;
 
@@ -1840,90 +1840,92 @@ function B32 do_new_ui_element(Context *context, Process *element) {
   Vector2 box_position = (box == 0) ? Ui_Default_Position : box->position;
   Vector2 box_offset = (box == 0) ? Ui_Default_Offset : box->offset;
 
-  if (element->label.first && element->label.last) {
-    label_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &element->label);
-  }
+  if (sizing) {
+    element->label_c_string = 0;
+    if (element->label.first && element->label.last) {
+      element->label_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &element->label);
+    }
 
-  /* Vector2 element_position; */
-  B32 fit_to_text = Get_Flag(element->flags, Process_Flag_FitToText);
-  element->size = get_ui_element_size(context, element, fit_to_text, label_c_string);
+    B32 fit_to_text = Get_Flag(element->flags, Process_Flag_FitToText);
+    element->size = get_ui_element_size(context, element, fit_to_text, element->label_c_string);
 
-  Vector2 next_offset;
+    switch (align) {
+    case Ui_Align_Top: {
+      box_position.x -= 0.5f * element->size.x;
+    } break;
+    case Ui_Align_TopLeft: {
+    } break;
+    case Ui_Align_Left: {
+      box_position.y -= 0.5f * element->size.y;
+    } break;
+    case Ui_Align_BottomLeft: {
+      box_position.y -= element->size.y;
+    } break;
+    case Ui_Align_Bottom: {
+      box_position.x -= 0.5f * element->size.x;
+      box_position.y -= element->size.y;
+    } break;
+    case Ui_Align_BottomRight: {
+      box_position.x -= element->size.x;
+      box_position.y -= element->size.y;
+    } break;
+    case Ui_Align_Right: {
+      box_position.x -= element->size.x;
+      box_position.y -= 0.5f * element->size.y;
+    } break;
+    case Ui_Align_TopRight: {
+      box_position.x -= element->size.x;
+    } break;
+    }
+  } else {
 
-  switch (align) {
-  case Ui_Align_Top: {
-    box_position.x -= 0.5f * element->size.x;
-  } break;
-  case Ui_Align_TopLeft: {
-  } break;
-  case Ui_Align_Left: {
-    box_position.y -= 0.5f * element->size.y;
-  } break;
-  case Ui_Align_BottomLeft: {
-    box_position.y -= element->size.y;
-  } break;
-  case Ui_Align_Bottom: {
-    box_position.x -= 0.5f * element->size.x;
-    box_position.y -= element->size.y;
-  } break;
-  case Ui_Align_BottomRight: {
-    box_position.x -= element->size.x;
-    box_position.y -= element->size.y;
-  } break;
-  case Ui_Align_Right: {
-    box_position.x -= element->size.x;
-    box_position.y -= 0.5f * element->size.y;
-  } break;
-  case Ui_Align_TopRight: {
-    box_position.x -= element->size.x;
-  } break;
-  }
+    Vector2 next_offset;
+    switch (layout) {
+    default:
+    case Ui_Layout_None: {
+      next_offset = Zero_Struct(Vector2);
+    } break;
+    case Ui_Layout_Vertical: {
+      next_offset = (Vector2){0.0f, element->size.y};
+      element->position = Vector2Add(box_position, box_offset);
+    } break;
+    case Ui_Layout_Horizontal: {
+      element->position = Vector2Add(box_position, box_offset);
+      next_offset = (Vector2){element->size.x, 0.0f};
+    } break;
+    }
 
-  switch (layout) {
-  default:
-  case Ui_Layout_None: {
-    next_offset = Zero_Struct(Vector2);
-  } break;
-  case Ui_Layout_Vertical: {
-    next_offset = (Vector2){0.0f, element->size.y};
-    element->position = Vector2Add(box_position, box_offset);
-  } break;
-  case Ui_Layout_Horizontal: {
-    element->position = Vector2Add(box_position, box_offset);
-    next_offset = (Vector2){element->size.x, 0.0f};
-  } break;
-  }
+    box->offset = Vector2Add(box->offset, next_offset);
 
-  box->offset = Vector2Add(box->offset, next_offset);
+    Rectangle bg_rect = (Rectangle){element->position.x, element->position.y, element->size.x, element->size.y};
 
-  Rectangle bg_rect = (Rectangle){element->position.x, element->position.y, element->size.x, element->size.y};
+    if (Get_Flag(element->flags, Process_Flag_Clickable) &&
+        !context->ui_state.action_occured &&
+        rectangle_contains_point(bg_rect, context->mouse_position)) {
+      context->hot_process = 0;
+      is_hot = 1;
 
-  if (Get_Flag(element->flags, Process_Flag_Clickable) &&
-      !context->ui_state.action_occured &&
-      rectangle_contains_point(bg_rect, context->mouse_position)) {
-    context->hot_process = 0;
-    is_hot = 1;
-
-    if (IsMouseButtonPressed(0)) {
-      interacted = 1;
-      context->ui_state.action_occured = 1;
-      if (Get_Flag(element->flags, Process_Flag_CanBeActive)) {
-        clear_active_processes(context);
-        SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, element, next_active, 0);
+      if (IsMouseButtonPressed(0)) {
+        interacted = 1;
+        context->ui_state.action_occured = 1;
+        if (Get_Flag(element->flags, Process_Flag_CanBeActive)) {
+          clear_active_processes(context);
+          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, element, next_active, 0);
+        }
       }
     }
-  }
 
-  Color bg_color = is_hot ? hot_bg_color : dormant_bg_color;
-  if (is_hot) {
-    context->hot_process = element;
-  }
+    Color bg_color = is_hot ? hot_bg_color : dormant_bg_color;
+    if (is_hot) {
+      context->hot_process = element;
+    }
 
-  render_DrawRectangle(rc, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, bg_color);
+    render_DrawRectangle(rc, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, bg_color);
 
-  if (label_c_string) {
-    render_DrawText(rc, (char *)label_c_string, element->position.x+padding.x+1.0f, element->position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
-    render_DrawText(rc, (char *)label_c_string, element->position.x+padding.x, element->position.y+padding.y, font_size, font_color, 0);
+    if (element->label_c_string) {
+      render_DrawText(rc, (char *)element->label_c_string, element->position.x+padding.x+1.0f, element->position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
+      render_DrawText(rc, (char *)element->label_c_string, element->position.x+padding.x, element->position.y+padding.y, font_size, font_color, 0);
+    }
   }
 
   return interacted;
@@ -1956,6 +1958,11 @@ global_variable Process edit_menu_button;
 global_variable Process copy_button;
 global_variable Process paste_button;
 
+Process *menu_buttons[] = { &file_menu_button, &edit_menu_button };
+Process *file_submenu[] = { &open_file_button, &save_file_button, &save_as_file_button };
+Process *edit_submenu[] = { &copy_button, &paste_button };
+Process **sub_menus[] = { file_submenu, edit_submenu };
+U32 sub_menu_counts[] = { ArrayCount(file_submenu), ArrayCount(edit_submenu) };
 
 function void ui_box_begin(Context *context, Ui_Box *box) {
   box->offset = (Vector2){0.0f, 0.0f};
@@ -1970,29 +1977,20 @@ function void ui_box_end(Context *context, Ui_Box *box) {
   SLLQueuePop(context->ui_box_stack.first, context->ui_box_stack.last);
 }
 
-function void test_ui(Context *context) {
-  Process *menu_buttons[] = { &file_menu_button, &edit_menu_button };
-  Process *file_submenu[] = { &open_file_button, &save_file_button, &save_as_file_button };
-  Process *edit_submenu[] = { &copy_button, &paste_button };
-  Process **sub_menus[] = { file_submenu, edit_submenu };
-  U32 sub_menu_counts[] = { ArrayCount(file_submenu), ArrayCount(edit_submenu) };
-  Assert(ArrayCount(menu_buttons) == ArrayCount(sub_menus) &&
-         ArrayCount(sub_menus) == ArrayCount(sub_menu_counts));
+function void test_ui(Context *context, B32 sizing) {
+  Process *clicked_active_menu_button = 0;
+  Process *hot_active_menu_button = 0;
 
   ui_box_begin(context, &top_menu_box);
   {
     for (U32 i = 0; i < ArrayCount(menu_buttons); ++i) {
       Process *menu_button = menu_buttons[i];
-      if (do_new_ui_element(context, menu_button)) {
-        if (context->active_menu_element == menu_button) {
-          context->active_menu_element = 0;
-        } else {
-          context->active_menu_element = menu_button;
-        }
+      if (do_new_ui_element(context, menu_button, sizing)) {
+        clicked_active_menu_button = menu_button;
       }
 
       if (context->hot_process == menu_button && context->active_menu_element != 0) {
-        context->active_menu_element = menu_button;
+        hot_active_menu_button = menu_button;
       }
     }
 
@@ -2007,7 +2005,7 @@ function void test_ui(Context *context) {
         {
           for (U32 j = 0; j < sub_menu_counts[i]; ++j) {
             Process *sub_menu_button = sub_menu[j];
-            do_new_ui_element(context, sub_menu_button);
+            do_new_ui_element(context, sub_menu_button, sizing);
           }
         }
         ui_box_end(context, &sub_menu_box);
@@ -2015,6 +2013,17 @@ function void test_ui(Context *context) {
     }
   }
   ui_box_end(context, &top_menu_box);
+
+  // update active-menu-element
+  if (clicked_active_menu_button) {
+    if (context->active_menu_element == clicked_active_menu_button) {
+      context->active_menu_element = 0;
+    } else {
+      context->active_menu_element = clicked_active_menu_button;
+    }
+  } else if (hot_active_menu_button) {
+    context->active_menu_element = hot_active_menu_button;
+  }
 }
 
 
@@ -2022,7 +2031,9 @@ function void test_ui(Context *context) {
 function void handle_ui(Context *context) {
   // TODO: delete this test function once we are done with it
   {
-    test_ui(context);
+    // NOTE: @Speed We have to call UI code twice... onces for sizing and once for rendering/interaction.
+    test_ui(context, 1);
+    test_ui(context, 0);
   }
 }
 
@@ -2785,6 +2796,8 @@ function void initialize_globals(Context *context) {
   edit_menu_button = create_lit_button(context, "Edit", 0, 0);
   copy_button = create_lit_button(context, "Copy", 0, 0);
   paste_button = create_lit_button(context, "Paste", 0, 0);
+  Assert(ArrayCount(menu_buttons) == ArrayCount(sub_menus) &&
+         ArrayCount(sub_menus) == ArrayCount(sub_menu_counts));
 
   // init common filepaths
 #if OS_WINDOWS
