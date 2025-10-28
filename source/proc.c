@@ -257,13 +257,22 @@ typedef enum {
   Ui_Layout_Horizontal,
 } Ui_Layout;
 
+typedef enum {
+  Ui_Sizing_None,
+  Ui_Sizing_FitContents,
+  Ui_Sizing_FitContentsX,
+  Ui_Sizing_FitContentsY,
+} Ui_Sizing;
+
 typedef struct Ui_Box Ui_Box;
 struct Ui_Box {
   Ui_Box *next;
   Vector2 position;
   Vector2 offset;
+  Vector2 size;
   Ui_Align align;
   Ui_Layout layout;
+  Ui_Sizing sizing;
 };
 
 typedef struct {
@@ -271,19 +280,22 @@ typedef struct {
   Ui_Box *last;
 } Ui_Box_List;
 
-#define Create_Ui_Box(x_pos, y_pos, align, layout)\
+#define Create_Ui_Box(x_pos, y_pos, align, layout, sizing)\
   (Ui_Box){\
     0,\
     (Vector2){(x_pos), (y_pos)},\
     (Vector2){0.0f, 0.0f},\
+    (Vector2){0.0f, 0.0f},\
     Ui_Align_##align,\
-    Ui_Layout_##layout\
+    Ui_Layout_##layout,\
+    Ui_Sizing_##sizing\
   }
 
 #define Ui_Default_Position (Vector2){0.0f, 0.0f}
 #define Ui_Default_Offset   (Vector2){0.0f, 0.0f}
 #define Ui_Default_Align    Ui_Align_TopLeft
 #define Ui_Default_Layout   Ui_Layout_None
+#define Ui_Default_Sizing   Ui_Sizing_None
 
 
 
@@ -434,12 +446,6 @@ global_variable Color global_button_dormant_bg_color;
 global_variable Color global_button_hot_bg_color;
 global_variable Color global_button_font_color;
 global_variable Color global_container_bg_color;
-
-global_variable String_Chunk_List global_open_button_label;
-global_variable String_Chunk_List global_save_button_label;
-global_variable String_Chunk_List global_save_as_button_label;
-global_variable String_Chunk_List global_cancel_button_label;
-global_variable String_Chunk_List global_file_button_label;
 
 global_variable Process global_null_process;
 global_variable String_Chunk global_null_string_chunk;
@@ -1821,6 +1827,11 @@ function Ui_State get_ui_state(Context *context) {
 }
 
 
+function void reset_ui_box(Context *context, Ui_Box *box) {
+  box->size = Zero_Struct(Vector2);
+}
+
+
 
 function B32 do_new_ui_element(Context *context, Process *element, B32 sizing) {
   B32 interacted = 0;
@@ -1840,6 +1851,9 @@ function B32 do_new_ui_element(Context *context, Process *element, B32 sizing) {
   Vector2 box_position = (box == 0) ? Ui_Default_Position : box->position;
   Vector2 box_offset = (box == 0) ? Ui_Default_Offset : box->offset;
 
+  B32 set_box_x = box && (box->sizing == Ui_Sizing_FitContents || box->sizing == Ui_Sizing_FitContentsX);
+  B32 set_box_y = box && (box->sizing == Ui_Sizing_FitContents || box->sizing == Ui_Sizing_FitContentsY);
+
   if (sizing) {
     element->label_c_string = 0;
     if (element->label.first && element->label.last) {
@@ -1848,6 +1862,13 @@ function B32 do_new_ui_element(Context *context, Process *element, B32 sizing) {
 
     B32 fit_to_text = Get_Flag(element->flags, Process_Flag_FitToText);
     element->size = get_ui_element_size(context, element, fit_to_text, element->label_c_string);
+
+    if (set_box_x) {
+      box->size.x = Max(box->size.x, element->size.x);
+    }
+    if (set_box_y) {
+      box->size.y = Max(box->size.y, element->size.y);
+    }
 
     switch (align) {
     case Ui_Align_Top: {
@@ -1878,7 +1899,6 @@ function B32 do_new_ui_element(Context *context, Process *element, B32 sizing) {
     } break;
     }
   } else {
-
     Vector2 next_offset;
     switch (layout) {
     default:
@@ -1896,6 +1916,13 @@ function B32 do_new_ui_element(Context *context, Process *element, B32 sizing) {
     }
 
     box->offset = Vector2Add(box->offset, next_offset);
+
+    if (set_box_x) {
+      element->size.x = box->size.x;
+    }
+    if (set_box_y) {
+      element->size.y = box->size.y;
+    }
 
     Rectangle bg_rect = (Rectangle){element->position.x, element->position.y, element->size.x, element->size.y};
 
@@ -1933,7 +1960,7 @@ function B32 do_new_ui_element(Context *context, Process *element, B32 sizing) {
 
 
 
-function Process create_lit_button(Context *context, char *label, F32 x_pos, F32 y_pos) {
+function Process create_lit_button(Context *context, String8 label, F32 x_pos, F32 y_pos) {
   Process button = Zero_Struct(Process);
 
   U32 flags = Process_Flag_Clickable | Process_Flag_FitToText;
@@ -1942,13 +1969,13 @@ function Process create_lit_button(Context *context, char *label, F32 x_pos, F32
   button.position.x = x_pos;
   button.position.y = y_pos;
 
-  button.label = string_chunk_list_from_string8(context, str8_lit(label));
+  button.label = string_chunk_list_from_string8(context, label);
 
   return button;
 }
 
-global_variable Ui_Box top_menu_box = Create_Ui_Box(0.0f, 0.0f, TopLeft, Horizontal);
-global_variable Ui_Box sub_menu_box = Create_Ui_Box(0.0f, 0.0f, TopLeft, Vertical);
+global_variable Ui_Box top_menu_box = Create_Ui_Box(0.0f, 0.0f, TopLeft, Horizontal, None);
+global_variable Ui_Box sub_menu_box = Create_Ui_Box(0.0f, 0.0f, TopLeft, Vertical, FitContentsX);
 
 global_variable Process file_menu_button;
 global_variable Process open_file_button;
@@ -2031,6 +2058,8 @@ function void test_ui(Context *context, B32 sizing) {
 function void handle_ui(Context *context) {
   // TODO: delete this test function once we are done with it
   {
+    reset_ui_box(context, &sub_menu_box);
+
     // NOTE: @Speed We have to call UI code twice... onces for sizing and once for rendering/interaction.
     test_ui(context, 1);
     test_ui(context, 0);
@@ -2727,34 +2756,6 @@ function Context initialize_context(void) {
 
 
 
-typedef struct {
-  char *c_string;
-  String_Chunk_List *string_chunk_list;
-} Init_String_Chunk;
-
-function void initialize_global_string_chunk_lists(Context *context) {
-  Init_String_Chunk inits[] = {
-    {"open", &global_open_button_label},
-    {"cancel", &global_cancel_button_label},
-    {"save", &global_save_button_label},
-    {"save as", &global_save_as_button_label},
-    {"File", &global_file_button_label},
-  };
-
-  for (S32 i = 0; i < ArrayCount(inits); ++i) {
-    Init_String_Chunk init = inits[i];
-    String_Chunk *sc = push_struct(context->permanent_arena, String_Chunk);
-    SLLQueuePush(init.string_chunk_list->first, init.string_chunk_list->last, sc);
-    S32 char_index = 0;
-    for (;;) {
-      sc->str_array[char_index] = init.c_string[char_index];
-      if (init.c_string[char_index] == 0) {
-        break;
-      }
-      char_index += 1;
-    }
-  }
-}
 
 function void initialize_globals(Context *context) {
   S32 monitor_id = GetCurrentMonitor();
@@ -2789,13 +2790,13 @@ function void initialize_globals(Context *context) {
 
 
   // init ui elements
-  file_menu_button = create_lit_button(context, "File", 0, 0);
-  open_file_button = create_lit_button(context, "Open...", 0, 0);
-  save_file_button = create_lit_button(context, "Save", 0, 0);
-  save_as_file_button = create_lit_button(context, "Save As...", 0, 0);
-  edit_menu_button = create_lit_button(context, "Edit", 0, 0);
-  copy_button = create_lit_button(context, "Copy", 0, 0);
-  paste_button = create_lit_button(context, "Paste", 0, 0);
+  file_menu_button = create_lit_button(context, str8_lit("File"), 0, 0);
+  open_file_button = create_lit_button(context, str8_lit("Open..."), 0, 0);
+  save_file_button = create_lit_button(context, str8_lit("Save"), 0, 0);
+  save_as_file_button = create_lit_button(context, str8_lit("Save As..."), 0, 0);
+  edit_menu_button = create_lit_button(context, str8_lit("Edit"), 0, 0);
+  copy_button = create_lit_button(context, str8_lit("Copy"), 0, 0);
+  paste_button = create_lit_button(context, str8_lit("Paste"), 0, 0);
   Assert(ArrayCount(menu_buttons) == ArrayCount(sub_menus) &&
          ArrayCount(sub_menus) == ArrayCount(sub_menu_counts));
 
@@ -2809,8 +2810,6 @@ function void initialize_globals(Context *context) {
   Saves_Filepath = str8_comptime_lit(".."_"saves"_);
   Build_Filepath = str8_comptime_lit(".."_"build"_);
 #undef _
-
-  initialize_global_string_chunk_lists(context);
 
   // ensure saves directory exists
   os_file_make_directory(Saves_Filepath);
