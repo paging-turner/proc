@@ -21,6 +21,7 @@
      [x] Allow de-selecting of processes
      [x] Click-and-drag selection rectangle
      [ ] Ctrl-click-and-drag to include more processes (this collides with process creation right now...)
+     [ ] BUG: Click-and-drag is not accurate. Sometimes the edge of the selection-region does NOT cause a shape to be selected. Try having only the bottom edge of selection-rect touch an empty-process, and you have to get over half covering the empty-process before it is selected.
    === Zooming and Panning ===
      [x] BUG: When zoomed way out, the wire positioning gets messed up.
    === Coordinates ===
@@ -44,6 +45,8 @@
      [x] Copy-paste of selected processes
      [x] BUG: Connect two processes by a single wire. Select the wire *first* and then one or both of the other processes. Copy and paste. There will be extra processes pasted.
      [ ] Allow cutting processes
+     [ ] BUG: Create a process with some text in it, copy-and-paste the process, then edit the text. Both processes' text is edited. We aren't creating copies of the text??
+     [ ] Allowing pasting multiple times. Right now you can only paste once.
    [ ] Use a font other than the raylib default
    [ ] Expand base-layer and let it consume core.h and ryn_memory.h
    [ ] Make some sliders/fields for global settings like process-size and font-size.
@@ -667,6 +670,172 @@ function void clear_processes(Context *context) {
   }
 }
 
+function void remove_copy_process_list(Context *context, Process_List *list) {
+  // TODO: @Speed can probably do some fancy stuff with just the ends of the list?
+  for (Process *p = list->first; p != 0;) {
+    Process *next_process = p->next;
+    remove_process_from_process_list(context, &context->copy_processes, p);
+    p = next_process;
+  }
+}
+
+function void copy_active_processes(Context *context) {
+  B32 error = 0;
+  Vector2 copy_center = (Vector2){0};
+  F32 copy_count = 0.0f;
+
+  // remove whatever processes were already in the copy-list
+  remove_copy_process_list(context, &context->copy_processes);
+
+  // copy processes from active-list to copy-list
+  for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
+    if (Get_Flag(a->flags, Process_Flag_Wire)) {
+      // add connected processes if they have not been added yet
+      for (S32 conn = 0; conn < Process_Connection__Count; ++conn) {
+        if (a->conn[conn] && a->conn[conn]->to_copied == 0) {
+          B32 found_conn = 0;
+          for (Process *test_p = context->active_processes.first; test_p != 0; test_p = test_p->next_active) {
+            if (test_p == a->conn[conn]) {
+              found_conn = 1;
+              // add connected process to copied list
+              // @Copypasta    v------------------v
+              Process *copied_p = create_detached_process(context);
+              *copied_p = *a->conn[conn];
+              a->conn[conn]->to_copied = copied_p;
+              copy_center = Vector2Add(copy_center, a->conn[conn]->position);
+              copy_count += 1.0f;
+              SLLQueuePush(context->copy_processes.first, context->copy_processes.last, copied_p);
+              break;
+            }
+          }
+          if (!found_conn) {
+            // add invisible process to copied list
+            // @Copypasta       ^----------v
+            Process *copied_p = create_detached_process(context);
+            *copied_p = *a->conn[conn];
+            Set_Flag(copied_p->flags, Process_Flag_Empty);
+            a->conn[conn]->to_copied = copied_p;
+            copy_center = Vector2Add(copy_center, a->conn[conn]->position);
+            copy_count += 1.0f;
+            SLLQueuePush(context->copy_processes.first, context->copy_processes.last, copied_p);
+          }
+        }
+      }
+      // add wire to copied-list
+      Process *copied_wire = create_detached_process(context);
+      *copied_wire = *a;
+      // connect copied wire to copied processes
+      for (S32 conn = 0; conn < Process_Connection__Count; ++conn) {
+        if (copied_wire->conn[conn]) {
+          copied_wire->conn[conn] = copied_wire->conn[conn]->to_copied;
+        }
+      }
+      SLLQueuePush(context->copy_processes.first, context->copy_processes.last, copied_wire);
+    } else if (!a->to_copied) {
+      // only add process if it hasn't already been added by a connected wire
+      // @Copypasta       ^----------^
+      Process *copied_p = create_detached_process(context);
+      *copied_p = *a;
+      a->to_copied = copied_p;
+      copy_center = Vector2Add(copy_center, a->position);
+      copy_count += 1.0f;
+      SLLQueuePush(context->copy_processes.first, context->copy_processes.last, copied_p);
+    }
+  }
+
+  // remove all to_copied fields
+  for (Process *p = context->processes.first; p != 0; p = p->next) {
+    p->to_copied = 0;
+  }
+
+  // TODO: @Speed
+  // fix-up copied wire positions (in the cases that only some of the wires between two processes are copied)
+  for (Process *c = context->copy_processes.first; c != 0; c = c->next) {
+    if (!Get_Flag(c->flags, Process_Flag_Wire)) {
+      for (S32 conn = 0; conn < Process_Connection__Count; ++conn) {
+        // get connected wire count
+        S32 conn_count = 0;
+        for (Process *w = context->copy_processes.first; w != 0; w = w->next) {
+          if (Get_Flag(w->flags, Process_Flag_Wire) && w->conn[conn] == c) {
+            conn_count += 1;
+          }
+        }
+        // adjust process' conn count
+        c->conn_count[conn] = conn_count;
+        // we have to loop wire-count times to re-assign each wire
+        for (S32 min_conn = 0; min_conn < conn_count; ++min_conn) {
+          Process *min_wire = 0;
+          // find the next connected wire
+          for (Process *w = context->copy_processes.first; w != 0; w = w->next) {
+            if (Get_Flag(w->flags, Process_Flag_Wire) && w->conn[conn] == c) {
+              if (w->which_conn[conn] >= min_conn) {
+                if (min_wire == 0 || w->which_conn[conn] < min_wire->which_conn[conn]) {
+                  min_wire = w;
+                }
+              }
+            }
+          }
+          // adjust the wire's connection
+          if (min_wire) {
+            min_wire->which_conn[conn] = min_conn;
+          }
+        }
+      }
+    }
+  }
+
+  // post-copy processing
+  for (Process *c = context->copy_processes.first; c != 0; c = c->next) {
+    // make any process with more than one connection (in or out) visible
+    {
+      B32 more_than_one_connection = 0;
+      for (S32 conn = 0; conn < Process_Connection__Count; ++conn) {
+        if (c->conn_count[conn] > 1) {
+          more_than_one_connection = 1;
+          break;
+        }
+      }
+      if (more_than_one_connection) {
+        Unset_Flag(c->flags, Process_Flag_Empty);
+      }
+    }
+
+    // copy label
+    if (c->label.first) {
+      c->label = copy_string_chunk_list(context, &c->label);
+    }
+  }
+
+  if (error) {
+    remove_copy_process_list(context, &context->copy_processes);
+  } else {
+    if (copy_count > 0.0f) {
+      copy_center = Vector2Scale(copy_center, 1.0f/copy_count);
+    } else {
+      // TODO: If copy_count is 0 then something went wrong and maybe we should just bail?
+      copy_center = (Vector2){0};
+    }
+    context->copy_center = copy_center;
+  }
+}
+
+function void paste_processes(Context *context) {
+  Vector2 mouse_world_pos = GetScreenToWorld2D(context->mouse_position, context->camera);
+  Vector2 center_delta = Vector2Subtract(mouse_world_pos, context->copy_center);
+
+  for (Process *p = context->copy_processes.first; p != 0;) {
+    Process *next_p = p->next;
+    if (!Get_Flag(p->flags, Process_Flag_Wire)) {
+      p->position = Vector2Add(p->position, center_delta);
+    }
+
+    SLLQueuePush(context->processes.first, context->processes.last, p);
+    p = next_p;
+  }
+
+  context->copy_processes.first = 0;
+  context->copy_processes.last = 0;
+}
 
 
 ////////////////////////////////////////
@@ -900,7 +1069,13 @@ function void handle_open_file(Context *context) {
 function void handle_save_file_as(Context *context) {
 }
 
+function void handle_copy(Context *context, Process *element) {
+  copy_active_processes(context);
+}
 
+function void handle_paste(Context *context, Process *element) {
+  paste_processes(context);
+}
 
 
 
@@ -1065,14 +1240,6 @@ function Process *get_process_wire_by_selection(Context *context, Process_Select
 
 
 
-function void remove_copy_process_list(Context *context, Process_List *list) {
-  // TODO: @Speed can probably do some fancy stuff with just the ends of the list?
-  for (Process *p = list->first; p != 0;) {
-    Process *next_process = p->next;
-    remove_process_from_process_list(context, &context->copy_processes, p);
-    p = next_process;
-  }
-}
 
 function void remove_process_from_active_processes(Context *context, Process *p) {
   if (context->active_processes.first == p) {
@@ -1230,155 +1397,7 @@ function void delete_process(Context *context, Process *p) {
 }
 
 
-function void copy_active_processes(Context *context) {
-  B32 error = 0;
-  Vector2 copy_center = (Vector2){0};
-  F32 copy_count = 0.0f;
 
-  // remove whatever processes were already in the copy-list
-  remove_copy_process_list(context, &context->copy_processes);
-
-  // copy processes from active-list to copy-list
-  for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
-    if (Get_Flag(a->flags, Process_Flag_Wire)) {
-      // add connected processes if they have not been added yet
-      for (S32 conn = 0; conn < Process_Connection__Count; ++conn) {
-        if (a->conn[conn] && a->conn[conn]->to_copied == 0) {
-          B32 found_conn = 0;
-          for (Process *test_p = context->active_processes.first; test_p != 0; test_p = test_p->next_active) {
-            if (test_p == a->conn[conn]) {
-              found_conn = 1;
-              // add connected process to copied list
-              // @Copypasta    v------------------v
-              Process *copied_p = create_detached_process(context);
-              *copied_p = *a->conn[conn];
-              a->conn[conn]->to_copied = copied_p;
-              copy_center = Vector2Add(copy_center, a->conn[conn]->position);
-              copy_count += 1.0f;
-              SLLQueuePush(context->copy_processes.first, context->copy_processes.last, copied_p);
-              break;
-            }
-          }
-          if (!found_conn) {
-            // add invisible process to copied list
-            // @Copypasta       ^----------v
-            Process *copied_p = create_detached_process(context);
-            *copied_p = *a->conn[conn];
-            Set_Flag(copied_p->flags, Process_Flag_Empty);
-            a->conn[conn]->to_copied = copied_p;
-            copy_center = Vector2Add(copy_center, a->conn[conn]->position);
-            copy_count += 1.0f;
-            SLLQueuePush(context->copy_processes.first, context->copy_processes.last, copied_p);
-          }
-        }
-      }
-      // add wire to copied-list
-      Process *copied_wire = create_detached_process(context);
-      *copied_wire = *a;
-      // connect copied wire to copied processes
-      for (S32 conn = 0; conn < Process_Connection__Count; ++conn) {
-        if (copied_wire->conn[conn]) {
-          copied_wire->conn[conn] = copied_wire->conn[conn]->to_copied;
-        }
-      }
-      SLLQueuePush(context->copy_processes.first, context->copy_processes.last, copied_wire);
-    } else if (!a->to_copied) {
-      // only add process if it hasn't already been added by a connected wire
-      // @Copypasta       ^----------^
-      Process *copied_p = create_detached_process(context);
-      *copied_p = *a;
-      a->to_copied = copied_p;
-      copy_center = Vector2Add(copy_center, a->position);
-      copy_count += 1.0f;
-      SLLQueuePush(context->copy_processes.first, context->copy_processes.last, copied_p);
-    }
-  }
-
-  // remove all to_copied fields
-  for (Process *p = context->processes.first; p != 0; p = p->next) {
-    p->to_copied = 0;
-  }
-
-  // TODO: @Speed
-  // fix-up copied wire positions (in the cases that only some of the wires between two processes are copied)
-  for (Process *c = context->copy_processes.first; c != 0; c = c->next) {
-    if (!Get_Flag(c->flags, Process_Flag_Wire)) {
-      for (S32 conn = 0; conn < Process_Connection__Count; ++conn) {
-        // get connected wire count
-        S32 conn_count = 0;
-        for (Process *w = context->copy_processes.first; w != 0; w = w->next) {
-          if (Get_Flag(w->flags, Process_Flag_Wire) && w->conn[conn] == c) {
-            conn_count += 1;
-          }
-        }
-        // adjust process' conn count
-        c->conn_count[conn] = conn_count;
-        // we have to loop wire-count times to re-assign each wire
-        for (S32 min_conn = 0; min_conn < conn_count; ++min_conn) {
-          Process *min_wire = 0;
-          // find the next connected wire
-          for (Process *w = context->copy_processes.first; w != 0; w = w->next) {
-            if (Get_Flag(w->flags, Process_Flag_Wire) && w->conn[conn] == c) {
-              if (w->which_conn[conn] >= min_conn) {
-                if (min_wire == 0 || w->which_conn[conn] < min_wire->which_conn[conn]) {
-                  min_wire = w;
-                }
-              }
-            }
-          }
-          // adjust the wire's connection
-          if (min_wire) {
-            min_wire->which_conn[conn] = min_conn;
-          }
-        }
-      }
-    }
-  }
-
-  // make any process with more than one connection (in or out) visible
-  for (Process *c = context->copy_processes.first; c != 0; c = c->next) {
-    B32 more_than_one_connection = 0;
-    for (S32 conn = 0; conn < Process_Connection__Count; ++conn) {
-      if (c->conn_count[conn] > 1) {
-        more_than_one_connection = 1;
-        break;
-      }
-    }
-    if (more_than_one_connection) {
-      Unset_Flag(c->flags, Process_Flag_Empty);
-    }
-  }
-
-  if (error) {
-    remove_copy_process_list(context, &context->copy_processes);
-  } else {
-    if (copy_count > 0.0f) {
-      copy_center = Vector2Scale(copy_center, 1.0f/copy_count);
-    } else {
-      // TODO: If copy_count is 0 then something went wrong and maybe we should just bail?
-      copy_center = (Vector2){0};
-    }
-    context->copy_center = copy_center;
-  }
-}
-
-function void paste_processes(Context *context) {
-  Vector2 mouse_world_pos = GetScreenToWorld2D(context->mouse_position, context->camera);
-  Vector2 center_delta = Vector2Subtract(mouse_world_pos, context->copy_center);
-
-  for (Process *p = context->copy_processes.first; p != 0;) {
-    Process *next_p = p->next;
-    if (!Get_Flag(p->flags, Process_Flag_Wire)) {
-      p->position = Vector2Add(p->position, center_delta);
-    }
-
-    SLLQueuePush(context->processes.first, context->processes.last, p);
-    p = next_p;
-  }
-
-  context->copy_processes.first = 0;
-  context->copy_processes.last = 0;
-}
 
 
 
@@ -2807,7 +2826,9 @@ function void initialize_globals(Context *context) {
   save_as_file_button.func = set_menu_state_as_save_file_as;
   edit_menu_button = create_lit_button(context, str8_lit("Edit"), 0, 0);
   copy_button = create_lit_button(context, str8_lit("Copy"), 0, 0);
+  copy_button.func = handle_copy;
   paste_button = create_lit_button(context, str8_lit("Paste"), 0, 0);
+  paste_button.func = handle_paste;
   Assert(ArrayCount(menu_buttons) == ArrayCount(sub_menus) &&
          ArrayCount(sub_menus) == ArrayCount(sub_menu_counts));
 
