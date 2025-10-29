@@ -878,15 +878,18 @@ function S32 collect_save_files(Context *context) {
 
 
 function void set_menu_state_as_open_file(Context *context, Process *element) {
+  printf("set_menu_state_as_open_file\n");
 }
 
 
 function void set_menu_state_as_save_file_as(Context *context, Process *element) {
+  printf("set_menu_state_as_save_file_as\n");
 }
 
 
 function void save_file(Context *context, Process *element) {
-  write_save_file(context, context->temp_arena, context->save_file_name);
+  printf("save_file\n");
+  /* write_save_file(context, context->temp_arena, context->save_file_name); */
 }
 
 
@@ -2032,7 +2035,12 @@ function void test_ui(Context *context, B32 sizing) {
         {
           for (U32 j = 0; j < sub_menu_counts[i]; ++j) {
             Process *sub_menu_button = sub_menu[j];
-            do_new_ui_element(context, sub_menu_button, sizing);
+            if (do_new_ui_element(context, sub_menu_button, sizing)) {
+              context->active_menu_element = 0;
+              if (sub_menu_button->func) {
+                sub_menu_button->func(context, sub_menu_button);
+              }
+            }
           }
         }
         ui_box_end(context, &sub_menu_box);
@@ -2792,8 +2800,11 @@ function void initialize_globals(Context *context) {
   // init ui elements
   file_menu_button = create_lit_button(context, str8_lit("File"), 0, 0);
   open_file_button = create_lit_button(context, str8_lit("Open..."), 0, 0);
+  open_file_button.func = set_menu_state_as_open_file;
   save_file_button = create_lit_button(context, str8_lit("Save"), 0, 0);
+  save_file_button.func = save_file;
   save_as_file_button = create_lit_button(context, str8_lit("Save As..."), 0, 0);
+  save_as_file_button.func = set_menu_state_as_save_file_as;
   edit_menu_button = create_lit_button(context, str8_lit("Edit"), 0, 0);
   copy_button = create_lit_button(context, str8_lit("Copy"), 0, 0);
   paste_button = create_lit_button(context, str8_lit("Paste"), 0, 0);
