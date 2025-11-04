@@ -1,0 +1,65 @@
+[x] Fix naming collisions with Raylib and "Windows.h" !!!
+
+[x] Allow deleting of processes
+  [x] BUG: Connect two processes with two wires. Delete the last wire. The processes do not update their in/out counts and look too wide.
+[x] BUG: Wires seems to have invisible, interactive parts. Since wires aren't given a position, you can click the top-left of the screen and select wires. This should not be allowed.
+[ ] File save and load
+[ ] Processes should expand to contain their label
+=== Wires ===
+  [x] Allow reordering of connected wires
+  [x] BUG: While making a new wire-connection, if you click on another wire-box, the new-wire jumps to a place off the screen. Clicking on a process while in this busted state makes a new wire that leads to some invisible process.
+  [ ] Preview wire movement while dragging wire.
+=== Multi-select ===
+  [x] Allow multi-selection of processes
+  [x] Allow dragging all selected processes
+  [x] Allow de-selecting of processes
+  [x] Click-and-drag selection rectangle
+  [ ] Ctrl-click-and-drag to include more processes (this collides with process creation right now...)
+  [ ] BUG: Click-and-drag is not accurate. Sometimes the edge of the selection-region does NOT cause a shape to be selected. Try having only the bottom edge of selection-rect touch an empty-process, and you have to get over half covering the empty-process before it is selected.
+=== Zooming and Panning ===
+  [x] BUG: When zoomed way out, the wire positioning gets messed up.
+=== Coordinates ===
+  [ ] We use the word "position" a lot, but sometimes it's screen-pos and sometimes world-pos. Should probably distinguish between the two to avoid confusion.
+=== Graphics ===
+  [ ] Replace line-drawing calls with a call that draws triangle-strips/fans. This should help deal with how to cleanly connect the ends of lines together.
+=== Keybind Config ===
+  [ ] Test some features of the new keybind-config file
+    [ ] Comments
+    [ ] Line without semi-color
+    [ ] Line without equals
+    [ ] Multiple definitions for same feature (should overwrite)
+    [ ] Multiple key-kind definitions for single feature (should error)
+  [ ] Add in error messages for tokenizing/parsing errors.
+  [ ] Rewrite example-config to have good-instructions to help users write their own config.
+  [ ] Add ability to define bindings for mouse buttons and mouse-wheels
+=== Testing ===
+  [ ] Enumerate some test cases, to at least be able to manually check that things are working.
+  [ ] Automated test??
+=== Copy/Paste ===
+  [x] Copy-paste of selected processes
+  [x] BUG: Connect two processes by a single wire. Select the wire *first* and then one or both of the other processes. Copy and paste. There will be extra processes pasted.
+  [ ] Allow cutting processes
+  [ ] BUG: Create a process with some text in it, copy-and-paste the process, then edit the text. Both processes' text is edited. We aren't creating copies of the text??
+  [ ] Allowing pasting multiple times. Right now you can only paste once.
+[ ] Use a font other than the raylib default
+[ ] Expand base-layer and let it consume core.h and ryn_memory.h
+[ ] Make some sliders/fields for global settings like process-size and font-size.
+=== Text Editing ===
+  [ ] Show cursor when editing the text of a process.
+  [ ] Allow moving the cursor to the middle of the text.
+  [ ] Allow selecting regions of text.
+  [ ] Cut/copy/paste
+[x] Allow toggling on/off "mr4th style" process drawing, which is a variation on the visual style of diragrams in the book.
+  [x] Move towards defining shapes using triangle strips/fans. We used some raylib funcs for circles and stuff just because it was easy, but now we need more control.
+  [x] Implement collision detection for triangle strip/fan so we can just define a shape with triangles and be able to interact and draw with the same shape.
+[x] BUG: If you toggle a process to be a special display (cup/cap/invisible), and then connect a new wire to it, the special visual still applies and you cannot toggle away. When connecting wires, we need to check if the special display flag should be unset.
+=== Undo/redo ===
+  [ ]
+[x] BUG: Connect a two processes. Make one process invisible. Delete the *other* process. The invisible process is still there but, well, you can't see it! Either delete the invisible one, or make it visible again. Probably just delete it??
+[x] Automatically show invisible processes. This should only apply to processes with no connections, set to invisible, and no text.
+=== UI / Process-Interaction ===
+  [x] Merge structs for ui-element and process. It will make memory management easier and give more use-cases of processes with different properties than what's covered in PQP.
+[ ] New Arena Changes
+  [x] Change how we loop through processes, so that we can enable growable arenas.
+  [x] Right now we have to make sure the Process struct is a size that's a multiple of a pointer. We should fix that :(
+  [ ] Enable growable arenas
