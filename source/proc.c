@@ -2817,6 +2817,11 @@ function Process *add_sub_button(Context *context, String8 label, U32 flags, Pro
 
 
 
+function void set_global_window_render_size(void) {
+  Vector2 dpi_scale = GetWindowScaleDPI();
+  global_window_size.x = (F32)GetRenderWidth() / dpi_scale.x;
+  global_window_size.y = (F32)GetRenderHeight() / dpi_scale.x;
+}
 
 
 int main(void) {
@@ -2831,8 +2836,13 @@ int main(void) {
 
   Render_Context *prc = &context.process_render_context;
   render_Initialize(context.temp_arena);
+  set_global_window_render_size();
 
   while (!WindowShouldClose()) {
+    if (IsWindowResized()) {
+      set_global_window_render_size();
+    }
+
     handle_user_input(&context);
 
     render_ClearBackground(prc, global_background_color);
