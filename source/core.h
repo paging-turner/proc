@@ -13,7 +13,12 @@
 #define    Set_Flag(flags, flag) ((flags) |=  (flag))
 #define  Unset_Flag(flags, flag) ((flags) &= ~(flag))
 #define    Get_Flag(flags, flag) ((flags) &   (flag))
+#define    Get_Flag_Bool(flags, flag) (Get_Flag((flags), (flag)) ? 1 : 0)
 #define Toggle_Flag(flags, flag) ((flags) ^=  (flag))
+#define Assign_Flag(flags, flag, bool)\
+  ((bool)\
+   ? Set_Flag((flags), (flag))\
+   : Unset_Flag((flags), (flag)))
 
 #define Zero_Struct(type) (type){0}
 

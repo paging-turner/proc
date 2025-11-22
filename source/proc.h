@@ -1,0 +1,297 @@
+//////////////////////////////////////
+// Forward Declarations
+//////////////////////////////////////
+
+typedef struct Process Process;
+typedef struct Context Context;
+function void clear_processes(Context *context);
+function Process *create_process(Context *context);
+function String_Chunk *create_string_chunk(Context *context);
+
+//////////////////////////////////////
+// Process
+//////////////////////////////////////
+
+typedef enum {
+  Process_Flag_Wire        = 1 << 0,
+  Process_Flag_Empty       = 1 << 1,
+  Process_Flag_Cup         = 1 << 2,
+  Process_Flag_Cap         = 1 << 3,
+  Process_Flag_Identity    = 1 << 4,
+  Process_Flag_Drag_In     = 1 << 5,
+  Process_Flag_Drag_Out    = 1 << 6,
+  // UI features
+  Process_Flag_TextEdit       = 1 << 7,
+  Process_Flag_CanBeActive    = 1 << 8,
+  Process_Flag_ScrollY        = 1 << 9,
+  Process_Flag_Clickable      = 1 << 10,
+  Process_Flag_Horizontal     = 1 << 11,
+  Process_Flag_FitToText      = 1 << 12,
+  Process_Flag_IsOpen         = 1 << 13,
+  Process_Flag_Container      = 1 << 14,
+  Process_Flag_FitChildX      = 1 << 15,
+  Process_Flag_FitChildY      = 1 << 16,
+} Process_Flag;
+
+#define Process_Connection_Xlist\
+  X(In, 0) X(Out, 1)
+
+typedef enum {
+#define X(conn, ...)\
+  Process_Connection_##conn,
+  Process_Connection_Xlist
+#undef X
+  Process_Connection__Count,
+} Process_Connection;
+
+typedef enum {
+#define X(conn, i)\
+  Process_Connection_Flag_##conn = (1 << i),
+  Process_Connection_Xlist
+#undef X
+} Process_Connection_Flag;
+
+
+struct Process {
+  B32 flags;
+  Vector2 position;
+  Vector2 size;
+  U32 cold_index;
+
+  void (*func)(Context*, Process*);
+
+  union {
+    struct {
+      S32 in_count;
+      S32 out_count;
+    };
+    S32 conn_count[Process_Connection__Count];
+  };
+
+  union {
+    struct {
+      Process *in;
+      Process *out;
+    };
+    Process *conn[Process_Connection__Count];
+  };
+
+  union {
+    struct {
+      U32 which_in;
+      U32 which_out;
+    };
+    U32 which_conn[Process_Connection__Count];
+  };
+
+  Process *next;
+  Process *next_active;
+
+  Process *to_copied;
+
+  String_Chunk_List label;
+  U8 *label_c_string;
+  U32 label_cursor;
+};
+
+
+typedef enum {
+  Process_Selection__Null,
+  Process_Selection_In,
+  Process_Selection_Out,
+  Process_Selection_NewWire,
+  Process_Selection_Process,
+} Process_Selection_Type;
+
+typedef struct {
+  Process *process;
+  Process_Selection_Type type;
+  S32 index;
+  B32 hot_id_assigned;
+} Process_Selection;
+
+typedef struct {
+  Process *first;
+  Process *last;
+} Process_List;
+
+typedef struct {
+  Vector2 first_point;
+  Vector2 second_point;
+  Vector2 first_control;
+  Vector2 second_control;
+  Vector2 middle_of_curve;
+  Vector2 middle_of_line;
+} Half_Circle_Points;
+
+
+
+//////////////////////////////////////
+// Process Shape
+//////////////////////////////////////
+
+typedef enum {
+  Process_Shape_TriangleFan,
+  Process_Shape_TriangleStrip,
+  Process_Shape_Circle,
+  Process_Shape_HalfCircle,
+} Process_Shape_Kind;
+
+
+typedef struct {
+  Process_Shape_Kind kind;
+#define Process_Shape_Max_Points 16
+  Vector2 points[Process_Shape_Max_Points];
+  S32 triangle_count;
+  F32 radius;
+  S32 point_count;
+  Vector2 center;
+  Vector2 first_control;
+  Vector2 second_control;
+  B32 downward;
+  Vector2 new_wire_position;
+} Process_Shape;
+
+
+//////////////////////////////////////
+// UI
+//////////////////////////////////////
+
+typedef enum {
+  Ui_Align_Top,
+  Ui_Align_TopLeft,
+  Ui_Align_Left,
+  Ui_Align_BottomLeft,
+  Ui_Align_Bottom,
+  Ui_Align_BottomRight,
+  Ui_Align_Right,
+  Ui_Align_TopRight,
+} Ui_Align;
+
+typedef enum {
+  Ui_Layout_None,
+  Ui_Layout_Vertical,
+  Ui_Layout_Horizontal,
+} Ui_Layout;
+
+typedef enum {
+  Ui_Sizing_None,
+  Ui_Sizing_FitContents,
+  Ui_Sizing_FitContentsX,
+  Ui_Sizing_FitContentsY,
+} Ui_Sizing;
+
+typedef struct Ui_Box Ui_Box;
+struct Ui_Box {
+  Ui_Box *next;
+  Vector2 position;
+  Vector2 offset;
+  Vector2 size;
+  Ui_Align align;
+  Ui_Layout layout;
+  Ui_Sizing sizing;
+};
+
+typedef struct {
+  Ui_Box *first;
+  Ui_Box *last;
+} Ui_Box_List;
+
+#define Create_Ui_Box(x_pos, y_pos, align, layout, sizing)\
+  (Ui_Box){\
+    0,\
+    (Vector2){(x_pos), (y_pos)},\
+    (Vector2){0.0f, 0.0f},\
+    (Vector2){0.0f, 0.0f},\
+    Ui_Align_##align,\
+    Ui_Layout_##layout,\
+    Ui_Sizing_##sizing\
+  }
+
+#define Ui_Default_Position (Vector2){0.0f, 0.0f}
+#define Ui_Default_Offset   (Vector2){0.0f, 0.0f}
+#define Ui_Default_Align    Ui_Align_TopLeft
+#define Ui_Default_Layout   Ui_Layout_None
+#define Ui_Default_Sizing   Ui_Sizing_None
+
+
+
+//////////////////////////////////////
+// Context
+//////////////////////////////////////
+
+
+// TODO: maybe this should be a mode and not flags?
+typedef enum {
+  Context_Flag_Dragging       = 1 << 0,
+  Context_Flag_Bounding       = 1 << 1,
+  Context_Flag_Panning        = 1 << 2,
+  Context_Flag_NewWire        = 1 << 3,
+  Context_Flag_RoundedShapes  = 1 << 4,
+} Context_Flag;
+
+
+typedef enum {
+  Ui_State_Flag_mouse0_pressed  = 1 << 0,
+  Ui_State_Flag_mouse1_pressed  = 1 << 1,
+  Ui_State_Flag_mouse0_down     = 1 << 2,
+  Ui_State_Flag_mouse1_down     = 1 << 3,
+  Ui_State_Flag_hot_id_assigned = 1 << 4,
+  Ui_State_Flag_control_down    = 1 << 5,
+  Ui_State_Flag_shift_down      = 1 << 6,
+  Ui_State_Flag_alt_down        = 1 << 7,
+  Ui_State_Flag_action_occured  = 1 << 8,
+} Ui_State_Flag;
+
+typedef struct {
+  U32 flags;
+
+  Vector2 mouse_position;
+  Vector2 mouse_wheel_movement;
+} Ui_State;
+
+
+typedef enum {
+  Menu_State__Null,
+  Menu_State_File,
+  Menu_State_OpenFile,
+  Menu_State_SaveFileAs,
+} Menu_State;
+
+struct Context {
+  Arena *render_arena;
+  Arena *permanent_arena;
+  Arena *ui_arena;
+  Arena *temp_arena;
+  Arena *per_frame_arena;
+
+  U32 flags;
+
+  Process_List processes;
+  Process_List free_processes;
+  Process_List free_ui_elements;
+  String_Chunk_List free_strings;
+
+  Process *hot_process;
+  Process_List active_processes;
+
+  Process_List copy_processes;
+
+  Process_List save_file_list;
+  Ui_Box_List ui_box_stack;
+
+  Render_Context ui_render_context;
+  Render_Context process_render_context;
+
+  Ui_State ui_state;
+  Vector2 active_position;
+  Vector2 copy_center;
+  Process *active_menu_element;
+
+  String_Chunk_List save_file_name;
+
+  Camera2D camera;
+
+#define Max_Key_Presses_Per_Frame 1024
+  U32 key_presses[Max_Key_Presses_Per_Frame];
+};

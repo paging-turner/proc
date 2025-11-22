@@ -38,7 +38,8 @@
   [ ] Add ability to define bindings for mouse buttons and mouse-wheels
 === Testing ===
   [ ] Enumerate some test cases, to at least be able to manually check that things are working.
-  [ ] Automated test??
+  === Automated Tests ===
+    [ ] Define a way to save user-inputs and compare resulting process-lists. Will probably need to id/sort the processes if we end up implementing hash-like structures for storing processes.
 === Copy/Paste ===
   [x] Copy-paste of selected processes
   [x] BUG: Connect two processes by a single wire. Select the wire *first* and then one or both of the other processes. Copy and paste. There will be extra processes pasted.

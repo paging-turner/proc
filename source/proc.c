@@ -38,309 +38,11 @@ global_variable String8 Saves_Filepath;
 global_variable String8 Build_Filepath;
 
 
-//////////////////////////////////////
-// Forward Declarations
-//////////////////////////////////////
 
-typedef struct Process Process;
-typedef struct Context Context;
-function void clear_processes(Context *context);
-function Process *create_process(Context *context);
-function String_Chunk *create_string_chunk(Context *context);
-
-
-
-//////////////////////////////////////
-// Process
-//////////////////////////////////////
-
-typedef enum {
-  Process_Flag_Wire        = 1 << 0,
-  Process_Flag_Empty       = 1 << 1,
-  Process_Flag_Cup         = 1 << 2,
-  Process_Flag_Cap         = 1 << 3,
-  Process_Flag_Identity    = 1 << 4,
-  Process_Flag_Drag_In     = 1 << 5,
-  Process_Flag_Drag_Out    = 1 << 6,
-  // UI features
-  Process_Flag_TextEdit       = 1 << 7,
-  Process_Flag_CanBeActive    = 1 << 8,
-  Process_Flag_ScrollY        = 1 << 9,
-  Process_Flag_Clickable      = 1 << 10,
-  Process_Flag_Horizontal     = 1 << 11,
-  Process_Flag_FitToText      = 1 << 12,
-  Process_Flag_IsOpen         = 1 << 13,
-  Process_Flag_Container      = 1 << 14,
-  Process_Flag_FitChildX      = 1 << 15,
-  Process_Flag_FitChildY      = 1 << 16,
-} Process_Flag;
-
-#define Process_Connection_Xlist\
-  X(In, 0) X(Out, 1)
-
-typedef enum {
-#define X(conn, ...)\
-  Process_Connection_##conn,
-  Process_Connection_Xlist
-#undef X
-  Process_Connection__Count,
-} Process_Connection;
-
-typedef enum {
-#define X(conn, i)\
-  Process_Connection_Flag_##conn = (1 << i),
-  Process_Connection_Xlist
-#undef X
-} Process_Connection_Flag;
-
-
-struct Process {
-  B32 flags;
-  Vector2 position;
-  Vector2 size;
-  U32 cold_index;
-
-  void (*func)(Context*, Process*);
-
-  union {
-    struct {
-      S32 in_count;
-      S32 out_count;
-    };
-    S32 conn_count[Process_Connection__Count];
-  };
-
-  union {
-    struct {
-      Process *in;
-      Process *out;
-    };
-    Process *conn[Process_Connection__Count];
-  };
-
-  union {
-    struct {
-      U32 which_in;
-      U32 which_out;
-    };
-    U32 which_conn[Process_Connection__Count];
-  };
-
-  Process *next;
-  Process *next_active;
-
-  Process *to_copied;
-
-  String_Chunk_List label;
-  U8 *label_c_string;
-  U32 label_cursor;
-};
-
-
-typedef enum {
-  Process_Selection__Null,
-  Process_Selection_In,
-  Process_Selection_Out,
-  Process_Selection_NewWire,
-  Process_Selection_Process,
-} Process_Selection_Type;
-
-typedef struct {
-  Process *process;
-  Process_Selection_Type type;
-  S32 index;
-  B32 hot_id_assigned;
-} Process_Selection;
-
-typedef struct {
-  Process *first;
-  Process *last;
-} Process_List;
-
-typedef struct {
-  Vector2 first_point;
-  Vector2 second_point;
-  Vector2 first_control;
-  Vector2 second_control;
-  Vector2 middle_of_curve;
-  Vector2 middle_of_line;
-} Half_Circle_Points;
-
-
-
-//////////////////////////////////////
-// UI
-//////////////////////////////////////
-
-typedef enum {
-  Ui_Align_Top,
-  Ui_Align_TopLeft,
-  Ui_Align_Left,
-  Ui_Align_BottomLeft,
-  Ui_Align_Bottom,
-  Ui_Align_BottomRight,
-  Ui_Align_Right,
-  Ui_Align_TopRight,
-} Ui_Align;
-
-typedef enum {
-  Ui_Layout_None,
-  Ui_Layout_Vertical,
-  Ui_Layout_Horizontal,
-} Ui_Layout;
-
-typedef enum {
-  Ui_Sizing_None,
-  Ui_Sizing_FitContents,
-  Ui_Sizing_FitContentsX,
-  Ui_Sizing_FitContentsY,
-} Ui_Sizing;
-
-typedef struct Ui_Box Ui_Box;
-struct Ui_Box {
-  Ui_Box *next;
-  Vector2 position;
-  Vector2 offset;
-  Vector2 size;
-  Ui_Align align;
-  Ui_Layout layout;
-  Ui_Sizing sizing;
-};
-
-typedef struct {
-  Ui_Box *first;
-  Ui_Box *last;
-} Ui_Box_List;
-
-#define Create_Ui_Box(x_pos, y_pos, align, layout, sizing)\
-  (Ui_Box){\
-    0,\
-    (Vector2){(x_pos), (y_pos)},\
-    (Vector2){0.0f, 0.0f},\
-    (Vector2){0.0f, 0.0f},\
-    Ui_Align_##align,\
-    Ui_Layout_##layout,\
-    Ui_Sizing_##sizing\
-  }
-
-#define Ui_Default_Position (Vector2){0.0f, 0.0f}
-#define Ui_Default_Offset   (Vector2){0.0f, 0.0f}
-#define Ui_Default_Align    Ui_Align_TopLeft
-#define Ui_Default_Layout   Ui_Layout_None
-#define Ui_Default_Sizing   Ui_Sizing_None
-
-
-
-//////////////////////////////////////
-// Context
-//////////////////////////////////////
-
-
-// TODO: maybe this should be a mode and not flags?
-typedef enum {
-  Context_Flag_Dragging       = 1 << 0,
-  Context_Flag_Bounding       = 1 << 1,
-  Context_Flag_Panning        = 1 << 2,
-  Context_Flag_NewWire        = 1 << 3,
-  Context_Flag_RoundedShapes  = 1 << 4,
-} Context_Flag;
-
-typedef struct {
-  B32 mouse0_pressed;
-  B32 mouse1_pressed;
-  B32 mouse0_down;
-  B32 mouse1_down;
-  B32 hot_id_assigned;
-  Vector2 mouse_wheel_movement;
-  B32 control_down;
-  B32 shift_down;
-  B32 alt_down;
-
-  B32 action_occured;
-} Ui_State;
-
-typedef enum {
-  Menu_State__Null,
-  Menu_State_File,
-  Menu_State_OpenFile,
-  Menu_State_SaveFileAs,
-} Menu_State;
-
-struct Context {
-  Arena *render_arena;
-  Arena *permanent_arena;
-  Arena *ui_arena;
-  Arena *temp_arena;
-  Arena *per_frame_arena;
-
-  U32 flags;
-
-  Process_List processes;
-  Process_List free_processes;
-  Process_List free_ui_elements;
-  String_Chunk_List free_strings;
-
-  Process *hot_process;
-  Process_List active_processes;
-
-  Process_List copy_processes;
-
-  Process_List save_file_list;
-  Ui_Box_List ui_box_stack;
-
-  Render_Context ui_render_context;
-  Render_Context process_render_context;
-
-  Ui_State ui_state;
-  Vector2 mouse_position; // TODO: move this to ui_state
-  Vector2 active_position;
-  Vector2 copy_center;
-  Process *active_menu_element;
-
-  String_Chunk_List save_file_name;
-
-  Camera2D camera;
-};
-
-
-
-
-
-//////////////////////////////////////
-// Includes relying on Context
-//////////////////////////////////////
-
+#include "../source/proc.h"
 #include "../source/keybind.h"
 #include "../source/saves.h"
 
-
-
-
-//////////////////////////////////////
-// Process Shape
-//////////////////////////////////////
-
-typedef enum {
-  Process_Shape_TriangleFan,
-  Process_Shape_TriangleStrip,
-  Process_Shape_Circle,
-  Process_Shape_HalfCircle,
-} Process_Shape_Kind;
-
-
-typedef struct {
-  Process_Shape_Kind kind;
-#define Process_Shape_Max_Points 16
-  Vector2 points[Process_Shape_Max_Points];
-  S32 triangle_count;
-  F32 radius;
-  S32 point_count;
-  Vector2 center;
-  Vector2 first_control;
-  Vector2 second_control;
-  B32 downward;
-  Vector2 new_wire_position;
-} Process_Shape;
 
 
 
@@ -386,7 +88,6 @@ global_variable String_Chunk global_null_string_chunk;
 
 #define Half_Circle_Fudge 1.32f
 #define Half_Circle_Radius_Fudge 1.0f
-
 
 
 
@@ -749,7 +450,7 @@ function void copy_active_processes(Context *context) {
 }
 
 function void paste_processes(Context *context) {
-  Vector2 mouse_world_pos = GetScreenToWorld2D(context->mouse_position, context->camera);
+  Vector2 mouse_world_pos = GetScreenToWorld2D(context->ui_state.mouse_position, context->camera);
   Vector2 center_delta = Vector2Subtract(mouse_world_pos, context->copy_center);
 
   for (Process *p = context->copy_processes.first; p != 0;) {
@@ -786,9 +487,10 @@ function void clear_ui_state(Context *context) {
 
 function void handle_label_editing(Context *context, Process_List ps) {
   U32 key = 0;
+  U32 k = 0;
   B32 shift_down = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
 
-  while ((key = GetKeyPressed())) {
+  while ((key = context->key_presses[k++])) {
     for (Process *a = ps.first; a != 0; a = a->next_active) {
       if (Get_Flag(a->flags, Process_Flag_TextEdit)) {
         B32 is_ascii = key > 0 && key < 256;
@@ -869,6 +571,7 @@ function Vector2 get_ui_element_size(Context *context, Process *element, B32 fit
 
 function B32 do_ui_element(Context *context, Process *element) {
   Render_Context *rc = &context->ui_render_context;
+  Ui_State *ui_state = &context->ui_state;
 
   F32 font_size = global_panel_font_size;
   Vector2 padding = global_button_padding;
@@ -890,14 +593,14 @@ function B32 do_ui_element(Context *context, Process *element) {
   Rectangle bg_rect = (Rectangle){element->position.x, element->position.y, element->size.x, element->size.y};
 
   if (Get_Flag(element->flags, Process_Flag_Clickable) &&
-      !context->ui_state.action_occured &&
-      rectangle_contains_point(bg_rect, context->mouse_position)) {
+      !Get_Flag(ui_state->flags, Ui_State_Flag_action_occured) &&
+      rectangle_contains_point(bg_rect, context->ui_state.mouse_position)) {
     context->hot_process = 0;
     is_hot = 1;
 
     if (IsMouseButtonPressed(0)) {
       interacted = 1;
-      context->ui_state.action_occured = 1;
+      Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
       if (Get_Flag(element->flags, Process_Flag_CanBeActive)) {
         clear_active_processes(context);
         SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, element, next_active, 0);
@@ -1045,7 +748,7 @@ function Vector2 get_process_position(Context *context, Process *process) {
 
   if (is_active && is_dragging) {
     // @Copypasta draw_processes    draw wire
-    Vector2 delta = Vector2Subtract(context->mouse_position, context->active_position);
+    Vector2 delta = Vector2Subtract(context->ui_state.mouse_position, context->active_position);
     position = Vector2Add(position, Vector2Scale(delta, 1.0f/context->camera.zoom));
   }
 
@@ -1125,10 +828,10 @@ function Rectangle get_new_wire_box(Context *context, Process *p, Process_Shape 
 
 
 function Rectangle get_selection_rectangle(Context *context) {
-  F32 x = fmin(context->active_position.x, context->mouse_position.x);
-  F32 y = fmin(context->active_position.y, context->mouse_position.y);
-  F32 x1 = fmax(context->active_position.x, context->mouse_position.x);
-  F32 y1 = fmax(context->active_position.y, context->mouse_position.y);
+  F32 x = fmin(context->active_position.x, context->ui_state.mouse_position.x);
+  F32 y = fmin(context->active_position.y, context->ui_state.mouse_position.y);
+  F32 x1 = fmax(context->active_position.x, context->ui_state.mouse_position.x);
+  F32 y1 = fmax(context->active_position.y, context->ui_state.mouse_position.y);
   Rectangle selection_rect = (Rectangle){x, y, x1-x, y1-y};
 
   return selection_rect;
@@ -1631,6 +1334,7 @@ process_shape_contains_point(Context *context, Process_Shape shape, Vector2 poin
 
 function Process_Selection
 get_process_selection(Context *context, Process *p) {
+  Ui_State *ui_state = &context->ui_state;
   Process_Selection selection = {0};
   selection.index = -1;
   selection.process = p;
@@ -1638,8 +1342,8 @@ get_process_selection(Context *context, Process *p) {
   Process_Shape shape = get_process_shape(context, p);
   Rectangle new_wire_box = get_new_wire_box(context, p, shape);
 
-  if (!context->ui_state.hot_id_assigned) {
-    if (rectangle_contains_point(new_wire_box, context->mouse_position)) {
+  if (!Get_Flag(ui_state->flags, Ui_State_Flag_hot_id_assigned)) {
+    if (rectangle_contains_point(new_wire_box, context->ui_state.mouse_position)) {
       // check new-wire-box
       selection.type = Process_Selection_NewWire;
       context->hot_process = p;
@@ -1649,7 +1353,7 @@ get_process_selection(Context *context, Process *p) {
       for (U32 i = 0; i < p->in_count; ++i) {
         Vector2 in_position = get_process_wire_position(context, p, shape, Process_Connection_In, i);
         Rectangle r = get_wire_box(context, in_position);
-        if (rectangle_contains_point(r, context->mouse_position)) {
+        if (rectangle_contains_point(r, context->ui_state.mouse_position)) {
           selection.type = Process_Selection_In;
           selection.index = i;
           Process *wire = get_process_wire_by_selection(context, selection);
@@ -1664,7 +1368,7 @@ get_process_selection(Context *context, Process *p) {
         for (U32 i = 0; i < p->out_count; ++i) {
           Vector2 out_position = get_process_wire_position(context, p, shape, Process_Connection_Out, i);
           Rectangle r = get_wire_box(context, out_position);
-          if (rectangle_contains_point(r, context->mouse_position)) {
+          if (rectangle_contains_point(r, context->ui_state.mouse_position)) {
             selection.type = Process_Selection_Out;
             selection.index = i;
             Process *wire = get_process_wire_by_selection(context, selection);
@@ -1676,7 +1380,7 @@ get_process_selection(Context *context, Process *p) {
       }
 
       if (selection.type == 0 && !Get_Flag(p->flags, Process_Flag_Wire)) {
-        if (process_shape_contains_point(context, shape, context->mouse_position)) {
+        if (process_shape_contains_point(context, shape, context->ui_state.mouse_position)) {
           // process selection
           selection.type = Process_Selection_Process;
           context->hot_process = p;
@@ -1703,12 +1407,12 @@ function Keybind_Result check_keybind(Context *context, Ui_Feature feature, Proc
 
   switch(keybind.key_kind) {
   case Key_Kind_Mouse0: {
-    key_is_pressed = ui_state->mouse0_pressed;
-    key_is_down = ui_state->mouse0_down;
+    key_is_pressed = Get_Flag(ui_state->flags, Ui_State_Flag_mouse0_pressed);
+    key_is_down = Get_Flag(ui_state->flags, Ui_State_Flag_mouse0_down);
   } break;
   case Key_Kind_Mouse1: {
-    key_is_pressed = ui_state->mouse1_pressed;
-    key_is_down = ui_state->mouse1_down;
+    key_is_pressed = Get_Flag(ui_state->flags, Ui_State_Flag_mouse1_pressed);
+    key_is_down = Get_Flag(ui_state->flags, Ui_State_Flag_mouse1_down);
   } break;
   case Key_Kind_MouseWheelUp: {
     key_is_pressed = ui_state->mouse_wheel_movement.y > 0.0f;
@@ -1726,9 +1430,9 @@ function Keybind_Result check_keybind(Context *context, Ui_Feature feature, Proc
   B32 modifier_shift = Get_Flag(keybind.modifiers, Modifier_Key_Shift) ? 1 : 0;
   B32 modifier_alt = Get_Flag(keybind.modifiers, Modifier_Key_Alt) ? 1 : 0;
 
-  B32 modifier_matches = ((!(modifier_control ^ ui_state->control_down)) &&
-                          (!(modifier_shift ^ ui_state->shift_down)) &&
-                          (!(modifier_alt ^ ui_state->alt_down)));
+  B32 modifier_matches = ((!(modifier_control ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_control_down))) &&
+                          (!(modifier_shift ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_shift_down))) &&
+                          (!(modifier_alt ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_alt_down))));
 
   B32 constraint_hover_process =
     (Get_Flag(keybind.constraint, Ui_Constraint_HoverProcess)
@@ -1753,7 +1457,7 @@ function Keybind_Result check_keybind(Context *context, Ui_Feature feature, Proc
   }
 
   if (result == Keybind_Result_Enter) {
-    context->ui_state.action_occured = 1;
+    Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
   }
 
   return result;
@@ -1763,17 +1467,19 @@ function Keybind_Result check_keybind(Context *context, Ui_Feature feature, Proc
 
 function Ui_State get_ui_state(Context *context) {
   Ui_State ui_state;
-  context->mouse_position = GetMousePosition(); // TODO: mouse_position should go in ui_state
-  ui_state.mouse0_pressed = IsMouseButtonPressed(0);
-  ui_state.mouse1_pressed = IsMouseButtonPressed(1);
-  ui_state.mouse0_down = IsMouseButtonDown(0);
-  ui_state.mouse1_down = IsMouseButtonDown(1);
-  ui_state.hot_id_assigned = 0;
+  ui_state.mouse_position = GetMousePosition(); // TODO: mouse_position should go in ui_state
   ui_state.mouse_wheel_movement = GetMouseWheelMoveV();
-  ui_state.control_down = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
-  ui_state.shift_down = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
-  ui_state.alt_down = IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT);
-  ui_state.action_occured = 0;
+
+  Assign_Flag(ui_state.flags, Ui_State_Flag_mouse0_pressed, IsMouseButtonPressed(0));
+  Assign_Flag(ui_state.flags, Ui_State_Flag_mouse1_pressed, IsMouseButtonPressed(1));
+  Assign_Flag(ui_state.flags, Ui_State_Flag_mouse0_down, IsMouseButtonDown(0));
+  Assign_Flag(ui_state.flags, Ui_State_Flag_mouse1_down, IsMouseButtonDown(1));
+  Unset_Flag(ui_state.flags, Ui_State_Flag_hot_id_assigned);
+  Assign_Flag(ui_state.flags, Ui_State_Flag_control_down, IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL));
+  Assign_Flag(ui_state.flags, Ui_State_Flag_shift_down, IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT));
+  Assign_Flag(ui_state.flags, Ui_State_Flag_alt_down, IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT));
+  Unset_Flag(ui_state.flags, Ui_State_Flag_action_occured);
+
   return ui_state;
 }
 
@@ -1789,6 +1495,7 @@ function B32 do_new_ui_element(Context *context, Process *element, B32 sizing) {
   B32 is_hot = 0;
 
   Render_Context *rc = &context->ui_render_context;
+  Ui_State *ui_state = &context->ui_state;
 
   F32 font_size = global_panel_font_size;
   Vector2 padding = global_button_padding;
@@ -1878,14 +1585,14 @@ function B32 do_new_ui_element(Context *context, Process *element, B32 sizing) {
     Rectangle bg_rect = (Rectangle){element->position.x, element->position.y, element->size.x, element->size.y};
 
     if (Get_Flag(element->flags, Process_Flag_Clickable) &&
-        !context->ui_state.action_occured &&
-        rectangle_contains_point(bg_rect, context->mouse_position)) {
+        !Get_Flag(ui_state->flags, Ui_State_Flag_action_occured) &&
+        rectangle_contains_point(bg_rect, context->ui_state.mouse_position)) {
       context->hot_process = 0;
       is_hot = 1;
 
       if (IsMouseButtonPressed(0)) {
         interacted = 1;
-        context->ui_state.action_occured = 1;
+        Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
         if (Get_Flag(element->flags, Process_Flag_CanBeActive)) {
           clear_active_processes(context);
           SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, element, next_active, 0);
@@ -2045,7 +1752,7 @@ function void handle_process_interaction(Context *context) {
   {
     if (check_keybind(context, Ui_Feature_Pan, selection) == Keybind_Result_Enter) {
       Set_Flag(context->flags, Context_Flag_Panning);
-      context->active_position = context->mouse_position;
+      context->active_position = context->ui_state.mouse_position;
     }
 
     if (Get_Flag(context->flags, Context_Flag_Panning)) {
@@ -2072,8 +1779,8 @@ function void handle_process_interaction(Context *context) {
                       keybind_in.key_kind == Key_Kind_MouseWheelDown);
       B32 out_wheel = (keybind_out.key_kind == Key_Kind_MouseWheelUp ||
                        keybind_out.key_kind == Key_Kind_MouseWheelDown);
-      Vector2 mouse_world_position = GetScreenToWorld2D(context->mouse_position, context->camera);
-      context->camera.offset = context->mouse_position;
+      Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position, context->camera);
+      context->camera.offset = context->ui_state.mouse_position;
       context->camera.target = mouse_world_position;
       F32 zoom_delta;
 
@@ -2094,7 +1801,7 @@ function void handle_process_interaction(Context *context) {
   // process interaction
   for (Process *p = context->processes.first; p != 0; p = p->next) {
     selection = get_process_selection(context, p);
-    ui_state->hot_id_assigned = selection.hot_id_assigned || ui_state->hot_id_assigned;
+    Assign_Flag(ui_state->flags, Ui_State_Flag_hot_id_assigned, selection.hot_id_assigned || Get_Flag(ui_state->flags, Ui_State_Flag_hot_id_assigned));
     B32 is_active = is_active_process(context, p);
 
     // check if we need to stop dragging wire
@@ -2121,7 +1828,7 @@ function void handle_process_interaction(Context *context) {
           U32 drag_flag = in_selection ? Process_Flag_Drag_In : Process_Flag_Drag_Out;
           Unset_Flag(context->flags, Context_Flag_NewWire);
           Set_Flag(wire->flags, drag_flag);
-          context->active_position = context->mouse_position;
+          context->active_position = context->ui_state.mouse_position;
           if (!is_active_wire) {
             clear_active_processes(context);
             SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, wire, next_active, 0);
@@ -2148,7 +1855,7 @@ function void handle_process_interaction(Context *context) {
           }
           Unset_Flag(context->flags, Context_Flag_NewWire);
           Set_Flag(context->flags, Context_Flag_Dragging);
-          context->active_position = context->mouse_position;
+          context->active_position = context->ui_state.mouse_position;
         }
       }
     } else if (check_keybind(context, Ui_Feature_SelectAnotherProcess, selection) == Keybind_Result_Enter) {
@@ -2201,7 +1908,7 @@ function void handle_process_interaction(Context *context) {
   // zero out selection
   selection = (Process_Selection){0};
   // zero the old hot-id
-  if (!ui_state->hot_id_assigned) {
+  if (!Get_Flag(ui_state->flags, Ui_State_Flag_hot_id_assigned)) {
     context->hot_process = 0;
   }
 
@@ -2216,12 +1923,15 @@ function void handle_process_interaction(Context *context) {
     }
   }
 
+  if (IsMouseButtonPressed(0)) {
+    B32 hmmm = 0;
+  }
   // create process
   if (check_keybind(context, Ui_Feature_CreateProcess, selection)) {
     Process *new_p = create_process(context);
     if (new_p) {
       Set_Flag(new_p->flags, Process_Flag_TextEdit);
-      new_p->position = GetScreenToWorld2D(context->mouse_position, context->camera);
+      new_p->position = GetScreenToWorld2D(context->ui_state.mouse_position, context->camera);
       clear_active_processes(context);
       SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, new_p, next_active, 0);
     }
@@ -2236,7 +1946,7 @@ function void handle_process_interaction(Context *context) {
   // enter bounding
   if (check_keybind(context, Ui_Feature_Bound, selection) == Keybind_Result_Enter) {
     Set_Flag(context->flags, Context_Flag_Bounding);
-    context->active_position = context->mouse_position;
+    context->active_position = context->ui_state.mouse_position;
   }
 
   // toggle between rounded and triangular shapes
@@ -2320,7 +2030,7 @@ function void handle_process_interaction(Context *context) {
         a = next_active;
       }
       clear_active_processes(context);
-    } else if (!ui_state->action_occured) {
+    } else if (!Get_Flag(ui_state->flags, Ui_State_Flag_action_occured)) {
       // process label editing
       handle_label_editing(context, context->active_processes);
     }
@@ -2331,8 +2041,19 @@ function void handle_process_interaction(Context *context) {
 
 function void handle_user_input(Context *context) {
   context->ui_state = get_ui_state(context);
+
+  // get key presses
+  for (U32 k = 0; k < Max_Key_Presses_Per_Frame; ++k) {
+    U32 key = GetKeyPressed();
+    context->key_presses[k] = key;
+
+    if (key == 0) {
+      break;
+    }
+  }
+
   handle_ui(context);
-  if (!context->ui_state.action_occured) {
+  if (!Get_Flag(context->ui_state.flags, Ui_State_Flag_action_occured)) {
     handle_process_interaction(context);
   }
 }
@@ -2541,7 +2262,7 @@ function void draw_processes(Context *context) {
         Rectangle new_wire_box = get_new_wire_box(context, p, shape);
         B32 new_wire_box_is_active = (
           (is_active && Get_Flag(context->flags, Context_Flag_NewWire)) ||
-          rectangle_contains_point(new_wire_box, context->mouse_position));
+          rectangle_contains_point(new_wire_box, context->ui_state.mouse_position));
         Color color = new_wire_box_is_active ? box_hover_color : box_color;
         render_DrawRectangleRec(rc, new_wire_box, color);
       }
@@ -2560,10 +2281,10 @@ function void draw_processes(Context *context) {
       Vector2 in_position = get_process_wire_position(context, p->in, in_shape, Process_Connection_In, p->which_in);
       if (Get_Flag(p->flags, Process_Flag_Drag_In)) {
         // @Copypasta get_process_position
-        Vector2 delta = Vector2Subtract(context->mouse_position, context->active_position);
+        Vector2 delta = Vector2Subtract(context->ui_state.mouse_position, context->active_position);
         in_position = Vector2Add(in_position, delta);
       } else if (Get_Flag(p->flags, Process_Flag_Drag_Out)) {
-        Vector2 delta = Vector2Subtract(context->mouse_position, context->active_position);
+        Vector2 delta = Vector2Subtract(context->ui_state.mouse_position, context->active_position);
         out_position = Vector2Add(out_position, delta);
       }
 
@@ -2606,12 +2327,12 @@ function void draw_processes(Context *context) {
 
     Vector2 from_control = position;
     from_control.y -= context->camera.zoom * 30.f;
-    Vector2 to_control = context->mouse_position;
+    Vector2 to_control = context->ui_state.mouse_position;
     to_control.y += context->camera.zoom * 30.0f;
 
     F32 thickness = context->camera.zoom * global_line_thickness;
 
-    render_DrawLineBezierCubic(rc, position, context->mouse_position, from_control, to_control, thickness, stroke_color);
+    render_DrawLineBezierCubic(rc, position, context->ui_state.mouse_position, from_control, to_control, thickness, stroke_color);
   }
 
   // draw selection rectangle
