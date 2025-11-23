@@ -1,27 +1,62 @@
 //////////////////////////////////
-// Types
+// Keybind Declarations
 //////////////////////////////////
-#define Ui_Feature_Xlist\
-  X(Bound)\
-  X(Pan)\
-  X(ZoomIn)\
-  X(ZoomOut)\
-  X(SelectSingleProcess)\
-  X(SelectAnotherProcess)\
-  X(CancelSelection)\
-  X(CreateProcess)\
-  X(DeleteProcess)\
-  X(BeginEditText)\
-  X(CycleProcessDisplay)\
-  X(ToggleDisplayMode)\
-  X(CopyProcess)\
-  X(PasteProcess)
+
+#define Keybind_Xlist\
+  X(Bound, Key_Kind_Mouse0, 0,\
+    Ui_Constraint_NoHotProcess|Ui_Constraint_ExitOnKeyup,\
+    "Select multiple processes by drawing a rectangle with your mouse.")\
+\
+  X(Pan, Key_Kind_Mouse1, 0,\
+    Ui_Constraint_ExitOnKeyup,\
+    "Slide your field of view by moving your mouse.")\
+\
+  X(ZoomIn, Key_Kind_MouseWheelUp, 0, 0,\
+    "Zoom your field of view in to make objects appear closer.")\
+\
+  X(ZoomOut, Key_Kind_MouseWheelDown, 0, 0,\
+    "Zoom your field of view out to make objects appear further.")\
+\
+  X(SelectSingleProcess, Key_Kind_Mouse0, 0,\
+    Ui_Constraint_HoverProcess|Ui_Constraint_ExitOnKeyup,\
+    "Select a single process.")\
+\
+  X(SelectAnotherProcess, Key_Kind_Mouse0, Modifier_Key_Control,\
+    Ui_Constraint_HoverProcess,\
+    "Add a process to the selected processes.")\
+\
+  X(CancelSelection, Key_Kind_Mouse0, 0,\
+    Ui_Constraint_NoHotProcess,\
+    "Clear out the selected processes.")\
+\
+  X(CreateProcess, Key_Kind_Mouse0, Modifier_Key_Control,\
+    Ui_Constraint_NoHotProcess,\
+    "Create a new process.")\
+\
+  X(DeleteProcess, KEY_D, Modifier_Key_Control, 0,\
+    "Delete the selected processes.")\
+\
+  X(CycleProcessDisplay, KEY_TAB, 0, 0,\
+    "Cycle through special displays for selected processes.")\
+\
+  X(ToggleDisplayMode, KEY_M, Modifier_Key_Control, 0,\
+    "Toggle between 'classic' and 'rounded' display modes.")\
+\
+  X(CopyProcess, KEY_C, Modifier_Key_Control, 0,\
+    "Copy selected processes.")\
+\
+  X(PasteProcess, KEY_V, Modifier_Key_Control, 0,\
+    "Paste copied processes, centered at the mouse.")\
+\
+  X(ToggleTestRecording, KEY_T, Modifier_Key_Control, 0,\
+    "Toggle on/off recording of user inputs for creating end-to-end tests.")
+
 
 typedef enum {
   Ui_Feature__Null,
-#define X(feature)\
+#define X(feature, ...)\
   Ui_Feature_##feature,
-  Ui_Feature_Xlist
+  Keybind_Xlist
 #undef X
   Ui_Feature__Count,
 } Ui_Feature;
@@ -116,55 +151,7 @@ function void load_keybinds(Context *context);
 
 
 
-//////////////////////////////////
-// Keybind Declarations
-//////////////////////////////////
 
-#define Keybind_Xlist\
-  X(Bound, Key_Kind_Mouse0, 0,\
-    Ui_Constraint_NoHotProcess|Ui_Constraint_ExitOnKeyup,\
-    "Select multiple processes by drawing a rectangle with your mouse.")\
-\
-  X(Pan, Key_Kind_Mouse1, 0,\
-    Ui_Constraint_ExitOnKeyup,\
-    "Slide your field of view by moving your mouse.")\
-\
-  X(ZoomIn, Key_Kind_MouseWheelUp, 0, 0,\
-    "Zoom your field of view in to make objects appear closer.")\
-\
-  X(ZoomOut, Key_Kind_MouseWheelDown, 0, 0,\
-    "Zoom your field of view out to make objects appear further.")\
-\
-  X(SelectSingleProcess, Key_Kind_Mouse0, 0,\
-    Ui_Constraint_HoverProcess|Ui_Constraint_ExitOnKeyup,\
-    "Select a single process.")\
-\
-  X(SelectAnotherProcess, Key_Kind_Mouse0, Modifier_Key_Control,\
-    Ui_Constraint_HoverProcess,\
-    "Add a process to the selected processes.")\
-\
-  X(CancelSelection, Key_Kind_Mouse0, 0,\
-    Ui_Constraint_NoHotProcess,\
-    "Clear out the selected processes.")\
-\
-  X(CreateProcess, Key_Kind_Mouse0, Modifier_Key_Control,\
-    Ui_Constraint_NoHotProcess,\
-    "Create a new process.")\
-\
-  X(DeleteProcess, KEY_D, Modifier_Key_Control, 0,\
-    "Delete the selected processes.")\
-\
-  X(CycleProcessDisplay, KEY_TAB, 0, 0,\
-    "Cycle through special displays for selected processes.")\
-\
-  X(ToggleDisplayMode, KEY_M, Modifier_Key_Control, 0,\
-    "Toggle between 'classic' and 'rounded' display modes.")\
-\
-  X(CopyProcess, KEY_C, Modifier_Key_Control, 0,\
-    "Copy selected processes.")\
-\
-  X(PasteProcess, KEY_V, Modifier_Key_Control, 0,\
-    "Paste copied processes, centered at the mouse.")
 
 
 

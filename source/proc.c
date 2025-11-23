@@ -490,7 +490,7 @@ function void handle_label_editing(Context *context, Process_List ps) {
   U32 k = 0;
   B32 shift_down = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
 
-  while ((key = context->key_presses[k++])) {
+  while ((key = context->ui_state.key_presses[k++])) {
     for (Process *a = ps.first; a != 0; a = a->next_active) {
       if (Get_Flag(a->flags, Process_Flag_TextEdit)) {
         B32 is_ascii = key > 0 && key < 256;
@@ -2045,7 +2045,7 @@ function void handle_user_input(Context *context) {
   // get key presses
   for (U32 k = 0; k < Max_Key_Presses_Per_Frame; ++k) {
     U32 key = GetKeyPressed();
-    context->key_presses[k] = key;
+    context->ui_state.key_presses[k] = key;
 
     if (key == 0) {
       break;
@@ -2419,6 +2419,7 @@ function Context initialize_context(void) {
   context.temp_arena = arena_alloc_reserve(Megabytes(1), 0);
   context.ui_arena = arena_alloc_reserve(Megabytes(1), 0);
   context.per_frame_arena = arena_alloc_reserve(Megabytes(1), 0);
+  context.test_arena = arena_alloc_reserve(Megabytes(1), 0);
 
   context.ui_render_context.arena = context.render_arena;
   context.process_render_context.arena = context.render_arena;

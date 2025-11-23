@@ -245,9 +245,11 @@ typedef enum {
 
 typedef struct {
   U32 flags;
-
   Vector2 mouse_position;
   Vector2 mouse_wheel_movement;
+
+#define Max_Key_Presses_Per_Frame 256
+  U32 key_presses[Max_Key_Presses_Per_Frame];
 } Ui_State;
 
 
@@ -264,6 +266,7 @@ struct Context {
   Arena *ui_arena;
   Arena *temp_arena;
   Arena *per_frame_arena;
+  Arena *test_arena;
 
   U32 flags;
 
@@ -291,7 +294,4 @@ struct Context {
   String_Chunk_List save_file_name;
 
   Camera2D camera;
-
-#define Max_Key_Presses_Per_Frame 1024
-  U32 key_presses[Max_Key_Presses_Per_Frame];
 };
