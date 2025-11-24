@@ -487,6 +487,17 @@ function void clear_ui_state(Context *context) {
   arena_pop_to(context->ui_arena, 0);
 }
 
+function void set_menu_state(Context *context, Menu_State menu_state) {
+  switch(context->menu_state) {
+  case Menu_State_OpenFile:
+  case Menu_State_SaveFileAs: {
+    clear_ui_state(context);
+  } break;
+  }
+
+  context->menu_state = menu_state;
+}
+
 
 function void handle_label_editing(Context *context, Process_List ps) {
   U32 key = 0;
@@ -682,12 +693,13 @@ function S32 collect_save_files(Context *context) {
 
 
 function void set_menu_state_as_open_file(Context *context, Process *element) {
-  context->menu_state = Menu_State_OpenFile;
+  set_menu_state(context, Menu_State_OpenFile);
+  collect_save_files(context);
 }
 
 
 function void set_menu_state_as_save_file_as(Context *context, Process *element) {
-  context->menu_state = Menu_State_SaveFileAs;
+  set_menu_state(context, Menu_State_SaveFileAs);
 }
 
 
@@ -704,7 +716,7 @@ function void handle_open_file(Context *context) {
   render_DrawRectangle(rc, r.x, r.y, r.width, r.height, (Color){200, 50, 70, 255});
 
   if (IsMouseButtonPressed(0) && rectangle_contains_point(r, context->ui_state.mouse_position)) {
-    context->menu_state = 0;
+    set_menu_state(context, 0);
   }
 }
 
@@ -716,7 +728,7 @@ function void handle_save_file_as(Context *context) {
   render_DrawRectangle(rc, r.x, r.y, r.width, r.height, (Color){50, 200, 70, 255});
 
   if (IsMouseButtonPressed(0) && rectangle_contains_point(r, context->ui_state.mouse_position)) {
-    context->menu_state = 0;
+    set_menu_state(context, 0);
   }
 }
 
@@ -1716,7 +1728,6 @@ function void do_menu_ui(Context *context, B32 sizing) {
           for (U32 j = 0; j < sub_menu_counts[i]; ++j) {
             Process *sub_menu_button = sub_menu[j];
             if (do_new_ui_element(context, sub_menu_button, sizing)) {
-              context->menu_state = 0;
               if (sub_menu_button->func) {
                 sub_menu_button->func(context, sub_menu_button);
               }
@@ -1732,12 +1743,12 @@ function void do_menu_ui(Context *context, B32 sizing) {
   // update active-menu-element
   if (clicked_active_menu_button > -1) {
     if (Top_Menu_Index(context->menu_state) == clicked_active_menu_button) {
-      context->menu_state = 0;
+      set_menu_state(context, 0);
     } else {
-      context->menu_state = Menu_State_From_Top_Menu_Index(clicked_active_menu_button);
+      set_menu_state(context, Menu_State_From_Top_Menu_Index(clicked_active_menu_button));
     }
   } else if (hot_active_menu_button > -1) {
-    context->menu_state = Menu_State_From_Top_Menu_Index(hot_active_menu_button);
+    set_menu_state(context, Menu_State_From_Top_Menu_Index(hot_active_menu_button));
   }
 }
 
