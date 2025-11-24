@@ -12,6 +12,8 @@ function String_Chunk *create_string_chunk(Context *context);
 // Process
 //////////////////////////////////////
 
+typedef U64 Process_Id;
+
 typedef enum {
   Process_Flag_Wire        = 1 << 0,
   Process_Flag_Empty       = 1 << 1,
@@ -53,12 +55,14 @@ typedef enum {
 
 
 struct Process {
+  ///////////////
+  // Critical members: Used for comparison tests, cold-storage, etc.
+  ///////////////
   B32 flags;
   Vector2 position;
   Vector2 size;
-  U32 cold_index;
-
-  void (*func)(Context*, Process*);
+  Process_Id id;
+  String_Chunk_List label;
 
   union {
     struct {
@@ -83,13 +87,17 @@ struct Process {
     };
     U32 which_conn[Process_Connection__Count];
   };
+  void (*func)(Context*, Process*); // TODO: What do we do about this func? It's only used for UI elements, so maybe we should stop using Processes as UI elements and give up on the idea of process-ui?
+
+  ///////////////
+  // Ephemeral members: Used for temp calculations, cacheing, logistics, etc.
+  ///////////////
+  U32 cold_index;
+  Process *to_copied;
 
   Process *next;
   Process *next_active;
 
-  Process *to_copied;
-
-  String_Chunk_List label;
   U8 *label_c_string;
   U32 label_cursor;
 };
@@ -252,13 +260,23 @@ typedef struct {
   U32 key_presses[Max_Key_Presses_Per_Frame];
 } Ui_State;
 
-
 typedef enum {
   Menu_State__Null,
-  Menu_State_File,
+  // top menu states
+  Menu_State_FileMenu,
+  Menu_State_EditMenu,
+  // other menu states
   Menu_State_OpenFile,
   Menu_State_SaveFileAs,
 } Menu_State;
+
+#define Top_Menu_Index(menu_state) ((menu_state) - Menu_State_FileMenu)
+#define Menu_State_From_Top_Menu_Index(index) ((index) + Menu_State_FileMenu)
+#define Top_Menu_Count  (Top_Menu_Index(Menu_State_EditMenu)+1)
+
+#define Has_Active_Menu_Element(context)\
+  ((context)->menu_state >= Menu_State_FileMenu &&\
+   (context)->menu_state <= Menu_State_EditMenu)
 
 struct Context {
   Arena *render_arena;
@@ -270,6 +288,7 @@ struct Context {
 
   U32 flags;
 
+  Process_Id current_process_id;
   Process_List processes;
   Process_List free_processes;
   Process_List free_ui_elements;
@@ -287,9 +306,9 @@ struct Context {
   Render_Context process_render_context;
 
   Ui_State ui_state;
+  Menu_State menu_state;
   Vector2 active_position;
   Vector2 copy_center;
-  Process *active_menu_element;
 
   String_Chunk_List save_file_name;
 

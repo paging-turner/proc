@@ -194,6 +194,9 @@ function Process *create_detached_process(Context *context) {
 
   if (p) {
     *p = (Process){0};
+
+    context->current_process_id += 1;
+    p->id = context->current_process_id;
   } else {
     p = The_Null_Process();
   }
@@ -679,12 +682,12 @@ function S32 collect_save_files(Context *context) {
 
 
 function void set_menu_state_as_open_file(Context *context, Process *element) {
-  printf("set_menu_state_as_open_file\n");
+  context->menu_state = Menu_State_OpenFile;
 }
 
 
 function void set_menu_state_as_save_file_as(Context *context, Process *element) {
-  printf("set_menu_state_as_save_file_as\n");
+  context->menu_state = Menu_State_SaveFileAs;
 }
 
 
@@ -695,10 +698,26 @@ function void save_file(Context *context, Process *element) {
 
 
 function void handle_open_file(Context *context) {
+  Render_Context *rc = &context->ui_render_context;
+  Rectangle r = (Rectangle){100, 100, 200, 100};
+
+  render_DrawRectangle(rc, r.x, r.y, r.width, r.height, (Color){200, 50, 70, 255});
+
+  if (IsMouseButtonPressed(0) && rectangle_contains_point(r, context->ui_state.mouse_position)) {
+    context->menu_state = 0;
+  }
 }
 
 
 function void handle_save_file_as(Context *context) {
+  Render_Context *rc = &context->ui_render_context;
+  Rectangle r = (Rectangle){200, 100, 100, 200};
+
+  render_DrawRectangle(rc, r.x, r.y, r.width, r.height, (Color){50, 200, 70, 255});
+
+  if (IsMouseButtonPressed(0) && rectangle_contains_point(r, context->ui_state.mouse_position)) {
+    context->menu_state = 0;
+  }
 }
 
 function void handle_copy(Context *context, Process *element) {
@@ -1643,10 +1662,16 @@ global_variable Process edit_menu_button;
 global_variable Process copy_button;
 global_variable Process paste_button;
 
-Process *menu_buttons[] = { &file_menu_button, &edit_menu_button };
+Process *menu_buttons[] = {
+    [Top_Menu_Index(Menu_State_FileMenu)] = &file_menu_button,
+    [Top_Menu_Index(Menu_State_EditMenu)] = &edit_menu_button,
+};
 Process *file_submenu[] = { &open_file_button, &save_file_button, &save_as_file_button };
 Process *edit_submenu[] = { &copy_button, &paste_button };
-Process **sub_menus[] = { file_submenu, edit_submenu };
+Process **sub_menus[] = {
+  [Top_Menu_Index(Menu_State_FileMenu)] = file_submenu,
+  [Top_Menu_Index(Menu_State_EditMenu)] = edit_submenu,
+};
 U32 sub_menu_counts[] = { ArrayCount(file_submenu), ArrayCount(edit_submenu) };
 
 function void ui_box_begin(Context *context, Ui_Box *box) {
@@ -1662,26 +1687,26 @@ function void ui_box_end(Context *context, Ui_Box *box) {
   SLLQueuePop(context->ui_box_stack.first, context->ui_box_stack.last);
 }
 
-function void test_ui(Context *context, B32 sizing) {
-  Process *clicked_active_menu_button = 0;
-  Process *hot_active_menu_button = 0;
+function void do_menu_ui(Context *context, B32 sizing) {
+  S32 clicked_active_menu_button = -1;
+  S32 hot_active_menu_button = -1;
 
   ui_box_begin(context, &top_menu_box);
   {
-    for (U32 i = 0; i < ArrayCount(menu_buttons); ++i) {
+    for (U32 i = 0; i < Top_Menu_Count; ++i) {
       Process *menu_button = menu_buttons[i];
       if (do_new_ui_element(context, menu_button, sizing)) {
-        clicked_active_menu_button = menu_button;
+        clicked_active_menu_button = i;
       }
 
-      if (context->hot_process == menu_button && context->active_menu_element != 0) {
-        hot_active_menu_button = menu_button;
+      if (context->hot_process == menu_button && Has_Active_Menu_Element(context)) {
+        hot_active_menu_button = i;
       }
     }
 
-    for (U32 i = 0; i < ArrayCount(sub_menus); ++i) {
+    for (U32 i = 0; i < Top_Menu_Count; ++i) {
       Process *menu_button = menu_buttons[i];
-      if (context->active_menu_element == menu_button) {
+      if (Top_Menu_Index(context->menu_state) == i) {
         Process **sub_menu = sub_menus[i];
 
         ui_box_begin(context, &sub_menu_box);
@@ -1691,7 +1716,7 @@ function void test_ui(Context *context, B32 sizing) {
           for (U32 j = 0; j < sub_menu_counts[i]; ++j) {
             Process *sub_menu_button = sub_menu[j];
             if (do_new_ui_element(context, sub_menu_button, sizing)) {
-              context->active_menu_element = 0;
+              context->menu_state = 0;
               if (sub_menu_button->func) {
                 sub_menu_button->func(context, sub_menu_button);
               }
@@ -1705,14 +1730,14 @@ function void test_ui(Context *context, B32 sizing) {
   ui_box_end(context, &top_menu_box);
 
   // update active-menu-element
-  if (clicked_active_menu_button) {
-    if (context->active_menu_element == clicked_active_menu_button) {
-      context->active_menu_element = 0;
+  if (clicked_active_menu_button > -1) {
+    if (Top_Menu_Index(context->menu_state) == clicked_active_menu_button) {
+      context->menu_state = 0;
     } else {
-      context->active_menu_element = clicked_active_menu_button;
+      context->menu_state = Menu_State_From_Top_Menu_Index(clicked_active_menu_button);
     }
-  } else if (hot_active_menu_button) {
-    context->active_menu_element = hot_active_menu_button;
+  } else if (hot_active_menu_button > -1) {
+    context->menu_state = Menu_State_From_Top_Menu_Index(hot_active_menu_button);
   }
 }
 
@@ -1723,9 +1748,19 @@ function void handle_ui(Context *context) {
   {
     reset_ui_box(context, &sub_menu_box);
 
+    switch(context->menu_state) {
+    case Menu_State_OpenFile: {
+      handle_open_file(context);
+    } break;
+    case Menu_State_SaveFileAs: {
+      handle_save_file_as(context);
+    } break;
+    }
+
+    // TODO: Having the switch above, and then calling do_menu_ui... just feels off. Like maybe it should all be unified.
     // NOTE: @Speed We have to call UI code twice... onces for sizing and once for rendering/interaction.
-    test_ui(context, 1);
-    test_ui(context, 0);
+    do_menu_ui(context, 1);
+    do_menu_ui(context, 0);
   }
 }
 
