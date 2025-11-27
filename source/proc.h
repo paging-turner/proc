@@ -25,14 +25,8 @@ typedef enum {
   // UI features
   Process_Flag_TextEdit       = 1 << 7,
   Process_Flag_CanBeActive    = 1 << 8,
-  Process_Flag_ScrollY        = 1 << 9,
-  Process_Flag_Clickable      = 1 << 10,
-  Process_Flag_Horizontal     = 1 << 11,
-  Process_Flag_FitToText      = 1 << 12,
-  Process_Flag_IsOpen         = 1 << 13,
-  Process_Flag_Container      = 1 << 14,
-  Process_Flag_FitChildX      = 1 << 15,
-  Process_Flag_FitChildY      = 1 << 16,
+  Process_Flag_Clickable      = 1 << 9,
+  Process_Flag_FitToText      = 1 << 10,
 } Process_Flag;
 
 #define Process_Connection_Xlist\
@@ -195,6 +189,10 @@ struct Ui_Box {
   Vector2 position;
   Vector2 offset;
   Vector2 size;
+  Vector2 min_size;
+  Vector2 max_size;
+  B32 should_draw;
+  Color color;
   Ui_Align align;
   Ui_Layout layout;
   Ui_Sizing sizing;
@@ -209,8 +207,12 @@ typedef struct {
   (Ui_Box){\
     0,\
     (Vector2){(x_pos), (y_pos)},\
-    (Vector2){0.0f, 0.0f},\
-    (Vector2){0.0f, 0.0f},\
+    (Vector2){0},\
+    (Vector2){0},\
+    (Vector2){0},\
+    (Vector2){0},\
+    0,\
+    (Color){0},\
     Ui_Align_##align,\
     Ui_Layout_##layout,\
     Ui_Sizing_##sizing\
