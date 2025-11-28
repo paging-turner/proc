@@ -23,10 +23,11 @@ typedef enum {
   Process_Flag_Drag_In     = 1 << 5,
   Process_Flag_Drag_Out    = 1 << 6,
   // UI features
-  Process_Flag_TextEdit       = 1 << 7,
-  Process_Flag_CanBeActive    = 1 << 8,
-  Process_Flag_Clickable      = 1 << 9,
-  Process_Flag_FitToText      = 1 << 10,
+  Process_Flag_TextEdit        = 1 << 7,
+  Process_Flag_CanBeActive     = 1 << 8,
+  Process_Flag_Clickable       = 1 << 9,
+  Process_Flag_FitToText       = 1 << 10,
+  Process_Flag_UseLabelCString = 1 << 11,
 } Process_Flag;
 
 #define Process_Connection_Xlist\

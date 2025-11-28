@@ -96,7 +96,7 @@ global_variable String_Chunk global_null_string_chunk;
 
 global_variable Ui_Box top_menu_box = Create_Ui_Box(0.0f, 0.0f, TopLeft, Horizontal, None);
 global_variable Ui_Box sub_menu_box = Create_Ui_Box(0.0f, 0.0f, TopLeft, Vertical, FitContentsX);
-global_variable Ui_Box file_list_box = Create_Ui_Box(0.0f, 0.0f, TopLeft, Vertical, FitContentsX);
+global_variable Ui_Box file_list_box = Create_Ui_Box(0.0f, 0.0f, TopLeft, Vertical, FitContents);
 global_variable Ui_Box open_file_box = Create_Ui_Box(0.0f, 0.0f, TopLeft, Vertical, FitContents);
 
 
@@ -594,15 +594,157 @@ function Vector2 get_ui_element_size(Context *context, Process *element, B32 fit
   return size;
 }
 
+function B32 do_new_ui_element(Context *context, Process *element, B32 sizing) {
+  B32 interacted = 0;
+  B32 is_hot = 0;
 
-function void do_ui_label(Context *context, String8 label, Vector2 position) {
-  // TODO: use do_new_ui_element
-  F32 font_size = global_panel_font_size;
   Render_Context *rc = &context->ui_render_context;
-  Color color = global_button_font_color;
+  Ui_State *ui_state = &context->ui_state;
+
+  F32 font_size = global_panel_font_size;
+  Vector2 padding = global_button_padding;
+  Color dormant_bg_color = global_button_dormant_bg_color;
+  Color hot_bg_color = global_button_hot_bg_color;
+  Color font_color = global_button_font_color;
+
+  Ui_Box *box = context->ui_box_stack.first;
+  Ui_Align align = (box == 0) ? Ui_Default_Align : box->align;
+  Ui_Layout layout = (box == 0) ? Ui_Default_Layout : box->layout;
+  Vector2 box_position = (box == 0) ? Ui_Default_Position : box->position;
+  Vector2 box_offset = (box == 0) ? Ui_Default_Offset : box->offset;
+
+  B32 set_box_x = box && (box->sizing == Ui_Sizing_FitContents || box->sizing == Ui_Sizing_FitContentsX);
+  B32 set_box_y = box && (box->sizing == Ui_Sizing_FitContents || box->sizing == Ui_Sizing_FitContentsY);
+
+  if (sizing) {
+    if (!Get_Flag(element->flags, Process_Flag_UseLabelCString)) {
+      element->label_c_string = 0;
+      if (element->label.first && element->label.last) {
+        element->label_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &element->label);
+      }
+    }
+
+    B32 fit_to_text = Get_Flag(element->flags, Process_Flag_FitToText);
+    element->size = get_ui_element_size(context, element, fit_to_text, element->label_c_string);
+
+    // @Copypasta ui_box_end
+    if (set_box_x) {
+      if (layout == Ui_Layout_Horizontal) {
+        box->size.x += element->size.x;
+      } else {
+        box->size.x = Max(box->size.x, element->size.x);
+      }
+    }
+    if (set_box_y) {
+      if (layout == Ui_Layout_Vertical) {
+        box->size.y += element->size.y;
+      } else {
+        box->size.y = Max(box->size.y, element->size.y);
+      }
+    }
+
+    switch (align) {
+    case Ui_Align_Top: {
+      box_position.x -= 0.5f * element->size.x;
+    } break;
+    case Ui_Align_TopLeft: {
+    } break;
+    case Ui_Align_Left: {
+      box_position.y -= 0.5f * element->size.y;
+    } break;
+    case Ui_Align_BottomLeft: {
+      box_position.y -= element->size.y;
+    } break;
+    case Ui_Align_Bottom: {
+      box_position.x -= 0.5f * element->size.x;
+      box_position.y -= element->size.y;
+    } break;
+    case Ui_Align_BottomRight: {
+      box_position.x -= element->size.x;
+      box_position.y -= element->size.y;
+    } break;
+    case Ui_Align_Right: {
+      box_position.x -= element->size.x;
+      box_position.y -= 0.5f * element->size.y;
+    } break;
+    case Ui_Align_TopRight: {
+      box_position.x -= element->size.x;
+    } break;
+    }
+  } else {
+    Vector2 next_offset;
+    switch (layout) {
+    default:
+    case Ui_Layout_None: {
+      next_offset = Zero_Struct(Vector2);
+    } break;
+    case Ui_Layout_Vertical: {
+      next_offset = (Vector2){0.0f, element->size.y};
+      element->position = Vector2Add(box_position, box_offset);
+    } break;
+    case Ui_Layout_Horizontal: {
+      element->position = Vector2Add(box_position, box_offset);
+      next_offset = (Vector2){element->size.x, 0.0f};
+    } break;
+    }
+
+    box->offset = Vector2Add(box->offset, next_offset);
+
+    if (set_box_x && layout == Ui_Layout_Vertical) {
+      element->size.x = box->size.x;
+    }
+    if (set_box_y && layout == Ui_Layout_Horizontal) {
+      element->size.y = box->size.y;
+    }
+
+    Rectangle bg_rect = (Rectangle){element->position.x, element->position.y, element->size.x, element->size.y};
+
+    if (Get_Flag(element->flags, Process_Flag_Clickable) &&
+        !Get_Flag(ui_state->flags, Ui_State_Flag_action_occured) &&
+        rectangle_contains_point(bg_rect, context->ui_state.mouse_position)) {
+      context->hot_process = 0;
+      is_hot = 1;
+
+      if (IsMouseButtonPressed(0)) {
+        interacted = 1;
+        Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
+        if (Get_Flag(element->flags, Process_Flag_CanBeActive)) {
+          clear_active_processes(context);
+          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, element, next_active, 0);
+        }
+      }
+    }
+
+    Color bg_color = is_hot ? hot_bg_color : dormant_bg_color;
+    if (is_hot) {
+      context->hot_process = element;
+    }
+
+    render_DrawRectangle(rc, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, bg_color);
+
+    if (element->label_c_string) {
+      render_DrawText(rc, (char *)element->label_c_string, element->position.x+padding.x+1.0f, element->position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
+      render_DrawText(rc, (char *)element->label_c_string, element->position.x+padding.x, element->position.y+padding.y, font_size, font_color, 0);
+    }
+  }
+
+  return interacted;
+}
+
+
+function void do_ui_label(Context *context, String8 label, Vector2 position, B32 sizing) {
+  Process element = Zero_Struct(Process);
+  element.position = position;
+  element.label_c_string = label.str;
+  Set_Flag(element.flags, Process_Flag_UseLabelCString|Process_Flag_FitToText);
+  // TODO: use do_new_ui_element
+  /* F32 font_size = global_panel_font_size; */
+  /* Render_Context *rc = &context->ui_render_context; */
+  /* Color color = global_button_font_color; */
 
   // NOTE: assume label is null-terminated
-  render_DrawText(rc, (char *)label.str, position.x, position.y, font_size, color, 1);
+  do_new_ui_element(context, &element, sizing);
+  /* render_DrawText(rc, (char *)label.str, position.x, position.y, font_size, color, 1); */
 }
 
 
@@ -670,138 +812,12 @@ function Process *create_button(Arena *arena, Vector2 position, String_Chunk_Lis
     button->size.x = text_width + 2.0f*padding.x;
     button->size.y = font_size + 2.0f*padding.y;
 
-    Set_Flag(button->flags, Process_Flag_Clickable);
+    Set_Flag(button->flags, Process_Flag_Clickable|Process_Flag_FitToText);
     button->position = position;
     button->label = label;
   }
 
   return button;
-}
-
-function B32 do_new_ui_element(Context *context, Process *element, B32 sizing) {
-  B32 interacted = 0;
-  B32 is_hot = 0;
-
-  Render_Context *rc = &context->ui_render_context;
-  Ui_State *ui_state = &context->ui_state;
-
-  F32 font_size = global_panel_font_size;
-  Vector2 padding = global_button_padding;
-  Color dormant_bg_color = global_button_dormant_bg_color;
-  Color hot_bg_color = global_button_hot_bg_color;
-  Color font_color = global_button_font_color;
-
-  Ui_Box *box = context->ui_box_stack.first;
-  Ui_Align align = (box == 0) ? Ui_Default_Align : box->align;
-  Ui_Layout layout = (box == 0) ? Ui_Default_Layout : box->layout;
-  Vector2 box_position = (box == 0) ? Ui_Default_Position : box->position;
-  Vector2 box_offset = (box == 0) ? Ui_Default_Offset : box->offset;
-
-  B32 set_box_x = box && (box->sizing == Ui_Sizing_FitContents || box->sizing == Ui_Sizing_FitContentsX);
-  B32 set_box_y = box && (box->sizing == Ui_Sizing_FitContents || box->sizing == Ui_Sizing_FitContentsY);
-
-  if (sizing) {
-    element->label_c_string = 0;
-    if (element->label.first && element->label.last) {
-      element->label_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &element->label);
-    }
-
-    B32 fit_to_text = Get_Flag(element->flags, Process_Flag_FitToText);
-    element->size = get_ui_element_size(context, element, fit_to_text, element->label_c_string);
-
-    if (set_box_x) {
-      box->size.x = Max(box->size.x, element->size.x);
-    }
-    if (set_box_y) {
-      box->size.y = Max(box->size.y, element->size.y);
-    }
-
-    switch (align) {
-    case Ui_Align_Top: {
-      box_position.x -= 0.5f * element->size.x;
-    } break;
-    case Ui_Align_TopLeft: {
-    } break;
-    case Ui_Align_Left: {
-      box_position.y -= 0.5f * element->size.y;
-    } break;
-    case Ui_Align_BottomLeft: {
-      box_position.y -= element->size.y;
-    } break;
-    case Ui_Align_Bottom: {
-      box_position.x -= 0.5f * element->size.x;
-      box_position.y -= element->size.y;
-    } break;
-    case Ui_Align_BottomRight: {
-      box_position.x -= element->size.x;
-      box_position.y -= element->size.y;
-    } break;
-    case Ui_Align_Right: {
-      box_position.x -= element->size.x;
-      box_position.y -= 0.5f * element->size.y;
-    } break;
-    case Ui_Align_TopRight: {
-      box_position.x -= element->size.x;
-    } break;
-    }
-  } else {
-    Vector2 next_offset;
-    switch (layout) {
-    default:
-    case Ui_Layout_None: {
-      next_offset = Zero_Struct(Vector2);
-    } break;
-    case Ui_Layout_Vertical: {
-      next_offset = (Vector2){0.0f, element->size.y};
-      element->position = Vector2Add(box_position, box_offset);
-    } break;
-    case Ui_Layout_Horizontal: {
-      element->position = Vector2Add(box_position, box_offset);
-      next_offset = (Vector2){element->size.x, 0.0f};
-    } break;
-    }
-
-    box->offset = Vector2Add(box->offset, next_offset);
-
-    if (set_box_x) {
-      element->size.x = box->size.x;
-    }
-    if (set_box_y) {
-      element->size.y = box->size.y;
-    }
-
-    Rectangle bg_rect = (Rectangle){element->position.x, element->position.y, element->size.x, element->size.y};
-
-    if (Get_Flag(element->flags, Process_Flag_Clickable) &&
-        !Get_Flag(ui_state->flags, Ui_State_Flag_action_occured) &&
-        rectangle_contains_point(bg_rect, context->ui_state.mouse_position)) {
-      context->hot_process = 0;
-      is_hot = 1;
-
-      if (IsMouseButtonPressed(0)) {
-        interacted = 1;
-        Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
-        if (Get_Flag(element->flags, Process_Flag_CanBeActive)) {
-          clear_active_processes(context);
-          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, element, next_active, 0);
-        }
-      }
-    }
-
-    Color bg_color = is_hot ? hot_bg_color : dormant_bg_color;
-    if (is_hot) {
-      context->hot_process = element;
-    }
-
-    render_DrawRectangle(rc, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, bg_color);
-
-    if (element->label_c_string) {
-      render_DrawText(rc, (char *)element->label_c_string, element->position.x+padding.x+1.0f, element->position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
-      render_DrawText(rc, (char *)element->label_c_string, element->position.x+padding.x, element->position.y+padding.y, font_size, font_color, 0);
-    }
-  }
-
-  return interacted;
 }
 
 
@@ -812,6 +828,15 @@ function void ui_box_begin(Context *context, Ui_Box *box, B32 sizing) {
   box->offset = (Vector2){0.0f, 0.0f};
   SLLQueuePushFront(context->ui_box_stack.first, context->ui_box_stack.last, box);
 
+  if (sizing) {
+    if (box->sizing == Ui_Sizing_FitContents || box->sizing == Ui_Sizing_FitContentsX) {
+      box->size.x = 0;
+    }
+    if (box->sizing == Ui_Sizing_FitContents || box->sizing == Ui_Sizing_FitContentsY) {
+      box->size.y = 0;
+    }
+  }
+
   if (!sizing && box->should_draw) {
     Vector2 size = box->size;
     if (box->min_size.x > 0.0f || box->min_size.y > 0.0f) {
@@ -820,16 +845,42 @@ function void ui_box_begin(Context *context, Ui_Box *box, B32 sizing) {
     if (box->max_size.x > 0.0f || box->max_size.y > 0.0f) {
       size = Vector2Min(size, box->max_size);
     }
-    render_DrawRectangle(rc, box->position.x, box->position.y, size.x, size.y, box->color);
+    F32 padding = 0.0f; // TODO: delete this
+    render_DrawRectangle(rc, box->position.x-padding, box->position.y-padding, size.x+2*padding, size.y+2*padding, box->color);
   }
 }
 
-function void ui_box_end(Context *context, Ui_Box *box) {
+function void ui_box_end(Context *context, Ui_Box *box, B32 sizing) {
   if (box != context->ui_box_stack.first) {
     printf("[ Error ] Popping ui-box off of stack but given box does not match. Box passed in is %p while the box popped of the stack is %p .\n", box, context->ui_box_stack.first);
   }
 
   SLLQueuePop(context->ui_box_stack.first, context->ui_box_stack.last);
+
+  Ui_Box *parent_box = context->ui_box_stack.first;
+
+  if (sizing && parent_box) {
+    if (parent_box == &open_file_box) {
+      B32 hmmm = 0;
+    }
+    // @Copypasta ui_box_end
+    B32 set_box_x = (parent_box->sizing == Ui_Sizing_FitContents || parent_box->sizing == Ui_Sizing_FitContentsX);
+    B32 set_box_y = (parent_box->sizing == Ui_Sizing_FitContents || parent_box->sizing == Ui_Sizing_FitContentsY);
+    if (set_box_x) {
+      if (parent_box->layout == Ui_Layout_Horizontal) {
+        parent_box->size.x += box->size.x;
+      } else {
+        parent_box->size.x = Max(parent_box->size.x, box->size.x);
+      }
+    }
+    if (set_box_y) {
+      if (parent_box->layout == Ui_Layout_Vertical) {
+        parent_box->size.y += box->size.y;
+      } else {
+        parent_box->size.y = Max(parent_box->size.y, box->size.y);
+      }
+    }
+  }
 }
 
 
@@ -888,24 +939,28 @@ function void handle_open_file(Context *context, B32 sizing) {
   B32 file_pressed = 0;
   F32 padding = 2.0f;
   open_file_box.position = (Vector2){100.0f, 100.0f};
-  file_list_box.position = (Vector2){open_file_box.position.x,
-                                     open_file_box.position.y + global_panel_font_size + padding};
+  /* file_list_box.position = (Vector2){open_file_box.position.x, */
+  /*                                    open_file_box.position.y + global_panel_font_size + padding}; */
 
   ui_box_begin(context, &open_file_box, sizing);
   open_file_box.should_draw = 1;
   open_file_box.color = global_container_bg_color;
-  open_file_box.min_size = (Vector2){400.0f, 500.0f};
+  /* open_file_box.min_size = (Vector2){400.0f, 500.0f}; */
   {
-    do_ui_label(context, str8_lit("Open File..."), open_file_box.position);
+    do_ui_label(context, str8_lit("Open File..."), open_file_box.position, sizing);
     ui_box_begin(context, &file_list_box, sizing);
+    if (sizing) {
+      // TODO: This file-list-box positioning should be more automatic... like how we layout buttons within a box...
+      file_list_box.position = (Vector2){open_file_box.position.x, open_file_box.position.y+open_file_box.size.y};
+    }
     {
       for (Process *file = context->save_file_list.first; file != 0; file = file->next) {
         file_pressed = do_new_ui_element(context, file, sizing);
       }
     }
-    ui_box_end(context, &file_list_box);
+    ui_box_end(context, &file_list_box, sizing);
   }
-  ui_box_end(context, &open_file_box);
+  ui_box_end(context, &open_file_box, sizing);
 }
 
 
@@ -1780,11 +1835,11 @@ function void do_menu_ui(Context *context, B32 sizing) {
             }
           }
         }
-        ui_box_end(context, &sub_menu_box);
+        ui_box_end(context, &sub_menu_box, sizing);
       }
     }
   }
-  ui_box_end(context, &top_menu_box);
+  ui_box_end(context, &top_menu_box, sizing);
 
   // update active-menu-element
   if (clicked_active_menu_button > -1) {
