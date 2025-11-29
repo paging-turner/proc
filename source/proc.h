@@ -184,6 +184,11 @@ typedef enum {
   Ui_Sizing_FitContentsY,
 } Ui_Sizing;
 
+typedef enum {
+  Ui_Box_Flag_ShouldDraw,
+  Ui_Box_Flag_Clip,
+} Ui_Box_Flag;
+
 typedef struct Ui_Box Ui_Box;
 struct Ui_Box {
   Ui_Box *next;
@@ -192,7 +197,7 @@ struct Ui_Box {
   Vector2 size;
   Vector2 min_size;
   Vector2 max_size;
-  B32 should_draw;
+  U32 flags;
   Color color;
   Ui_Align align;
   Ui_Layout layout;

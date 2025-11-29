@@ -19,6 +19,8 @@ typedef enum {
   render_command_DrawCircleSector,
   render_command_DrawCircleLines,
   render_command_DrawCircleSectorLines,
+  render_command_BeginScissorMode,
+  render_command_EndScissorMode,
 } render_command_kind;
 
 
@@ -60,7 +62,7 @@ typedef struct Render_Command_List {
 typedef struct Render_Context {
   Arena *arena;
   Render_Command_List command_list;
-  B32 reverse_commands;
+  /* B32 reverse_commands; */
 } Render_Context;
 
 global_variable Arena *render_GlobalTempArena;
@@ -73,11 +75,11 @@ function void render_Initialize(Arena *TempArena) {
 function render_command *create_render_command(Render_Context *rc) {
   render_command *command = push_struct(rc->arena, render_command);
 
-  if (rc->reverse_commands) {
-    SLLQueuePushFront(rc->command_list.first, rc->command_list.last, command);
-  } else {
+  /* if (rc->reverse_commands) { */
+  /*   SLLQueuePushFront(rc->command_list.first, rc->command_list.last, command); */
+  /* } else { */
     SLLQueuePush(rc->command_list.first, rc->command_list.last, command);
-  }
+  /* } */
 
   return command;
 }
@@ -318,6 +320,25 @@ function void render_DrawCircleSectorLines(Render_Context *rc, Vector2 center, f
   }
 }
 
+function void render_BeginScissorMode(Render_Context *rc, Vector2 position, Vector2 size) {
+  render_command *Command = create_render_command(rc);
+
+  if (Command) {
+    Command->Kind = render_command_BeginScissorMode;
+    Command->X = position.x;
+    Command->Y = position.y;
+    Command->Width = size.x;
+    Command->Height = size.y;
+  }
+}
+
+function void render_EndScissorMode(Render_Context *rc) {
+  render_command *Command = create_render_command(rc);
+
+  if (Command) {
+    Command->Kind = render_command_EndScissorMode;
+  }
+}
 
 
 function void render_Commands(Render_Context *rc) {
@@ -345,6 +366,8 @@ function void render_Commands(Render_Context *rc) {
     case render_command_DrawCircleSector: { DrawCircleSector((Vector2){C->X, C->Y}, C->Radius, C->StartAngle, C->EndAngle, 10, C->Color); } break;
     case render_command_DrawCircleLines: { DrawCircleLines(C->X, C->Y, C->Radius, C->Color); } break;
     case render_command_DrawCircleSectorLines: { DrawCircleSectorLines((Vector2){C->X, C->Y}, C->Radius, C->StartAngle, C->EndAngle, 10, C->Color); } break;
+    case render_command_BeginScissorMode: { BeginScissorMode(C->X, C->Y, C->Width, C->Height); } break;
+    case render_command_EndScissorMode: { EndScissorMode(); } break;
 
     default: Assert(0); break;
     }

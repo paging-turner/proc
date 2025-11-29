@@ -699,32 +699,38 @@ function B32 do_new_ui_element(Context *context, Process *element, B32 sizing) {
 
     Rectangle bg_rect = (Rectangle){element->position.x, element->position.y, element->size.x, element->size.y};
 
-    if (Get_Flag(element->flags, Process_Flag_Clickable) &&
-        !Get_Flag(ui_state->flags, Ui_State_Flag_action_occured) &&
-        rectangle_contains_point(bg_rect, context->ui_state.mouse_position)) {
-      context->hot_process = 0;
-      is_hot = 1;
+    Vector2 rel_p = Vector2Subtract(element->position, box->position);
+    B32 in_bounds = ((box->max_size.x == 0.0f || rel_p.x <= box->max_size.x) &&
+                     (box->max_size.y == 0.0f || rel_p.y <= box->max_size.y));
 
-      if (IsMouseButtonPressed(0)) {
-        interacted = 1;
-        Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
-        if (Get_Flag(element->flags, Process_Flag_CanBeActive)) {
-          clear_active_processes(context);
-          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, element, next_active, 0);
+    if (in_bounds) {
+      if (Get_Flag(element->flags, Process_Flag_Clickable) &&
+          !Get_Flag(ui_state->flags, Ui_State_Flag_action_occured) &&
+          rectangle_contains_point(bg_rect, context->ui_state.mouse_position)) {
+        context->hot_process = 0;
+        is_hot = 1;
+
+        if (IsMouseButtonPressed(0)) {
+          interacted = 1;
+          Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
+          if (Get_Flag(element->flags, Process_Flag_CanBeActive)) {
+            clear_active_processes(context);
+            SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, element, next_active, 0);
+          }
         }
       }
-    }
 
-    Color bg_color = is_hot ? hot_bg_color : dormant_bg_color;
-    if (is_hot) {
-      context->hot_process = element;
-    }
+      Color bg_color = is_hot ? hot_bg_color : dormant_bg_color;
+      if (is_hot) {
+        context->hot_process = element;
+      }
 
-    render_DrawRectangle(rc, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, bg_color);
+      render_DrawRectangle(rc, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, bg_color);
 
-    if (element->label_c_string) {
-      render_DrawText(rc, (char *)element->label_c_string, element->position.x+padding.x+1.0f, element->position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
-      render_DrawText(rc, (char *)element->label_c_string, element->position.x+padding.x, element->position.y+padding.y, font_size, font_color, 0);
+      if (element->label_c_string) {
+        render_DrawText(rc, (char *)element->label_c_string, element->position.x+padding.x+1.0f, element->position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
+        render_DrawText(rc, (char *)element->label_c_string, element->position.x+padding.x, element->position.y+padding.y, font_size, font_color, 0);
+      }
     }
   }
 
@@ -837,20 +843,33 @@ function void ui_box_begin(Context *context, Ui_Box *box, B32 sizing) {
     }
   }
 
-  if (!sizing && box->should_draw) {
+  if (!sizing) {
     Vector2 size = box->size;
-    if (box->min_size.x > 0.0f || box->min_size.y > 0.0f) {
-      size = Vector2Max(size, box->min_size);
+    if (box->min_size.x > 0.0f) {
+      size.x = Max(size.x, box->min_size.x);
     }
-    if (box->max_size.x > 0.0f || box->max_size.y > 0.0f) {
-      size = Vector2Min(size, box->max_size);
+    if (box->min_size.y > 0.0f) {
+      size.y = Max(size.y, box->min_size.y);
     }
-    F32 padding = 0.0f; // TODO: delete this
-    render_DrawRectangle(rc, box->position.x-padding, box->position.y-padding, size.x+2*padding, size.y+2*padding, box->color);
+    if (box->max_size.x > 0.0f) {
+      size.x = Min(size.x, box->max_size.x);
+    }
+    if (box->max_size.y > 0.0f) {
+      size.y = Min(size.y, box->max_size.y);
+    }
+    if (Get_Flag(box->flags, Ui_Box_Flag_ShouldDraw)) {
+      render_DrawRectangle(rc, box->position.x, box->position.y, size.x, size.y, box->color);
+    }
+    if (Get_Flag(box->flags, Ui_Box_Flag_Clip)) {
+      /* printf("scissor %.2f %.2f %.2f %.2f\n", box->position.x, box->position.y, size.x, size.y); */
+      render_BeginScissorMode(rc, box->position, size);
+    }
   }
 }
 
 function void ui_box_end(Context *context, Ui_Box *box, B32 sizing) {
+  Render_Context *rc = &context->ui_render_context;
+
   if (box != context->ui_box_stack.first) {
     printf("[ Error ] Popping ui-box off of stack but given box does not match. Box passed in is %p while the box popped of the stack is %p .\n", box, context->ui_box_stack.first);
   }
@@ -879,6 +898,12 @@ function void ui_box_end(Context *context, Ui_Box *box, B32 sizing) {
       } else {
         parent_box->size.y = Max(parent_box->size.y, box->size.y);
       }
+    }
+  }
+
+  if (!sizing) {
+    if (Get_Flag(box->flags, Ui_Box_Flag_Clip)) {
+      render_EndScissorMode(rc);
     }
   }
 }
@@ -939,16 +964,16 @@ function void handle_open_file(Context *context, B32 sizing) {
   B32 file_pressed = 0;
   F32 padding = 2.0f;
   open_file_box.position = (Vector2){100.0f, 100.0f};
-  /* file_list_box.position = (Vector2){open_file_box.position.x, */
-  /*                                    open_file_box.position.y + global_panel_font_size + padding}; */
 
   ui_box_begin(context, &open_file_box, sizing);
-  open_file_box.should_draw = 1;
+  Set_Flag(open_file_box.flags, Ui_Box_Flag_ShouldDraw);
   open_file_box.color = global_container_bg_color;
   /* open_file_box.min_size = (Vector2){400.0f, 500.0f}; */
   {
     do_ui_label(context, str8_lit("Open File..."), open_file_box.position, sizing);
     ui_box_begin(context, &file_list_box, sizing);
+    Set_Flag(file_list_box.flags, Ui_Box_Flag_Clip);
+    file_list_box.max_size.y = 100.0f;
     if (sizing) {
       // TODO: This file-list-box positioning should be more automatic... like how we layout buttons within a box...
       file_list_box.position = (Vector2){open_file_box.position.x, open_file_box.position.y+open_file_box.size.y};
