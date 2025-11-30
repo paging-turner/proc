@@ -680,10 +680,10 @@ function B32 do_new_ui_element(Context *context, Process *element, B32 sizing) {
     } break;
     case Ui_Layout_Vertical: {
       next_offset = (Vector2){0.0f, element->size.y};
-      element->position = Vector2Add(box_position, box_offset);
+      element->position = Vector2Add(Vector2Add(box_position, box_offset), box->scroll_offset);
     } break;
     case Ui_Layout_Horizontal: {
-      element->position = Vector2Add(box_position, box_offset);
+      element->position = Vector2Add(Vector2Add(box_position, box_offset), box->scroll_offset);
       next_offset = (Vector2){element->size.x, 0.0f};
     } break;
     }
@@ -697,16 +697,17 @@ function B32 do_new_ui_element(Context *context, Process *element, B32 sizing) {
       element->size.y = box->size.y;
     }
 
-    Rectangle bg_rect = (Rectangle){element->position.x, element->position.y, element->size.x, element->size.y};
-
-    Vector2 rel_p = Vector2Subtract(element->position, box->position);
-    B32 in_bounds = ((box->max_size.x == 0.0f || rel_p.x <= box->max_size.x) &&
-                     (box->max_size.y == 0.0f || rel_p.y <= box->max_size.y));
+    Rectangle element_rect = (Rectangle){element->position.x, element->position.y, element->size.x, element->size.y};
+    Rectangle box_rect = (Rectangle){box->position.x, box->position.y, box->size.x, box->size.y};
+    B32 in_bounds = 1;
+    if (Get_Flag(box->flags, Ui_Box_Flag_Clip)) {
+      in_bounds = CheckCollisionRecs(element_rect, box_rect);
+    }
 
     if (in_bounds) {
       if (Get_Flag(element->flags, Process_Flag_Clickable) &&
           !Get_Flag(ui_state->flags, Ui_State_Flag_action_occured) &&
-          rectangle_contains_point(bg_rect, context->ui_state.mouse_position)) {
+          rectangle_contains_point(element_rect, context->ui_state.mouse_position)) {
         context->hot_process = 0;
         is_hot = 1;
 
@@ -725,7 +726,7 @@ function B32 do_new_ui_element(Context *context, Process *element, B32 sizing) {
         context->hot_process = element;
       }
 
-      render_DrawRectangle(rc, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, bg_color);
+      render_DrawRectangle(rc, element_rect.x, element_rect.y, element_rect.width, element_rect.height, bg_color);
 
       if (element->label_c_string) {
         render_DrawText(rc, (char *)element->label_c_string, element->position.x+padding.x+1.0f, element->position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
@@ -830,6 +831,7 @@ function Process *create_button(Arena *arena, Vector2 position, String_Chunk_Lis
 
 function void ui_box_begin(Context *context, Ui_Box *box, B32 sizing) {
   Render_Context *rc = &context->ui_render_context;
+  Ui_State *ui_state = &context->ui_state;
 
   box->offset = (Vector2){0.0f, 0.0f};
   SLLQueuePushFront(context->ui_box_stack.first, context->ui_box_stack.last, box);
@@ -857,8 +859,15 @@ function void ui_box_begin(Context *context, Ui_Box *box, B32 sizing) {
     if (box->max_size.y > 0.0f) {
       size.y = Min(size.y, box->max_size.y);
     }
+    Rectangle box_rect = (Rectangle){box->position.x, box->position.y, size.x, size.y};
     if (Get_Flag(box->flags, Ui_Box_Flag_ShouldDraw)) {
-      render_DrawRectangle(rc, box->position.x, box->position.y, size.x, size.y, box->color);
+      render_DrawRectangle(rc, box_rect.x, box_rect.y, box_rect.width, box_rect.height, box->color);
+    }
+    if (rectangle_contains_point(box_rect, ui_state->mouse_position)) {
+      if (Get_Flag(box->flags, Ui_Box_Flag_ScrollY) &&
+          ui_state->mouse_wheel_movement.y != 0) {
+        box->scroll_offset.y += ui_state->mouse_wheel_movement.y;
+      }
     }
     if (Get_Flag(box->flags, Ui_Box_Flag_Clip)) {
       /* printf("scissor %.2f %.2f %.2f %.2f\n", box->position.x, box->position.y, size.x, size.y); */
@@ -972,7 +981,7 @@ function void handle_open_file(Context *context, B32 sizing) {
   {
     do_ui_label(context, str8_lit("Open File..."), open_file_box.position, sizing);
     ui_box_begin(context, &file_list_box, sizing);
-    Set_Flag(file_list_box.flags, Ui_Box_Flag_Clip);
+    Set_Flag(file_list_box.flags, Ui_Box_Flag_Clip|Ui_Box_Flag_ScrollY);
     file_list_box.max_size.y = 100.0f;
     if (sizing) {
       // TODO: This file-list-box positioning should be more automatic... like how we layout buttons within a box...

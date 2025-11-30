@@ -187,6 +187,7 @@ typedef enum {
 typedef enum {
   Ui_Box_Flag_ShouldDraw,
   Ui_Box_Flag_Clip,
+  Ui_Box_Flag_ScrollY,
 } Ui_Box_Flag;
 
 typedef struct Ui_Box Ui_Box;
@@ -194,6 +195,7 @@ struct Ui_Box {
   Ui_Box *next;
   Vector2 position;
   Vector2 offset;
+  Vector2 scroll_offset;
   Vector2 size;
   Vector2 min_size;
   Vector2 max_size;
@@ -213,6 +215,7 @@ typedef struct {
   (Ui_Box){\
     0,\
     (Vector2){(x_pos), (y_pos)},\
+    (Vector2){0},\
     (Vector2){0},\
     (Vector2){0},\
     (Vector2){0},\
