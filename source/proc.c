@@ -594,6 +594,27 @@ function Vector2 get_ui_element_size(Context *context, Process *element, B32 fit
   return size;
 }
 
+
+function Vector2 get_box_size(Ui_Box *box) {
+  Vector2 size = box->size;
+
+  if (box->min_size.x > 0.0f) {
+    size.x = Max(size.x, box->min_size.x);
+  }
+  if (box->min_size.y > 0.0f) {
+    size.y = Max(size.y, box->min_size.y);
+  }
+  if (box->max_size.x > 0.0f) {
+    size.x = Min(size.x, box->max_size.x);
+  }
+  if (box->max_size.y > 0.0f) {
+    size.y = Min(size.y, box->max_size.y);
+  }
+
+  return size;
+}
+
+
 function B32 do_new_ui_element(Context *context, Process *element, B32 sizing) {
   B32 interacted = 0;
   B32 is_hot = 0;
@@ -689,16 +710,17 @@ function B32 do_new_ui_element(Context *context, Process *element, B32 sizing) {
     }
 
     box->offset = Vector2Add(box->offset, next_offset);
+    Vector2 box_size = get_box_size(box);
 
     if (set_box_x && layout == Ui_Layout_Vertical) {
-      element->size.x = box->size.x;
+      element->size.x = box_size.x;
     }
     if (set_box_y && layout == Ui_Layout_Horizontal) {
-      element->size.y = box->size.y;
+      element->size.y = box_size.y;
     }
 
     Rectangle element_rect = (Rectangle){element->position.x, element->position.y, element->size.x, element->size.y};
-    Rectangle box_rect = (Rectangle){box->position.x, box->position.y, box->size.x, box->size.y};
+    Rectangle box_rect = (Rectangle){box->position.x, box->position.y, box_size.x, box_size.y};
     B32 in_bounds = 1;
     if (Get_Flag(box->flags, Ui_Box_Flag_Clip)) {
       in_bounds = CheckCollisionRecs(element_rect, box_rect);
@@ -846,19 +868,7 @@ function void ui_box_begin(Context *context, Ui_Box *box, B32 sizing) {
   }
 
   if (!sizing) {
-    Vector2 size = box->size;
-    if (box->min_size.x > 0.0f) {
-      size.x = Max(size.x, box->min_size.x);
-    }
-    if (box->min_size.y > 0.0f) {
-      size.y = Max(size.y, box->min_size.y);
-    }
-    if (box->max_size.x > 0.0f) {
-      size.x = Min(size.x, box->max_size.x);
-    }
-    if (box->max_size.y > 0.0f) {
-      size.y = Min(size.y, box->max_size.y);
-    }
+    Vector2 size = get_box_size(box);
     Rectangle box_rect = (Rectangle){box->position.x, box->position.y, size.x, size.y};
     if (Get_Flag(box->flags, Ui_Box_Flag_ShouldDraw)) {
       render_DrawRectangle(rc, box_rect.x, box_rect.y, box_rect.width, box_rect.height, box->color);
@@ -866,7 +876,9 @@ function void ui_box_begin(Context *context, Ui_Box *box, B32 sizing) {
     if (rectangle_contains_point(box_rect, ui_state->mouse_position)) {
       if (Get_Flag(box->flags, Ui_Box_Flag_ScrollY) &&
           ui_state->mouse_wheel_movement.y != 0) {
+        F32 max_scroll_offset = box->size.y - size.y;
         box->scroll_offset.y += ui_state->mouse_wheel_movement.y;
+        box->scroll_offset.y = Clamp(box->scroll_offset.y, -max_scroll_offset, 0.0f);
       }
     }
     if (Get_Flag(box->flags, Ui_Box_Flag_Clip)) {
