@@ -596,7 +596,7 @@ function Vector2 get_ui_element_size(Context *context, Process *element, B32 fit
 
 
 function Vector2 get_box_size(Ui_Box *box) {
-  Vector2 size = box->size;
+  Vector2 size = box->raw_size;
 
   if (box->min_size.x > 0.0f) {
     size.x = Max(size.x, box->min_size.x);
@@ -612,6 +612,37 @@ function Vector2 get_box_size(Ui_Box *box) {
   }
 
   return size;
+}
+
+function B32 ui_box_should_set_x(Ui_Box *box) {
+  B32 result = (box->sizing == Ui_Sizing_FitContents ||
+                box->sizing == Ui_Sizing_FitContentsX);
+
+  return result;
+}
+
+function B32 ui_box_should_set_y(Ui_Box *box) {
+  B32 result = (box->sizing == Ui_Sizing_FitContents ||
+                box->sizing == Ui_Sizing_FitContentsY);
+
+  return result;
+}
+
+function void set_ui_box_size(Ui_Box *box, Vector2 size, B32 set_box_x, B32 set_box_y) {
+  if (set_box_x) {
+    if (box->layout == Ui_Layout_Horizontal) {
+      box->raw_size.x += size.x;
+    } else {
+      box->raw_size.x = Max(box->raw_size.x, size.x);
+    }
+  }
+  if (set_box_y) {
+    if (box->layout == Ui_Layout_Vertical) {
+      box->raw_size.y += size.y;
+    } else {
+      box->raw_size.y = Max(box->raw_size.y, size.y);
+    }
+  }
 }
 
 
@@ -634,8 +665,8 @@ function B32 do_new_ui_element(Context *context, Process *element, B32 sizing) {
   Vector2 box_position = (box == 0) ? Ui_Default_Position : box->position;
   Vector2 box_offset = (box == 0) ? Ui_Default_Offset : box->offset;
 
-  B32 set_box_x = box && (box->sizing == Ui_Sizing_FitContents || box->sizing == Ui_Sizing_FitContentsX);
-  B32 set_box_y = box && (box->sizing == Ui_Sizing_FitContents || box->sizing == Ui_Sizing_FitContentsY);
+  B32 set_box_x = box && ui_box_should_set_x(box);
+  B32 set_box_y = box && ui_box_should_set_y(box);
 
   if (sizing) {
     if (!Get_Flag(element->flags, Process_Flag_UseLabelCString)) {
@@ -648,21 +679,7 @@ function B32 do_new_ui_element(Context *context, Process *element, B32 sizing) {
     B32 fit_to_text = Get_Flag(element->flags, Process_Flag_FitToText);
     element->size = get_ui_element_size(context, element, fit_to_text, element->label_c_string);
 
-    // @Copypasta ui_box_end
-    if (set_box_x) {
-      if (layout == Ui_Layout_Horizontal) {
-        box->size.x += element->size.x;
-      } else {
-        box->size.x = Max(box->size.x, element->size.x);
-      }
-    }
-    if (set_box_y) {
-      if (layout == Ui_Layout_Vertical) {
-        box->size.y += element->size.y;
-      } else {
-        box->size.y = Max(box->size.y, element->size.y);
-      }
-    }
+    set_ui_box_size(box, element->size, set_box_x, set_box_y);
 
     switch (align) {
     case Ui_Align_Top: {
@@ -860,10 +877,10 @@ function void ui_box_begin(Context *context, Ui_Box *box, B32 sizing) {
 
   if (sizing) {
     if (box->sizing == Ui_Sizing_FitContents || box->sizing == Ui_Sizing_FitContentsX) {
-      box->size.x = 0;
+      box->raw_size.x = 0;
     }
     if (box->sizing == Ui_Sizing_FitContents || box->sizing == Ui_Sizing_FitContentsY) {
-      box->size.y = 0;
+      box->raw_size.y = 0;
     }
   }
 
@@ -876,7 +893,7 @@ function void ui_box_begin(Context *context, Ui_Box *box, B32 sizing) {
     if (rectangle_contains_point(box_rect, ui_state->mouse_position)) {
       if (Get_Flag(box->flags, Ui_Box_Flag_ScrollY) &&
           ui_state->mouse_wheel_movement.y != 0) {
-        F32 max_scroll_offset = box->size.y - size.y;
+        F32 max_scroll_offset = box->raw_size.y - size.y;
         box->scroll_offset.y += ui_state->mouse_wheel_movement.y;
         box->scroll_offset.y = Clamp(box->scroll_offset.y, -max_scroll_offset, 0.0f);
       }
@@ -900,26 +917,10 @@ function void ui_box_end(Context *context, Ui_Box *box, B32 sizing) {
   Ui_Box *parent_box = context->ui_box_stack.first;
 
   if (sizing && parent_box) {
-    if (parent_box == &open_file_box) {
-      B32 hmmm = 0;
-    }
-    // @Copypasta ui_box_end
-    B32 set_box_x = (parent_box->sizing == Ui_Sizing_FitContents || parent_box->sizing == Ui_Sizing_FitContentsX);
-    B32 set_box_y = (parent_box->sizing == Ui_Sizing_FitContents || parent_box->sizing == Ui_Sizing_FitContentsY);
-    if (set_box_x) {
-      if (parent_box->layout == Ui_Layout_Horizontal) {
-        parent_box->size.x += box->size.x;
-      } else {
-        parent_box->size.x = Max(parent_box->size.x, box->size.x);
-      }
-    }
-    if (set_box_y) {
-      if (parent_box->layout == Ui_Layout_Vertical) {
-        parent_box->size.y += box->size.y;
-      } else {
-        parent_box->size.y = Max(parent_box->size.y, box->size.y);
-      }
-    }
+    B32 set_box_x = ui_box_should_set_x(parent_box);
+    B32 set_box_y = ui_box_should_set_y(parent_box);
+
+    set_ui_box_size(parent_box, box->raw_size, set_box_x, set_box_y);
   }
 
   if (!sizing) {
@@ -997,7 +998,7 @@ function void handle_open_file(Context *context, B32 sizing) {
     file_list_box.max_size.y = 100.0f;
     if (sizing) {
       // TODO: This file-list-box positioning should be more automatic... like how we layout buttons within a box...
-      file_list_box.position = (Vector2){open_file_box.position.x, open_file_box.position.y+open_file_box.size.y};
+      file_list_box.position = (Vector2){open_file_box.position.x, open_file_box.position.y+open_file_box.raw_size.y};
     }
     {
       for (Process *file = context->save_file_list.first; file != 0; file = file->next) {
@@ -1805,7 +1806,7 @@ function Ui_State get_ui_state(Context *context) {
 
 
 function void reset_ui_box(Context *context, Ui_Box *box) {
-  box->size = Zero_Struct(Vector2);
+  box->raw_size = Zero_Struct(Vector2);
 }
 
 

@@ -196,7 +196,7 @@ struct Ui_Box {
   Vector2 position;
   Vector2 offset;
   Vector2 scroll_offset;
-  Vector2 size;
+  Vector2 raw_size;
   Vector2 min_size;
   Vector2 max_size;
   U32 flags;
