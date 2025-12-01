@@ -94,11 +94,53 @@ global_variable String_Chunk global_null_string_chunk;
 // UI Globals
 ////////////////////////
 
-global_variable Ui_Box top_menu_box = Create_Ui_Box(0.0f, 0.0f, TopLeft, Horizontal, None);
-global_variable Ui_Box sub_menu_box = Create_Ui_Box(0.0f, 0.0f, TopLeft, Vertical, FitContentsX);
-global_variable Ui_Box file_list_box = Create_Ui_Box(0.0f, 0.0f, TopLeft, Vertical, FitContents);
-global_variable Ui_Box open_file_box = Create_Ui_Box(0.0f, 0.0f, TopLeft, Vertical, FitContents);
+global_variable Process file_menu_button;
+global_variable Process open_file_button;
+global_variable Process save_file_button;
+global_variable Process save_as_file_button;
+global_variable Process edit_menu_button;
+global_variable Process copy_button;
+global_variable Process paste_button;
 
+global_variable Process *menu_buttons[] = {
+    [Top_Menu_Index(Menu_State_FileMenu)] = &file_menu_button,
+    [Top_Menu_Index(Menu_State_EditMenu)] = &edit_menu_button,
+};
+global_variable Process *file_submenu[] = { &open_file_button, &save_file_button, &save_as_file_button };
+global_variable Process *edit_submenu[] = { &copy_button, &paste_button };
+global_variable Process **sub_menus[] = {
+  [Top_Menu_Index(Menu_State_FileMenu)] = file_submenu,
+  [Top_Menu_Index(Menu_State_EditMenu)] = edit_submenu,
+};
+global_variable U32 sub_menu_counts[] = { ArrayCount(file_submenu), ArrayCount(edit_submenu) };
+
+
+global_variable Ui_Box top_menu_box = (Ui_Box){
+  .align = Ui_Align_TopLeft,
+  .layout = Ui_Layout_Horizontal,
+};
+
+global_variable Ui_Box sub_menu_box =  (Ui_Box){
+  .align = Ui_Align_TopLeft,
+  .layout = Ui_Layout_Vertical,
+  .sizing = Ui_Sizing_FitContentsX,
+};
+
+global_variable Ui_Box file_list_box = (Ui_Box){
+  .align = Ui_Align_TopLeft,
+  .layout = Ui_Layout_Vertical,
+  .sizing = Ui_Sizing_FitContents,
+  .flags = Ui_Box_Flag_Clip|Ui_Box_Flag_ScrollY,
+  .max_size = (Vector2){0.0f, 100.0f},
+};
+
+global_variable Ui_Box open_file_box = (Ui_Box){
+  .position = {100.0f, 100.0f},
+  .align = Ui_Align_TopLeft,
+  .layout = Ui_Layout_Vertical,
+  .sizing = Ui_Sizing_FitContents,
+  .flags = Ui_Box_Flag_ShouldDraw,
+};
 
 
 function B32 rectangle_contains_point(Rectangle r, Vector2 p) {
@@ -322,6 +364,17 @@ function void remove_copy_process_list(Context *context, Process_List *list) {
   }
 }
 
+function Process *add_process_to_copy_list(Context *context, Process *p, Vector2 *copy_center, F32 *copy_count) {
+  Process *copied_p = create_detached_process(context);
+  *copied_p = *p;
+  p->to_copied = copied_p;
+  *copy_center = Vector2Add(*copy_center, p->position);
+  *copy_count += 1.0f;
+  SLLQueuePush(context->copy_processes.first, context->copy_processes.last, copied_p);
+
+  return copied_p;
+}
+
 function void copy_active_processes(Context *context) {
   B32 error = 0;
   Vector2 copy_center = (Vector2){0};
@@ -341,26 +394,14 @@ function void copy_active_processes(Context *context) {
             if (test_p == a->conn[conn]) {
               found_conn = 1;
               // add connected process to copied list
-              // @Copypasta    v------------------v
-              Process *copied_p = create_detached_process(context);
-              *copied_p = *a->conn[conn];
-              a->conn[conn]->to_copied = copied_p;
-              copy_center = Vector2Add(copy_center, a->conn[conn]->position);
-              copy_count += 1.0f;
-              SLLQueuePush(context->copy_processes.first, context->copy_processes.last, copied_p);
+              add_process_to_copy_list(context, a->conn[conn], &copy_center, &copy_count);
               break;
             }
           }
           if (!found_conn) {
             // add invisible process to copied list
-            // @Copypasta       ^----------v
-            Process *copied_p = create_detached_process(context);
-            *copied_p = *a->conn[conn];
+            Process *copied_p = add_process_to_copy_list(context, a->conn[conn], &copy_center, &copy_count);
             Set_Flag(copied_p->flags, Process_Flag_Empty);
-            a->conn[conn]->to_copied = copied_p;
-            copy_center = Vector2Add(copy_center, a->conn[conn]->position);
-            copy_count += 1.0f;
-            SLLQueuePush(context->copy_processes.first, context->copy_processes.last, copied_p);
           }
         }
       }
@@ -376,13 +417,7 @@ function void copy_active_processes(Context *context) {
       SLLQueuePush(context->copy_processes.first, context->copy_processes.last, copied_wire);
     } else if (!a->to_copied) {
       // only add process if it hasn't already been added by a connected wire
-      // @Copypasta       ^----------^
-      Process *copied_p = create_detached_process(context);
-      *copied_p = *a;
-      a->to_copied = copied_p;
-      copy_center = Vector2Add(copy_center, a->position);
-      copy_count += 1.0f;
-      SLLQueuePush(context->copy_processes.first, context->copy_processes.last, copied_p);
+      add_process_to_copy_list(context, a, &copy_center, &copy_count);
     }
   }
 
@@ -508,7 +543,22 @@ function void set_menu_state(Context *context, Menu_State menu_state) {
   } break;
   }
 
+  switch(menu_state) {
+  case Menu_State_OpenFile:
+  case Menu_State_SaveFileAs: {
+    collect_save_files(context);
+  } break;
+  }
+
   context->menu_state = menu_state;
+}
+
+function void set_menu_state_as_open_file(Context *context, Process *element) {
+  set_menu_state(context, Menu_State_OpenFile);
+}
+
+function void set_menu_state_as_save_file_as(Context *context, Process *element) {
+  set_menu_state(context, Menu_State_SaveFileAs);
 }
 
 
@@ -646,7 +696,7 @@ function void set_ui_box_size(Ui_Box *box, Vector2 size, B32 set_box_x, B32 set_
 }
 
 
-function B32 do_new_ui_element(Context *context, Process *element, B32 sizing) {
+function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
   B32 interacted = 0;
   B32 is_hot = 0;
 
@@ -783,66 +833,9 @@ function void do_ui_label(Context *context, String8 label, Vector2 position, B32
   element.position = position;
   element.label_c_string = label.str;
   Set_Flag(element.flags, Process_Flag_UseLabelCString|Process_Flag_FitToText);
-  // TODO: use do_new_ui_element
-  /* F32 font_size = global_panel_font_size; */
-  /* Render_Context *rc = &context->ui_render_context; */
-  /* Color color = global_button_font_color; */
 
   // NOTE: assume label is null-terminated
-  do_new_ui_element(context, &element, sizing);
-  /* render_DrawText(rc, (char *)label.str, position.x, position.y, font_size, color, 1); */
-}
-
-
-function B32 do_ui_element(Context *context, Process *element) {
-  Render_Context *rc = &context->ui_render_context;
-  Ui_State *ui_state = &context->ui_state;
-
-  F32 font_size = global_panel_font_size;
-  Vector2 padding = global_button_padding;
-  Color dormant_bg_color = global_button_dormant_bg_color;
-  Color hot_bg_color = global_button_hot_bg_color;
-  Color font_color = global_button_font_color;
-
-  U8 *label_c_string = 0;
-  B32 is_hot = 0;
-  B32 interacted = 0;
-
-  if (element->label.first && element->label.last) {
-    label_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &element->label);
-  }
-
-  B32 fit_to_text = Get_Flag(element->flags, Process_Flag_FitToText);
-  element->size = get_ui_element_size(context, element, fit_to_text, label_c_string);
-
-  Rectangle bg_rect = (Rectangle){element->position.x, element->position.y, element->size.x, element->size.y};
-
-  if (Get_Flag(element->flags, Process_Flag_Clickable) &&
-      !Get_Flag(ui_state->flags, Ui_State_Flag_action_occured) &&
-      rectangle_contains_point(bg_rect, context->ui_state.mouse_position)) {
-    context->hot_process = 0;
-    is_hot = 1;
-
-    if (IsMouseButtonPressed(0)) {
-      interacted = 1;
-      Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
-      if (Get_Flag(element->flags, Process_Flag_CanBeActive)) {
-        clear_active_processes(context);
-        SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, element, next_active, 0);
-      }
-    }
-  }
-
-  Color bg_color = is_hot ? hot_bg_color : dormant_bg_color;
-
-  render_DrawRectangle(rc, bg_rect.x, bg_rect.y, bg_rect.width, bg_rect.height, bg_color);
-
-  if (label_c_string) {
-    render_DrawText(rc, (char *)label_c_string, element->position.x+padding.x+1.0f, element->position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
-    render_DrawText(rc, (char *)label_c_string, element->position.x+padding.x, element->position.y+padding.y, font_size, font_color, 0);
-  }
-
-  return interacted;
+  do_ui_element(context, &element, sizing);
 }
 
 
@@ -893,13 +886,13 @@ function void ui_box_begin(Context *context, Ui_Box *box, B32 sizing) {
     if (rectangle_contains_point(box_rect, ui_state->mouse_position)) {
       if (Get_Flag(box->flags, Ui_Box_Flag_ScrollY) &&
           ui_state->mouse_wheel_movement.y != 0) {
+        Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
         F32 max_scroll_offset = box->raw_size.y - size.y;
         box->scroll_offset.y += ui_state->mouse_wheel_movement.y;
         box->scroll_offset.y = Clamp(box->scroll_offset.y, -max_scroll_offset, 0.0f);
       }
     }
     if (Get_Flag(box->flags, Ui_Box_Flag_Clip)) {
-      /* printf("scissor %.2f %.2f %.2f %.2f\n", box->position.x, box->position.y, size.x, size.y); */
       render_BeginScissorMode(rc, box->position, size);
     }
   }
@@ -965,17 +958,6 @@ function S32 collect_save_files(Context *context) {
 }
 
 
-function void set_menu_state_as_open_file(Context *context, Process *element) {
-  set_menu_state(context, Menu_State_OpenFile);
-  collect_save_files(context);
-}
-
-
-function void set_menu_state_as_save_file_as(Context *context, Process *element) {
-  set_menu_state(context, Menu_State_SaveFileAs);
-}
-
-
 function void save_file(Context *context, Process *element) {
   printf("save_file\n");
   /* write_save_file(context, context->temp_arena, context->save_file_name); */
@@ -985,24 +967,18 @@ function void save_file(Context *context, Process *element) {
 function void handle_open_file(Context *context, B32 sizing) {
   B32 file_pressed = 0;
   F32 padding = 2.0f;
-  open_file_box.position = (Vector2){100.0f, 100.0f};
 
   ui_box_begin(context, &open_file_box, sizing);
-  Set_Flag(open_file_box.flags, Ui_Box_Flag_ShouldDraw);
-  open_file_box.color = global_container_bg_color;
-  /* open_file_box.min_size = (Vector2){400.0f, 500.0f}; */
   {
     do_ui_label(context, str8_lit("Open File..."), open_file_box.position, sizing);
     ui_box_begin(context, &file_list_box, sizing);
-    Set_Flag(file_list_box.flags, Ui_Box_Flag_Clip|Ui_Box_Flag_ScrollY);
-    file_list_box.max_size.y = 100.0f;
-    if (sizing) {
-      // TODO: This file-list-box positioning should be more automatic... like how we layout buttons within a box...
-      file_list_box.position = (Vector2){open_file_box.position.x, open_file_box.position.y+open_file_box.raw_size.y};
-    }
     {
+      if (sizing) {
+        // TODO: This file-list-box positioning should be more automatic... like how we layout buttons within a box...
+        file_list_box.position = (Vector2){open_file_box.position.x, open_file_box.position.y+open_file_box.raw_size.y};
+      }
       for (Process *file = context->save_file_list.first; file != 0; file = file->next) {
-        file_pressed = do_new_ui_element(context, file, sizing);
+        file_pressed = do_ui_element(context, file, sizing);
       }
     }
     ui_box_end(context, &file_list_box, sizing);
@@ -1068,7 +1044,6 @@ function Vector2 get_process_position(Context *context, Process *process) {
 
 
   if (is_active && is_dragging) {
-    // @Copypasta draw_processes    draw wire
     Vector2 delta = Vector2Subtract(context->ui_state.mouse_position, context->active_position);
     position = Vector2Add(position, Vector2Scale(delta, 1.0f/context->camera.zoom));
   }
@@ -1763,9 +1738,14 @@ function Keybind_Result check_keybind(Context *context, Ui_Feature feature, Proc
     (Get_Flag(keybind.constraint, Ui_Constraint_NoHotProcess)
      ? (context->hot_process == 0)
      : 1);
+  B32 constraint_action_not_occured =
+    (Get_Flag(keybind.constraint, Ui_Constraint_ActionNotOccured)
+     ? (Get_Flag_Bool(ui_state->flags, Ui_State_Flag_action_occured) == 0)
+     : 1);
 
   B32 constraints_met = (constraint_hover_process &&
-                         constraint_no_hover);
+                         constraint_no_hover &&
+                         constraint_action_not_occured);
 
   if (key_is_pressed && modifier_matches && constraints_met) {
     result = Keybind_Result_Enter;
@@ -1827,26 +1807,6 @@ function Process create_lit_button(Context *context, String8 label, F32 x_pos, F
   return button;
 }
 
-global_variable Process file_menu_button;
-global_variable Process open_file_button;
-global_variable Process save_file_button;
-global_variable Process save_as_file_button;
-global_variable Process edit_menu_button;
-global_variable Process copy_button;
-global_variable Process paste_button;
-
-Process *menu_buttons[] = {
-    [Top_Menu_Index(Menu_State_FileMenu)] = &file_menu_button,
-    [Top_Menu_Index(Menu_State_EditMenu)] = &edit_menu_button,
-};
-Process *file_submenu[] = { &open_file_button, &save_file_button, &save_as_file_button };
-Process *edit_submenu[] = { &copy_button, &paste_button };
-Process **sub_menus[] = {
-  [Top_Menu_Index(Menu_State_FileMenu)] = file_submenu,
-  [Top_Menu_Index(Menu_State_EditMenu)] = edit_submenu,
-};
-U32 sub_menu_counts[] = { ArrayCount(file_submenu), ArrayCount(edit_submenu) };
-
 function void do_menu_ui(Context *context, B32 sizing) {
   S32 clicked_active_menu_button = -1;
   S32 hot_active_menu_button = -1;
@@ -1855,7 +1815,7 @@ function void do_menu_ui(Context *context, B32 sizing) {
   {
     for (U32 i = 0; i < Top_Menu_Count; ++i) {
       Process *menu_button = menu_buttons[i];
-      if (do_new_ui_element(context, menu_button, sizing)) {
+      if (do_ui_element(context, menu_button, sizing)) {
         clicked_active_menu_button = i;
       }
 
@@ -1870,12 +1830,13 @@ function void do_menu_ui(Context *context, B32 sizing) {
         Process **sub_menu = sub_menus[i];
 
         ui_box_begin(context, &sub_menu_box, sizing);
+        // TODO: This sub_menu_box positioning is a little awkward...
         sub_menu_box.position = menu_button->position;
         sub_menu_box.position.y += menu_button->size.y;
         {
           for (U32 j = 0; j < sub_menu_counts[i]; ++j) {
             Process *sub_menu_button = sub_menu[j];
-            if (do_new_ui_element(context, sub_menu_button, sizing)) {
+            if (do_ui_element(context, sub_menu_button, sizing)) {
               if (sub_menu_button->func) {
                 sub_menu_button->func(context, sub_menu_button);
               }
@@ -1903,25 +1864,22 @@ function void do_menu_ui(Context *context, B32 sizing) {
 
 
 function void handle_ui(Context *context) {
-  // TODO: delete this test function once we are done with it
-  {
-    reset_ui_box(context, &sub_menu_box);
+  reset_ui_box(context, &sub_menu_box);
 
-    switch(context->menu_state) {
-    case Menu_State_OpenFile: {
-      handle_open_file(context, 1);
-      handle_open_file(context, 0);
-    } break;
-    case Menu_State_SaveFileAs: {
-      handle_save_file_as(context);
-    } break;
-    }
-
-    // TODO: Having the switch above, and then calling do_menu_ui... just feels off. Like maybe it should all be unified.
-    // NOTE: @Speed We have to call UI code twice... onces for sizing and once for rendering/interaction.
-    do_menu_ui(context, 1);
-    do_menu_ui(context, 0);
+  switch(context->menu_state) {
+  case Menu_State_OpenFile: {
+    handle_open_file(context, 1);
+    handle_open_file(context, 0);
+  } break;
+  case Menu_State_SaveFileAs: {
+    handle_save_file_as(context);
+  } break;
   }
+
+  // TODO: Having the switch above, and then calling do_menu_ui... just feels off. Like maybe it should all be unified.
+  // NOTE: @Speed We have to call UI code twice... onces for sizing and once for rendering/interaction.
+  do_menu_ui(context, 1);
+  do_menu_ui(context, 0);
 }
 
 
@@ -2475,7 +2433,6 @@ function void draw_processes(Context *context) {
       Vector2 out_position = get_process_wire_position(context, p->out, out_shape, Process_Connection_Out, p->which_out);
       Vector2 in_position = get_process_wire_position(context, p->in, in_shape, Process_Connection_In, p->which_in);
       if (Get_Flag(p->flags, Process_Flag_Drag_In)) {
-        // @Copypasta get_process_position
         Vector2 delta = Vector2Subtract(context->ui_state.mouse_position, context->active_position);
         in_position = Vector2Add(in_position, delta);
       } else if (Get_Flag(p->flags, Process_Flag_Drag_Out)) {
@@ -2699,37 +2656,6 @@ function void initialize_globals(Context *context) {
 
 
 
-function Process *create_menu_button(Context *context, String8 label_str) {
-  Process *button = create_ui_element(context);
-
-  U32 button_flags = Process_Flag_Clickable | Process_Flag_FitToText;
-  Set_Flag(button->flags, button_flags);
-  button->label = string_chunk_list_from_string8(context, label_str);
-
-  return button;
-}
-
-
-
-function Process *add_button(Context *context, String8 label, U32 flags, Process_List *list) {
-  Process *button = create_ui_element(context);
-
-  Set_Flag(button->flags, Process_Flag_Clickable | flags);
-  button->label = string_chunk_list_from_string8(context, label);
-  SLLQueuePush(list->first, list->last, button);
-
-  return button;
-}
-
-function Process *add_sub_button(Context *context, String8 label, U32 flags, Process **prev) {
-  Process *button = create_ui_element(context);
-
-  Set_Flag(button->flags, Process_Flag_Clickable | flags);
-  button->label = string_chunk_list_from_string8(context, label);
-  (*prev) = (*prev)->in = button;
-
-  return button;
-}
 
 
 

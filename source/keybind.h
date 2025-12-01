@@ -11,10 +11,12 @@
     Ui_Constraint_ExitOnKeyup,\
     "Slide your field of view by moving your mouse.")\
 \
-  X(ZoomIn, Key_Kind_MouseWheelUp, 0, 0,\
+  X(ZoomIn, Key_Kind_MouseWheelUp, 0,\
+    Ui_Constraint_ActionNotOccured,\
     "Zoom your field of view in to make objects appear closer.")\
 \
-  X(ZoomOut, Key_Kind_MouseWheelDown, 0, 0,\
+  X(ZoomOut, Key_Kind_MouseWheelDown, 0,\
+    Ui_Constraint_ActionNotOccured,\
     "Zoom your field of view out to make objects appear further.")\
 \
   X(SelectSingleProcess, Key_Kind_Mouse0, 0,\
@@ -62,10 +64,11 @@ typedef enum {
 } Ui_Feature;
 
 typedef enum {
-  Ui_Constraint__Null         = 0,
-  Ui_Constraint_HoverProcess  = (1 << 1),
-  Ui_Constraint_NoHotProcess  = (1 << 2),
-  Ui_Constraint_ExitOnKeyup   = (1 << 3),
+  Ui_Constraint__Null            = 0,
+  Ui_Constraint_HoverProcess     = (1 << 1),
+  Ui_Constraint_NoHotProcess     = (1 << 2),
+  Ui_Constraint_ExitOnKeyup      = (1 << 3),
+  Ui_Constraint_ActionNotOccured = (1 << 4),
 } Ui_Constraint;
 
 // NOTE: These enum values start with values higher than raylib's highest KEY_* value, which is in the 300s

@@ -7,6 +7,8 @@ typedef struct Context Context;
 function void clear_processes(Context *context);
 function Process *create_process(Context *context);
 function String_Chunk *create_string_chunk(Context *context);
+function S32 collect_save_files(Context *context);
+
 
 //////////////////////////////////////
 // Process
@@ -211,21 +213,6 @@ typedef struct {
   Ui_Box *last;
 } Ui_Box_List;
 
-#define Create_Ui_Box(x_pos, y_pos, align, layout, sizing)\
-  (Ui_Box){\
-    0,\
-    (Vector2){(x_pos), (y_pos)},\
-    (Vector2){0},\
-    (Vector2){0},\
-    (Vector2){0},\
-    (Vector2){0},\
-    (Vector2){0},\
-    0,\
-    (Color){0},\
-    Ui_Align_##align,\
-    Ui_Layout_##layout,\
-    Ui_Sizing_##sizing\
-  }
 
 #define Ui_Default_Position (Vector2){0.0f, 0.0f}
 #define Ui_Default_Offset   (Vector2){0.0f, 0.0f}
