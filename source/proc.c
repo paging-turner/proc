@@ -141,6 +141,10 @@ global_variable Ui_Box open_file_box = (Ui_Box){
   .sizing = Ui_Sizing_FitContents,
   .flags = Ui_Box_Flag_ShouldDraw,
 };
+global_variable Process open_file_label = (Process){
+  .flags = Process_Flag_UseLabelCString|Process_Flag_FitToText,
+  .label_c_string = (U8 *)"Open File...",
+};
 
 
 function B32 rectangle_contains_point(Rectangle r, Vector2 p) {
@@ -645,6 +649,12 @@ function Vector2 get_ui_element_size(Context *context, Process *element, B32 fit
 }
 
 
+function Vector2 get_ui_box_inner_position(Context *context, Ui_Box *box) {
+  Vector2 position = Vector2Add(Vector2Add(box->position, box->offset), box->scroll_offset);
+  return position;
+}
+
+
 function Vector2 get_box_size(Ui_Box *box) {
   Vector2 size = box->raw_size;
 
@@ -768,10 +778,10 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
     } break;
     case Ui_Layout_Vertical: {
       next_offset = (Vector2){0.0f, element->size.y};
-      element->position = Vector2Add(Vector2Add(box_position, box_offset), box->scroll_offset);
+      element->position = get_ui_box_inner_position(context, box);
     } break;
     case Ui_Layout_Horizontal: {
-      element->position = Vector2Add(Vector2Add(box_position, box_offset), box->scroll_offset);
+      element->position = get_ui_box_inner_position(context, box);
       next_offset = (Vector2){element->size.x, 0.0f};
     } break;
     }
@@ -828,17 +838,6 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
 }
 
 
-function void do_ui_label(Context *context, String8 label, Vector2 position, B32 sizing) {
-  Process element = Zero_Struct(Process);
-  element.position = position;
-  element.label_c_string = label.str;
-  Set_Flag(element.flags, Process_Flag_UseLabelCString|Process_Flag_FitToText);
-
-  // NOTE: assume label is null-terminated
-  do_ui_element(context, &element, sizing);
-}
-
-
 function Process *create_button(Arena *arena, Vector2 position, String_Chunk_List label) {
   Process *button = push_struct(arena, Process);
   Vector2 padding = global_button_padding;
@@ -864,11 +863,12 @@ function Process *create_button(Arena *arena, Vector2 position, String_Chunk_Lis
 function void ui_box_begin(Context *context, Ui_Box *box, B32 sizing) {
   Render_Context *rc = &context->ui_render_context;
   Ui_State *ui_state = &context->ui_state;
+  Ui_Box *parent_box = context->ui_box_stack.first;
 
-  box->offset = (Vector2){0.0f, 0.0f};
   SLLQueuePushFront(context->ui_box_stack.first, context->ui_box_stack.last, box);
 
   if (sizing) {
+    box->offset = (Vector2){0.0f, 0.0f};
     if (box->sizing == Ui_Sizing_FitContents || box->sizing == Ui_Sizing_FitContentsX) {
       box->raw_size.x = 0;
     }
@@ -880,10 +880,15 @@ function void ui_box_begin(Context *context, Ui_Box *box, B32 sizing) {
   if (!sizing) {
     Vector2 size = get_box_size(box);
     Rectangle box_rect = (Rectangle){box->position.x, box->position.y, size.x, size.y};
+    // positioning
+    if (parent_box) {
+      box->position = get_ui_box_inner_position(context, parent_box);
+    }
     if (Get_Flag(box->flags, Ui_Box_Flag_ShouldDraw)) {
       render_DrawRectangle(rc, box_rect.x, box_rect.y, box_rect.width, box_rect.height, box->color);
     }
     if (rectangle_contains_point(box_rect, ui_state->mouse_position)) {
+      // handle scrolling
       if (Get_Flag(box->flags, Ui_Box_Flag_ScrollY) &&
           ui_state->mouse_wheel_movement.y != 0) {
         Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
@@ -965,20 +970,16 @@ function void save_file(Context *context, Process *element) {
 
 
 function void handle_open_file(Context *context, B32 sizing) {
-  B32 file_pressed = 0;
   F32 padding = 2.0f;
 
   ui_box_begin(context, &open_file_box, sizing);
   {
-    do_ui_label(context, str8_lit("Open File..."), open_file_box.position, sizing);
+    do_ui_element(context, &open_file_label, sizing);
+
     ui_box_begin(context, &file_list_box, sizing);
     {
-      if (sizing) {
-        // TODO: This file-list-box positioning should be more automatic... like how we layout buttons within a box...
-        file_list_box.position = (Vector2){open_file_box.position.x, open_file_box.position.y+open_file_box.raw_size.y};
-      }
       for (Process *file = context->save_file_list.first; file != 0; file = file->next) {
-        file_pressed = do_ui_element(context, file, sizing);
+        do_ui_element(context, file, sizing);
       }
     }
     ui_box_end(context, &file_list_box, sizing);
