@@ -145,6 +145,14 @@ global_variable Process open_file_label = (Process){
   .flags = Process_Flag_UseLabelCString|Process_Flag_FitToText,
   .label_c_string = (U8 *)"Open File...",
 };
+global_variable Process open_button = (Process){
+  .flags = Process_Flag_UseLabelCString|Process_Flag_FitToText|Process_Flag_Clickable,
+  .label_c_string = (U8 *)"Open",
+};
+global_variable Process cancel_button = (Process){
+  .flags = Process_Flag_UseLabelCString|Process_Flag_FitToText|Process_Flag_Clickable,
+  .label_c_string = (U8 *)"Cancel",
+};
 
 
 function B32 rectangle_contains_point(Rectangle r, Vector2 p) {
@@ -770,6 +778,7 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
     } break;
     }
   } else {
+    // @Copypasta ui_box_end
     Vector2 next_offset;
     switch (layout) {
     default:
@@ -922,6 +931,24 @@ function void ui_box_end(Context *context, Ui_Box *box, B32 sizing) {
   }
 
   if (!sizing) {
+    if (parent_box) {
+      // @Copypasta do_ui_element
+      Vector2 box_size = get_box_size(box);
+      Vector2 next_offset;
+      switch (parent_box->layout) {
+      default:
+      case Ui_Layout_None: {
+        next_offset = Zero_Struct(Vector2);
+      } break;
+      case Ui_Layout_Vertical: {
+        next_offset = (Vector2){0.0f, box_size.y};
+      } break;
+      case Ui_Layout_Horizontal: {
+        next_offset = (Vector2){box_size.x, 0.0f};
+      } break;
+      }
+      parent_box->offset = Vector2Add(parent_box->offset, next_offset);
+    }
     if (Get_Flag(box->flags, Ui_Box_Flag_Clip)) {
       render_EndScissorMode(rc);
     }
@@ -975,7 +1002,6 @@ function void handle_open_file(Context *context, B32 sizing) {
   ui_box_begin(context, &open_file_box, sizing);
   {
     do_ui_element(context, &open_file_label, sizing);
-
     ui_box_begin(context, &file_list_box, sizing);
     {
       for (Process *file = context->save_file_list.first; file != 0; file = file->next) {
@@ -983,6 +1009,8 @@ function void handle_open_file(Context *context, B32 sizing) {
       }
     }
     ui_box_end(context, &file_list_box, sizing);
+    do_ui_element(context, &open_button, sizing);
+    do_ui_element(context, &cancel_button, sizing);
   }
   ui_box_end(context, &open_file_box, sizing);
 }
