@@ -813,9 +813,12 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
     }
 
     if (in_bounds) {
+      B32 hover_element = rectangle_contains_point(element_rect, context->ui_state.mouse_position);
+      B32 hover_box = (!Get_Flag(box->flags, Ui_Box_Flag_Clip) ||
+                       rectangle_contains_point(box_rect, context->ui_state.mouse_position));
       if (Get_Flag(element->flags, Process_Flag_Clickable) &&
           !Get_Flag(ui_state->flags, Ui_State_Flag_action_occured) &&
-          rectangle_contains_point(element_rect, context->ui_state.mouse_position)) {
+          hover_element && hover_box) {
         context->hot_process = 0;
         is_hot = 1;
 
