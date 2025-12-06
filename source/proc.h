@@ -187,9 +187,9 @@ typedef enum {
 } Ui_Sizing;
 
 typedef enum {
-  Ui_Box_Flag_ShouldDraw,
-  Ui_Box_Flag_Clip,
-  Ui_Box_Flag_ScrollY,
+  Ui_Box_Flag_ShouldDraw = (1 << 0),
+  Ui_Box_Flag_Clip       = (1 << 1),
+  Ui_Box_Flag_ScrollY    = (1 << 2),
 } Ui_Box_Flag;
 
 typedef struct Ui_Box Ui_Box;

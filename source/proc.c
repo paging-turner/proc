@@ -126,6 +126,15 @@ global_variable Ui_Box sub_menu_box =  (Ui_Box){
   .sizing = Ui_Sizing_FitContentsX,
 };
 
+global_variable Ui_Box open_file_box = (Ui_Box){
+  .position = (Vector2){100.0f, 100.0f},
+  .min_size = (Vector2){300.0f, 0.0f},
+  .align = Ui_Align_TopLeft,
+  .layout = Ui_Layout_Vertical,
+  .sizing = Ui_Sizing_FitContents,
+  .flags = Ui_Box_Flag_ShouldDraw,
+  .color = (Color){200.0f, 200.0f, 200.0f, 255.0f},
+};
 global_variable Ui_Box file_list_box = (Ui_Box){
   .align = Ui_Align_TopLeft,
   .layout = Ui_Layout_Vertical,
@@ -133,14 +142,12 @@ global_variable Ui_Box file_list_box = (Ui_Box){
   .flags = Ui_Box_Flag_Clip|Ui_Box_Flag_ScrollY,
   .max_size = (Vector2){0.0f, 100.0f},
 };
-
-global_variable Ui_Box open_file_box = (Ui_Box){
-  .position = {100.0f, 100.0f},
-  .align = Ui_Align_TopLeft,
-  .layout = Ui_Layout_Vertical,
+global_variable Ui_Box open_file_confirm_box = (Ui_Box){
+  .align = Ui_Align_TopRight,
+  .layout = Ui_Layout_Horizontal,
   .sizing = Ui_Sizing_FitContents,
-  .flags = Ui_Box_Flag_ShouldDraw,
 };
+
 global_variable Process open_file_label = (Process){
   .flags = Process_Flag_UseLabelCString|Process_Flag_FitToText,
   .label_c_string = (U8 *)"Open File...",
@@ -1012,8 +1019,12 @@ function void handle_open_file(Context *context, B32 sizing) {
       }
     }
     ui_box_end(context, &file_list_box, sizing);
-    do_ui_element(context, &open_button, sizing);
-    do_ui_element(context, &cancel_button, sizing);
+    ui_box_begin(context, &open_file_confirm_box, sizing);
+    {
+      do_ui_element(context, &open_button, sizing);
+      do_ui_element(context, &cancel_button, sizing);
+    }
+    ui_box_end(context, &open_file_confirm_box, sizing);
   }
   ui_box_end(context, &open_file_box, sizing);
 }
@@ -2700,6 +2711,7 @@ function void set_global_window_render_size(void) {
 
 
 int main(void) {
+
   InitWindow(800, 500, "proc");
   SetExitKey(0);
   SetWindowState(FLAG_WINDOW_RESIZABLE);
