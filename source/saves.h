@@ -17,6 +17,24 @@ typedef struct {
   U32 string_count;
 } Save_File_Header;
 
+typedef U64 Cold_Process_Id;
+
+// TODO: Begin to use specialized "cold" process struct.
+typedef struct {
+  B32 flags;
+  Vector2 position;
+  String8 label;
+
+  Cold_Process_Id in;
+  Cold_Process_Id out;
+
+  U32 which_in;
+  U32 which_out;
+
+  U8 unused_bytes[8];
+} Cold_Process;
+
+StaticAssert(sizeof(Cold_Process) == 64, cold_process_should_be_64_bytes);
 
 
 #define Save_File_Size(process_count, string_count)\

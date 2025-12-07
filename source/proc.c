@@ -265,9 +265,6 @@ function Process *create_detached_process(Context *context) {
 
   if (p) {
     *p = (Process){0};
-
-    context->current_process_id += 1;
-    p->id = context->current_process_id;
   } else {
     p = The_Null_Process();
   }
@@ -2711,7 +2708,6 @@ function void set_global_window_render_size(void) {
 
 
 int main(void) {
-
   InitWindow(800, 500, "proc");
   SetExitKey(0);
   SetWindowState(FLAG_WINDOW_RESIZABLE);

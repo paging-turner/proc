@@ -14,8 +14,6 @@ function S32 collect_save_files(Context *context);
 // Process
 //////////////////////////////////////
 
-typedef U64 Process_Id;
-
 typedef enum {
   Process_Flag_Wire        = 1 << 0,
   Process_Flag_Empty       = 1 << 1,
@@ -52,22 +50,12 @@ typedef enum {
 
 
 struct Process {
-  ///////////////
-  // Critical members: Used for comparison tests, cold-storage, etc.
-  ///////////////
+  //////////////
+  // Members that need to be saved when serializing.
+  //////////////
   B32 flags;
   Vector2 position;
-  Vector2 size;
-  Process_Id id;
   String_Chunk_List label;
-
-  union {
-    struct {
-      S32 in_count;
-      S32 out_count;
-    };
-    S32 conn_count[Process_Connection__Count];
-  };
 
   union {
     struct {
@@ -84,11 +72,21 @@ struct Process {
     };
     U32 which_conn[Process_Connection__Count];
   };
+
+  //////////////
+  // Members that are "ephemeral", which can be ocnstructed from serialized members.
+  //////////////
+  union {
+    struct {
+      S32 in_count;
+      S32 out_count;
+    };
+    S32 conn_count[Process_Connection__Count];
+  };
+
   void (*func)(Context*, Process*); // TODO: What do we do about this func? It's only used for UI elements, so maybe we should stop using Processes as UI elements and give up on the idea of process-ui?
 
-  ///////////////
-  // Ephemeral members: Used for temp calculations, cacheing, logistics, etc.
-  ///////////////
+  Vector2 size;
   U32 cold_index;
   Process *to_copied;
 
@@ -286,7 +284,6 @@ struct Context {
 
   U32 flags;
 
-  Process_Id current_process_id;
   Process_List processes;
   Process_List free_processes;
   Process_List free_ui_elements;
