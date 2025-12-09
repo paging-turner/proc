@@ -75,6 +75,7 @@ struct Process {
 
   //////////////
   // Members that are "ephemeral", which can be ocnstructed from serialized members.
+  //     or it's for UI...
   //////////////
   union {
     struct {
@@ -87,6 +88,7 @@ struct Process {
   void (*func)(Context*, Process*); // TODO: What do we do about this func? It's only used for UI elements, so maybe we should stop using Processes as UI elements and give up on the idea of process-ui?
 
   Vector2 size;
+  Vector2 margin;
   U32 cold_index;
   Process *to_copied;
 

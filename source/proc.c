@@ -151,14 +151,17 @@ global_variable Ui_Box open_file_confirm_box = (Ui_Box){
 global_variable Process open_file_label = (Process){
   .flags = Process_Flag_UseLabelCString|Process_Flag_FitToText,
   .label_c_string = (U8 *)"Open File...",
+  .margin = (Vector2){5.0f, 8.0f},
 };
 global_variable Process open_button = (Process){
   .flags = Process_Flag_UseLabelCString|Process_Flag_FitToText|Process_Flag_Clickable,
   .label_c_string = (U8 *)"Open",
+  .margin = (Vector2){5.0f, 8.0f},
 };
 global_variable Process cancel_button = (Process){
   .flags = Process_Flag_UseLabelCString|Process_Flag_FitToText|Process_Flag_Clickable,
   .label_c_string = (U8 *)"Cancel",
+  .margin = (Vector2){5.0f, 8.0f},
 };
 
 
@@ -653,6 +656,8 @@ function Vector2 get_ui_element_size(Context *context, Process *element, B32 fit
     size.y = font_size + 2.0f*padding.y;
   }
 
+  size = Vector2Add(size, Vector2Scale(element->margin, 2.0f));
+
   // HACK: Round up because having values close to integers can cause visual "gaps" between rectangles and stuff...
   size.x = ceil_F32(size.x);
   size.y = ceil_F32(size.y);
@@ -821,7 +826,12 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
       element->size.y = box_size.y;
     }
 
-    Rectangle element_rect = (Rectangle){element->position.x, element->position.y, element->size.x, element->size.y};
+    Rectangle element_rect = (Rectangle){
+      element->position.x+element->margin.x,
+      element->position.y+element->margin.y,
+      element->size.x-2.0f*element->margin.x,
+      element->size.y-2.0f*element->margin.y,
+    };
     Rectangle box_rect = (Rectangle){box->position.x, box->position.y, box_size.x, box_size.y};
     B32 in_bounds = 1;
     if (Get_Flag(box->flags, Ui_Box_Flag_Clip)) {
@@ -856,8 +866,8 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
       render_DrawRectangle(rc, element_rect.x, element_rect.y, element_rect.width, element_rect.height, bg_color);
 
       if (element->label_c_string) {
-        render_DrawText(rc, (char *)element->label_c_string, element->position.x+padding.x+1.0f, element->position.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
-        render_DrawText(rc, (char *)element->label_c_string, element->position.x+padding.x, element->position.y+padding.y, font_size, font_color, 0);
+        render_DrawText(rc, (char *)element->label_c_string, element_rect.x+padding.x+1.0f, element_rect.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
+        render_DrawText(rc, (char *)element->label_c_string, element_rect.x+padding.x, element_rect.y+padding.y, font_size, font_color, 0);
       }
     }
   }
@@ -2673,6 +2683,7 @@ function void initialize_globals(Context *context) {
 
 
   // init ui elements
+  // TODO: Turn these into struct literal declarations if we can.
   file_menu_button = create_lit_button(context, str8_lit("File"), 0, 0);
   open_file_button = create_lit_button(context, str8_lit("Open..."), 0, 0);
   open_file_button.func = set_menu_state_as_open_file;
