@@ -139,11 +139,11 @@ global_variable Ui_Box file_list_box = (Ui_Box){
   .align = Ui_Align_TopLeft,
   .layout = Ui_Layout_Vertical,
   .sizing = Ui_Sizing_FitContents,
-  .flags = Ui_Box_Flag_Clip|Ui_Box_Flag_ScrollY,
+  .flags = Ui_Box_Flag_Clip|Ui_Box_Flag_ScrollY|Ui_Box_Flag_Stretch,
   .max_size = (Vector2){0.0f, 100.0f},
 };
 global_variable Ui_Box open_file_confirm_box = (Ui_Box){
-  .align = Ui_Align_TopRight,
+  .align = Ui_Align_TopRight, // TODO: The right-alignment is broken... should fix that at some point...
   .layout = Ui_Layout_Horizontal,
   .sizing = Ui_Sizing_FitContents,
 };
@@ -668,7 +668,19 @@ function Vector2 get_ui_box_inner_position(Context *context, Ui_Box *box) {
 
 
 function Vector2 get_box_size(Ui_Box *box) {
+  Ui_Box *parent_box = box->next;
+  B32 stretch = Get_Flag(box->flags, Ui_Box_Flag_Stretch);
   Vector2 size = box->raw_size;
+
+  if (stretch && parent_box) {
+    Vector2 parent_size = get_box_size(parent_box);
+    // TODO: Do we need to recursively call get_box_size here??
+    if (box->layout == Ui_Layout_Vertical) {
+      size.x = parent_size.x;
+    } else if (box->layout == Ui_Layout_Horizontal) {
+      size.y = parent_size.y;
+    }
+  }
 
   if (box->min_size.x > 0.0f) {
     size.x = Max(size.x, box->min_size.x);
@@ -933,8 +945,9 @@ function void ui_box_end(Context *context, Ui_Box *box, B32 sizing) {
   if (sizing && parent_box) {
     B32 set_box_x = ui_box_should_set_x(parent_box);
     B32 set_box_y = ui_box_should_set_y(parent_box);
+    Vector2 box_size = get_box_size(box);
 
-    set_ui_box_size(parent_box, box->raw_size, set_box_x, set_box_y);
+    set_ui_box_size(parent_box, box_size, set_box_x, set_box_y);
   }
 
   if (!sizing) {
