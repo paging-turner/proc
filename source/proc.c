@@ -858,7 +858,8 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
         }
       }
 
-      Color bg_color = is_hot ? hot_bg_color : dormant_bg_color;
+      B32 is_hot_bg_color = is_hot || element == context->selected_element;
+      Color bg_color = is_hot_bg_color ? hot_bg_color : dormant_bg_color;
       if (is_hot) {
         context->hot_process = element;
       }
@@ -1021,12 +1022,13 @@ function S32 collect_save_files(Context *context) {
 
 
 function void save_file(Context *context, Process *element) {
+  Assert(!"TODO");
   printf("save_file\n");
   /* write_save_file(context, context->temp_arena, context->save_file_name); */
 }
 
 
-function void handle_open_file(Context *context, B32 sizing) {
+function void do_open_file(Context *context, B32 sizing) {
   F32 padding = 2.0f;
 
   ui_box_begin(context, &open_file_box, sizing);
@@ -1035,14 +1037,22 @@ function void handle_open_file(Context *context, B32 sizing) {
     ui_box_begin(context, &file_list_box, sizing);
     {
       for (Process *file = context->save_file_list.first; file != 0; file = file->next) {
-        do_ui_element(context, file, sizing);
+        if (do_ui_element(context, file, sizing)) {
+          context->selected_element = file;
+        }
       }
     }
     ui_box_end(context, &file_list_box, sizing);
     ui_box_begin(context, &open_file_confirm_box, sizing);
     {
-      do_ui_element(context, &open_button, sizing);
-      do_ui_element(context, &cancel_button, sizing);
+      B32 open_clicked = do_ui_element(context, &open_button, sizing);
+      B32 cancel_clicked = do_ui_element(context, &cancel_button, sizing);
+
+      if (open_clicked) {
+        open_file_and_replace_processes(context, context->selected_element->label);
+      } else if (cancel_clicked) {
+        set_menu_state(context, 0);
+      }
     }
     ui_box_end(context, &open_file_confirm_box, sizing);
   }
@@ -1931,8 +1941,8 @@ function void handle_ui(Context *context) {
 
   switch(context->menu_state) {
   case Menu_State_OpenFile: {
-    handle_open_file(context, 1);
-    handle_open_file(context, 0);
+    do_open_file(context, 1);
+    do_open_file(context, 0);
   } break;
   case Menu_State_SaveFileAs: {
     handle_save_file_as(context);

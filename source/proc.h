@@ -298,6 +298,7 @@ struct Context {
   Process_List copy_processes;
 
   Process_List save_file_list;
+  Process *selected_element; // Use this for things like picking (button click) a file to open.
   Ui_Box_List ui_box_stack;
 
   Render_Context ui_render_context;
