@@ -22,6 +22,9 @@
 
 #define Zero_Struct(type) (type){0}
 
+// Freeze_Member is used to ensure a struct is not changed. Used as an alarm for structs sensitive to internal changes, like ones that are serialized.
+#define Freeze_Member(_struct, member, byte_offset)\
+  StaticAssert(offsetof(_struct, member) == byte_offset, Freeze_##_struct##_##member)
 
 
 //////////////////////////////////////

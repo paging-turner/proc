@@ -23,7 +23,7 @@ typedef U64 Cold_Process_Id;
 typedef struct {
   B32 flags;
   Vector2 position;
-  String8 label;
+  String_Chunk_List label;
 
   Cold_Process_Id in;
   Cold_Process_Id out;
@@ -34,24 +34,34 @@ typedef struct {
   U8 unused_bytes[8];
 } Cold_Process;
 
+// "Freeze" Cold_Process
 StaticAssert(sizeof(Cold_Process) == 64, cold_process_should_be_64_bytes);
+Freeze_Member(Cold_Process, flags       ,  0);
+Freeze_Member(Cold_Process, position    ,  4);
+Freeze_Member(Cold_Process, label       , 16);
+Freeze_Member(Cold_Process, in          , 32);
+Freeze_Member(Cold_Process, out         , 40);
+Freeze_Member(Cold_Process, which_in    , 48);
+Freeze_Member(Cold_Process, which_out   , 52);
+Freeze_Member(Cold_Process, unused_bytes, 56);
 
 
 #define Save_File_Size(process_count, string_count)\
   (sizeof(Save_File_Header)+\
-   process_count*sizeof(Process)+\
+   process_count*sizeof(Cold_Process)+\
    string_count*sizeof(String_Chunk))
 
 #define Save_File_Start_Of_Processes(save_file_bytes)\
-  (Process *)((save_file_bytes)+sizeof(Save_File_Header))
+  (Cold_Process *)((save_file_bytes)+sizeof(Save_File_Header))
 
 #define Save_File_Start_Of_Strings(save_file_bytes, process_count)\
-  (String_Chunk *)((save_file_bytes)+(sizeof(Save_File_Header)+process_count*sizeof(Process)))
+  (String_Chunk *)((save_file_bytes)+(sizeof(Save_File_Header)+process_count*sizeof(Cold_Process)))
 
 //////////////////////////////////////
 // Saves Functions
 //////////////////////////////////////
 function void write_save_file(Context *context, Arena *arena, String_Chunk_List file_name);
+function void open_file_and_replace_processes(Context *context, String_Chunk_List file_name_list);
 
 
 
@@ -68,7 +78,6 @@ function void write_save_file(Context *context, Arena *arena, String_Chunk_List 
   // save-file sizing and cold-indexing
   U64 process_cold_index = 0;
   U64 string_cold_index = 0;
-  /* S32 process_count = 0; */
   for (Process *p = context->processes.first; p != 0; p = p->next) {
     p->cold_index = process_cold_index+1;
     process_cold_index += 1;
@@ -76,7 +85,6 @@ function void write_save_file(Context *context, Arena *arena, String_Chunk_List 
       s->cold_index = string_cold_index+1;
       string_cold_index += 1;
     }
-    /* process_count += 1; */
   }
 
   String8 save_file_data;
@@ -90,21 +98,32 @@ function void write_save_file(Context *context, Arena *arena, String_Chunk_List 
     header->version = Save_File_Version;
     header->process_count = process_cold_index;
     header->string_count = string_cold_index;
-    Process *first_cold_process = Save_File_Start_Of_Processes(save_file_data.str);
+    Cold_Process *first_cold_process = Save_File_Start_Of_Processes(save_file_data.str);
     String_Chunk *first_cold_string = Save_File_Start_Of_Strings(save_file_data.str, process_cold_index);
 
     // copy processes to save file
     process_cold_index = 0;
     string_cold_index = 0;
     for (Process *p = context->processes.first; p != 0; p = p->next) {
-      Process *cold_process = first_cold_process + process_cold_index;
-      *cold_process = *p;
+      Cold_Process *cold_process = first_cold_process + process_cold_index;
+
+      cold_process->flags = p->flags;
+      cold_process->position = p->position;
+      cold_process->label = p->label;
+
+      /* cold_process->in = p->in; */
+      /* cold_process->out = p->out; */
+
+      cold_process->which_in = p->which_in;
+      cold_process->which_out = p->which_out;
+
+      /* *cold_process = *p; */
 
       if (p->in) {
-        cold_process->in = PtrFromInt(p->in->cold_index);
+        cold_process->in = p->in->cold_index;
       }
       if (p->out) {
-        cold_process->out = PtrFromInt(p->out->cold_index);
+        cold_process->out = p->out->cold_index;
       }
 
       if (p->label.first) {
@@ -125,9 +144,9 @@ function void write_save_file(Context *context, Arena *arena, String_Chunk_List 
       }
 
       // zero out transient process-pointers
-      cold_process->next = 0;
-      cold_process->next_active = 0;
-      cold_process->to_copied = 0;
+      /* cold_process->next = 0; */
+      /* cold_process->next_active = 0; */
+      /* cold_process->to_copied = 0; */
 
       process_cold_index += 1;
     }
@@ -139,7 +158,12 @@ function void write_save_file(Context *context, Arena *arena, String_Chunk_List 
   os_set_current_directory(Build_Filepath);
 }
 
-function void open_file_and_replace_processes(Context *context, String_Chunk_List file_name_list) {
+function void open_file_and_replace_processes_v1(Context *context, String_Chunk_List file_name_list) {
+  Assert(!"TODO");
+}
+
+#if 0
+function void open_file_and_replace_processes_v1_OLD(Context *context, String_Chunk_List file_name_list) {
   os_set_current_directory(Saves_Filepath);
   String8 file_name = string8_from_string_chunk_list(context->temp_arena, &file_name_list);
   String8 file_data = os_file_read(context->temp_arena, file_name);
@@ -147,6 +171,7 @@ function void open_file_and_replace_processes(Context *context, String_Chunk_Lis
 
   if (file_data.str && file_data.size > sizeof(Save_File_Header)) {
     Save_File_Header *header = (Save_File_Header *)file_data.str;
+    Assert(header->version == 1);
     Process *first_cold_process = Save_File_Start_Of_Processes(file_data.str);
     String_Chunk *first_cold_string = Save_File_Start_Of_Strings(file_data.str, header->process_count);
 
@@ -220,4 +245,9 @@ function void open_file_and_replace_processes(Context *context, String_Chunk_Lis
   }
 
   os_set_current_directory(Build_Filepath);
+}
+#endif
+
+function void open_file_and_replace_processes(Context *context, String_Chunk_List file_name_list) {
+  open_file_and_replace_processes_v1(context, file_name_list);
 }
