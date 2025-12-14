@@ -1065,9 +1065,8 @@ function S32 collect_save_files(Context *context) {
 
 
 function void save_file(Context *context, Process *element) {
-  Assert(!"TODO");
-  printf("save_file\n");
-  /* write_save_file(context, context->temp_arena, context->save_file_name); */
+  /* Assert(!"TODO"); */
+  write_save_file(context, context->temp_arena, context->save_file_name);
 }
 
 
@@ -1114,7 +1113,8 @@ function void do_save_file_as(Context *context, B32 sizing) {
       B32 cancel_clicked = do_ui_element(context, &cancel_button, sizing);
 
       if (save_clicked) {
-        // TODO:
+        set_as_current_file(context, save_file_as_text_input.label);
+        save_file(context, &save_file_as_text_input);
         set_menu_state(context, 0);
       } else if (cancel_clicked) {
         set_menu_state(context, 0);

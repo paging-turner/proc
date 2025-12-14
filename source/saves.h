@@ -120,9 +120,14 @@ function void write_save_file_v1(Context *context, Arena *arena, String_Chunk_Li
         string_cold_offset += String_Chunk_Size;
         cold_process->label.size += String_Chunk_Size;
       }
+
+      process_cold_index += 1;
     }
 
     set_as_current_file(context, file_name);
+
+    String8 file_name_str8 = string8_from_string_chunk_list(context->temp_arena, &file_name);
+    os_file_write(file_name_str8, save_file_data);
   }
 }
 
