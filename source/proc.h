@@ -7,6 +7,7 @@ typedef struct Context Context;
 function void clear_processes(Context *context);
 function Process *create_process(Context *context);
 function String_Chunk *create_string_chunk(Context *context);
+function String_Chunk_List string_chunk_list_from_string8(Context *context, String8 string8);
 function S32 collect_save_files(Context *context);
 
 
