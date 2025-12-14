@@ -126,6 +126,7 @@ global_variable Ui_Box sub_menu_box =  (Ui_Box){
   .sizing = Ui_Sizing_FitContentsX,
 };
 
+// Open File UI
 global_variable Ui_Box open_file_box = (Ui_Box){
   .position = (Vector2){100.0f, 100.0f},
   .min_size = (Vector2){300.0f, 0.0f},
@@ -163,6 +164,33 @@ global_variable Process cancel_button = (Process){
   .label_c_string = (U8 *)"Cancel",
   .margin = (Vector2){5.0f, 8.0f},
 };
+global_variable Process save_button = (Process){
+  .flags = Process_Flag_UseLabelCString|Process_Flag_FitToText|Process_Flag_Clickable,
+  .label_c_string = (U8 *)"Save",
+  .margin = (Vector2){5.0f, 8.0f},
+};
+
+// Save File As UI
+global_variable Ui_Box save_file_as_box = (Ui_Box){
+  .position = (Vector2){100.0f, 100.0f},
+  .min_size = (Vector2){300.0f, 0.0f},
+  .align = Ui_Align_TopLeft,
+  .layout = Ui_Layout_Vertical,
+  .sizing = Ui_Sizing_FitContents,
+  .flags = Ui_Box_Flag_ShouldDraw,
+  .color = (Color){200.0f, 200.0f, 200.0f, 255.0f},
+};
+global_variable Process  save_file_as_text_input = (Process){
+  .flags = Process_Flag_TextEdit|Process_Flag_FitToText|Process_Flag_Clickable|Process_Flag_CanBeActive,
+};
+global_variable Ui_Box save_file_as_confirm_box = (Ui_Box){
+  .align = Ui_Align_TopRight, // TODO: The right-alignment is broken... should fix that at some point...
+  .layout = Ui_Layout_Horizontal,
+  .sizing = Ui_Sizing_FitContents,
+};
+
+
+
 
 
 function B32 rectangle_contains_point(Rectangle r, Vector2 p) {
@@ -532,6 +560,21 @@ function void paste_processes(Context *context) {
 
   context->copy_processes.first = 0;
   context->copy_processes.last = 0;
+}
+
+
+
+function B32 is_active_process(Context *context, Process *p) {
+  B32 is_active = 0;
+
+  for (Process *test_p = context->active_processes.first; test_p != 0; test_p = test_p->next_active) {
+    if (test_p == p) {
+      is_active = 1;
+      break;
+    }
+  }
+
+  return is_active;
 }
 
 
@@ -1060,15 +1103,26 @@ function void do_open_file(Context *context, B32 sizing) {
 }
 
 
-function void handle_save_file_as(Context *context) {
-  Render_Context *rc = &context->ui_render_context;
-  Rectangle r = (Rectangle){200, 100, 100, 200};
+function void do_save_file_as(Context *context, B32 sizing) {
+  ui_box_begin(context, &save_file_as_box, sizing);
+  {
+    do_ui_element(context, &save_file_as_text_input, sizing);
 
-  render_DrawRectangle(rc, r.x, r.y, r.width, r.height, (Color){50, 200, 70, 255});
+    ui_box_begin(context, &save_file_as_confirm_box, sizing);
+    {
+      B32 save_clicked = do_ui_element(context, &save_button, sizing);
+      B32 cancel_clicked = do_ui_element(context, &cancel_button, sizing);
 
-  if (IsMouseButtonPressed(0) && rectangle_contains_point(r, context->ui_state.mouse_position)) {
-    set_menu_state(context, 0);
+      if (save_clicked) {
+        // TODO:
+        set_menu_state(context, 0);
+      } else if (cancel_clicked) {
+        set_menu_state(context, 0);
+      }
+    }
+    ui_box_end(context, &save_file_as_confirm_box, sizing);
   }
+  ui_box_end(context, &save_file_as_box, sizing);
 }
 
 function void handle_copy(Context *context, Process *element) {
@@ -1091,20 +1145,6 @@ function Vector2 get_percentage_between_points(Vector2 p0, Vector2 p1, F32 perce
 }
 
 
-
-
-function B32 is_active_process(Context *context, Process *p) {
-  B32 is_active = 0;
-
-  for (Process *test_p = context->active_processes.first; test_p != 0; test_p = test_p->next_active) {
-    if (test_p == p) {
-      is_active = 1;
-      break;
-    }
-  }
-
-  return is_active;
-}
 
 
 
@@ -1765,6 +1805,7 @@ get_process_selection(Context *context, Process *p) {
 
 
 
+
 function Keybind_Result check_keybind(Context *context, Ui_Feature feature, Process_Selection selection) {
   Keybind_Result result = 0;
 
@@ -1945,7 +1986,8 @@ function void handle_ui(Context *context) {
     do_open_file(context, 0);
   } break;
   case Menu_State_SaveFileAs: {
-    handle_save_file_as(context);
+    do_save_file_as(context, 1);
+    do_save_file_as(context, 0);
   } break;
   }
 
