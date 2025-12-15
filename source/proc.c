@@ -1092,6 +1092,7 @@ function void do_open_file(Context *context, B32 sizing) {
 
       if (open_clicked) {
         open_file_and_replace_processes(context, context->selected_element->label);
+        set_menu_state(context, 0);
       } else if (cancel_clicked) {
         set_menu_state(context, 0);
       }

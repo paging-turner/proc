@@ -147,7 +147,6 @@ function void open_file_and_replace_processes_v1(Context *context, String_Chunk_
 
     if (header->magic_number == Save_File_Magic_Number) {
       if (header->version == 1) {
-
         Cold_Process *first_cold_process = Save_File_Start_Of_Processes_V1(file_data.str);
         U8 *start_of_cold_string = Save_File_Start_Of_Strings_V1(file_data.str, header->process_count);
         U64 string_offset = 0;
@@ -164,6 +163,7 @@ function void open_file_and_replace_processes_v1(Context *context, String_Chunk_
             new_process->flags = cold_process->flags;
             new_process->position = cold_process->position;
             String8 cold_string = (String8){start_of_cold_string + string_offset, cold_process->string_size};
+            string_offset += cold_process->string_size;
             new_process->label = string_chunk_list_from_string8(context, cold_string);
             new_process->cold_index = i;
             new_process->which_in = cold_process->which_in;
@@ -174,10 +174,14 @@ function void open_file_and_replace_processes_v1(Context *context, String_Chunk_
             Cold_Process *cold_process = first_cold_process + i;
 
             if (cold_process->in) {
-              process_lookup[i]->in = process_lookup[cold_process->in];
+              Process *connected_process = process_lookup[cold_process->in-1];
+              process_lookup[i]->in = connected_process;
+              connected_process->in_count += 1;
             }
             if (cold_process->out) {
-              process_lookup[i]->out = process_lookup[cold_process->out];
+              Process *connected_process = process_lookup[cold_process->out-1];
+              process_lookup[i]->out = process_lookup[cold_process->out-1];
+              connected_process->out_count += 1;
             }
           }
         } else {
