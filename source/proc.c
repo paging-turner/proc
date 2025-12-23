@@ -16,6 +16,7 @@
 
 
 
+
 #if OS_WINDOWS
 # include "../libraries/raylib-5.5_win32_msvc16/include/raylib.h"
 # include "../libraries/raylib-5.5_win32_msvc16/include/raymath.h"
@@ -39,11 +40,11 @@ global_variable String8 Build_Filepath;
 
 
 
+
+
 #include "../source/proc.h"
 #include "../source/keybind.h"
 #include "../source/saves.h"
-
-
 
 
 
@@ -408,6 +409,17 @@ function void remove_copy_process_list(Context *context, Process_List *list) {
     Process *next_process = p->next;
     remove_process_from_process_list(context, &context->copy_processes, p);
     p = next_process;
+  }
+}
+
+function void gather_processes_from_trie(Context *context) {
+  Arena *arena = context->per_frame_arena;
+  Proc_Trie_Trie *trie = &context->proc_trie;
+
+  clear_processes(context);
+
+  Proc_Trie_Iterate(iter, arena, trie) {
+    break;
   }
 }
 
@@ -1065,8 +1077,9 @@ function S32 collect_save_files(Context *context) {
 
 
 function void save_file(Context *context, Process *element) {
-  /* Assert(!"TODO"); */
-  write_save_file(context, context->temp_arena, context->save_file_name);
+  if (context->save_file_name.first && context->save_file_name.last) {
+    write_save_file(context, context->temp_arena, context->save_file_name);
+  }
 }
 
 
@@ -1091,7 +1104,9 @@ function void do_open_file(Context *context, B32 sizing) {
       B32 cancel_clicked = do_ui_element(context, &cancel_button, sizing);
 
       if (open_clicked) {
-        open_file_and_replace_processes(context, context->selected_element->label);
+        if (context->selected_element) {
+          open_file_and_replace_processes(context, context->selected_element->label);
+        }
         set_menu_state(context, 0);
       } else if (cancel_clicked) {
         set_menu_state(context, 0);
