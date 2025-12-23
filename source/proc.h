@@ -106,9 +106,6 @@ struct Process {
 #define Steady_Trie_Key_Bits 64
 #define Steady_Trie_Slot_Bits 2
 #define Steady_Trie_Root_Is_Lowest_Significant_Byte 0
-#define Steady_Trie_Use_Key_Value_Pair 1
-# define Steady_Trie_Value_Type Process
-# define Steady_Trie_Default_Value (Process){0}
 #define Proc_Trie_Iterate(iter_name, arena, trie)\
   for (Proc_Trie_Iterator *iter_name = proc_trie_iter_init(arena, trie->current_root->node);\
        proc_trie_iter_test(iter_name);\
@@ -304,7 +301,7 @@ struct Context {
 
   U32 flags;
 
-  Proc_Trie_Trie proc_trie;
+  Proc_Trie_Trie *proc_trie;
   Process_List processes;
   Process_List free_processes;
   Process_List free_ui_elements;

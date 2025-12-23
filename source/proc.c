@@ -304,12 +304,29 @@ function Process *create_detached_process(Context *context) {
   return p;
 }
 
+function void gather_processes_from_trie(Context *context) {
+  Arena *arena = context->per_frame_arena;
+  Proc_Trie_Trie *trie = context->proc_trie;
+
+  clear_processes(context);
+
+  Proc_Trie_Iterate(iter, arena, trie) {
+    Process *p = (Process *)iter->key;
+    SLLQueuePush(context->processes.first, context->processes.last, p);
+  }
+}
+
 function Process *create_process(Context *context) {
   Process *p = create_detached_process(context);
 
+#if 1
   if (p) {
     SLLQueuePush(context->processes.first, context->processes.last, p);
   }
+#else
+  proc_trie_insert(context->permanent_arena, context->proc_trie, (U64)p);
+  gather_processes_from_trie(context);
+#endif
 
   return p;
 }
@@ -409,17 +426,6 @@ function void remove_copy_process_list(Context *context, Process_List *list) {
     Process *next_process = p->next;
     remove_process_from_process_list(context, &context->copy_processes, p);
     p = next_process;
-  }
-}
-
-function void gather_processes_from_trie(Context *context) {
-  Arena *arena = context->per_frame_arena;
-  Proc_Trie_Trie *trie = &context->proc_trie;
-
-  clear_processes(context);
-
-  Proc_Trie_Iterate(iter, arena, trie) {
-    break;
   }
 }
 
@@ -2668,8 +2674,8 @@ function void draw_info_panel(Context *context) {
   render_DrawText(rc, TextFormat("active count %d\n", debug_process_active_list_count(context->active_processes)),
                   x, y, global_panel_font_size, text_color, 1);
   y += global_panel_font_size + padding;
-  render_DrawText(rc, TextFormat("free count %d\n", debug_process_list_count(context->free_processes)),
-                  x, y, global_panel_font_size, text_color, 1);
+  /* render_DrawText(rc, TextFormat("free count %d\n", debug_process_list_count(context->free_processes)), */
+  /*                 x, y, global_panel_font_size, text_color, 1); */
   y += global_panel_font_size + padding;
   render_DrawText(rc, TextFormat("copy count %d\n", debug_process_list_count(context->copy_processes)),
                   x, y, global_panel_font_size, text_color, 1);
@@ -2708,6 +2714,8 @@ function Context initialize_context(void) {
   context.process_render_context.arena = context.render_arena;
 
   context.camera.zoom = 1.0f;
+
+  context.proc_trie = proc_trie_create_trie(context.permanent_arena);
 
   return context;
 }
