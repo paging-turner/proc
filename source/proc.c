@@ -286,13 +286,19 @@ function Process *create_ui_element(Context *context) {
 
 
 
+function Process *push_permanent_process(Context *context) {
+  Process *p = push_struct(context->permanent_arena, Process);
+
+  return p;
+}
+
 function Process *create_detached_process(Context *context) {
   Process *p = context->free_processes.first;
 
   if (p) {
     SLLQueuePop(context->free_processes.first, context->free_processes.last);
   } else {
-    p = push_struct(context->permanent_arena, Process);
+    p = push_permanent_process(context);
   }
 
   if (p) {
@@ -303,6 +309,7 @@ function Process *create_detached_process(Context *context) {
 
   return p;
 }
+
 
 function void gather_processes_from_trie(Context *context) {
   Arena *arena = context->per_frame_arena;
@@ -316,19 +323,36 @@ function void gather_processes_from_trie(Context *context) {
   }
 }
 
-function Process *create_process(Context *context) {
-  Process *p = create_detached_process(context);
 
-#if 1
+function Process *create_process(Context *context) {
+  Process *p = push_permanent_process(context);
+
+#if 0
   if (p) {
     SLLQueuePush(context->processes.first, context->processes.last, p);
   }
 #else
-  proc_trie_insert(context->permanent_arena, context->proc_trie, (U64)p);
-  gather_processes_from_trie(context);
+  if (p) {
+    proc_trie_insert(context->permanent_arena, context->proc_trie, (U64)p);
+    gather_processes_from_trie(context);
+  }
 #endif
 
   return p;
+}
+
+
+function void clear_process_list(Process_List *list) {
+  if (list->first) {
+    for (Process *p = list->first; p != 0;) {
+      Process *next_active = p->next_active;
+      p->next_active = 0;
+      p = next_active;
+    }
+  }
+
+  list->first = 0;
+  list->last = 0;
 }
 
 function void clear_active_processes(Context *context) {
@@ -409,6 +433,9 @@ function String_Chunk_List copy_string_chunk_list(Context *context, String_Chunk
 function void clear_processes(Context *context) {
   clear_active_processes(context);
 
+#if 1
+  clear_process_list(&context->processes);
+#else
   for (Process *p = context->processes.first; p != 0;) {
     Process *next_process = p->next;
     remove_process_from_process_list(context, &context->processes, p);
@@ -418,6 +445,7 @@ function void clear_processes(Context *context) {
 
     p = next_process;
   }
+#endif
 }
 
 function void remove_copy_process_list(Context *context, Process_List *list) {
