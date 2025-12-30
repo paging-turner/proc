@@ -222,6 +222,7 @@ function String_Chunk *create_string_chunk(Context *context) {
   return c;
 }
 
+
 function void free_string_chunk(Context *context, String_Chunk *chunk) {
   SLLQueuePush(context->free_strings.first, context->free_strings.last, chunk);
   chunk->next = 0;
@@ -266,6 +267,7 @@ function void free_ui_element(Context *context, Process *e) {
   e->next = 0;
 }
 
+
 function Process *create_ui_element(Context *context) {
   Process *e = context->free_ui_elements.first;
 
@@ -292,6 +294,7 @@ function Process *push_permanent_process(Context *context) {
   return p;
 }
 
+
 function Process *create_detached_process(Context *context) {
   Process *p = context->free_processes.first;
 
@@ -316,6 +319,7 @@ function void gather_processes_from_trie(Context *context) {
   Proc_Trie_Trie *trie = context->proc_trie;
 
   clear_processes(context);
+  proc_trie_print_trie(arena, trie);
 
   Proc_Trie_Iterate(iter, arena, trie) {
     Process *p = (Process *)iter->key;
@@ -342,6 +346,25 @@ function Process *create_process(Context *context) {
 }
 
 
+function Process *create_processes(Context *context, U32 process_count) {
+  Process *ps = push_array(context->permanent_arena, Process, process_count);
+  Proc_Trie_Key *keys = push_array(context->temp_arena, Proc_Trie_Key, process_count);
+
+  if (ps && keys) {
+    for (U32 i = 0; i < process_count; ++i) {
+      keys[i] = (Proc_Trie_Key)(ps + i);
+    }
+    Arena *arena = context->permanent_arena;
+    Proc_Trie_Trie *trie = context->proc_trie;
+
+    proc_trie_edit(arena, trie, keys, 0, process_count, Proc_Trie_Edit_Insert);
+    gather_processes_from_trie(context);
+  }
+
+  return ps;
+}
+
+
 function void clear_process_list(Process_List *list) {
   if (list->first) {
     for (Process *p = list->first; p != 0;) {
@@ -355,6 +378,7 @@ function void clear_process_list(Process_List *list) {
   list->last = 0;
 }
 
+
 function void clear_active_processes(Context *context) {
   if (context->active_processes.first) {
     for (Process *p = context->active_processes.first; p != 0;) {
@@ -367,6 +391,7 @@ function void clear_active_processes(Context *context) {
   context->active_processes.first = 0;
   context->active_processes.last = 0;
 }
+
 
 function void remove_process_from_process_list(Context *context, Process_List *list, Process *p) {
   if (list->first == p) {
@@ -386,6 +411,7 @@ function void remove_process_from_process_list(Context *context, Process_List *l
   SLLQueuePush(context->free_processes.first, context->free_processes.last, p);
 }
 
+
 function void remove_string_chunk_list(Context *context, String_Chunk_List *scl) {
   if (scl->first && scl->last) {
     if (context->free_strings.first && context->free_strings.last) {
@@ -397,6 +423,7 @@ function void remove_string_chunk_list(Context *context, String_Chunk_List *scl)
     }
   }
 }
+
 
 function void free_ui_element_list(Context *context, Process_List *l) {
   // free the string-chunks
@@ -416,6 +443,7 @@ function void free_ui_element_list(Context *context, Process_List *l) {
   }
 }
 
+
 function String_Chunk_List copy_string_chunk_list(Context *context, String_Chunk_List *scl) {
   String_Chunk_List result = (String_Chunk_List){0};
 
@@ -429,6 +457,7 @@ function String_Chunk_List copy_string_chunk_list(Context *context, String_Chunk
 
   return result;
 }
+
 
 function void clear_processes(Context *context) {
   clear_active_processes(context);
@@ -448,6 +477,7 @@ function void clear_processes(Context *context) {
 #endif
 }
 
+
 function void remove_copy_process_list(Context *context, Process_List *list) {
   // TODO: @Speed can probably do some fancy stuff with just the ends of the list?
   for (Process *p = list->first; p != 0;) {
@@ -456,6 +486,7 @@ function void remove_copy_process_list(Context *context, Process_List *list) {
     p = next_process;
   }
 }
+
 
 function Process *add_process_to_copy_list(Context *context, Process *p, Vector2 *copy_center, F32 *copy_count) {
   Process *copied_p = create_detached_process(context);
@@ -467,6 +498,7 @@ function Process *add_process_to_copy_list(Context *context, Process *p, Vector2
 
   return copied_p;
 }
+
 
 function void copy_active_processes(Context *context) {
   B32 error = 0;
@@ -590,10 +622,13 @@ function void copy_active_processes(Context *context) {
   }
 }
 
+
 function void paste_processes(Context *context) {
   Vector2 mouse_world_pos = GetScreenToWorld2D(context->ui_state.mouse_position, context->camera);
   Vector2 center_delta = Vector2Subtract(mouse_world_pos, context->copy_center);
+  U32 process_count = 0;
 
+#if 0
   for (Process *p = context->copy_processes.first; p != 0;) {
     Process *next_p = p->next;
     if (!Get_Flag(p->flags, Process_Flag_Wire)) {
@@ -602,6 +637,26 @@ function void paste_processes(Context *context) {
 
     SLLQueuePush(context->processes.first, context->processes.last, p);
     p = next_p;
+  }
+#else
+  for (Process *p = context->copy_processes.first; p != 0; p = p->next) {
+    process_count += 1;
+    /* Process *new_p = create_processes(context, 1); */
+    /* *new_p = *p; */
+    /* new_p->position = Vector2Add(p->position, center_delta); */
+  }
+#endif
+
+  if (process_count) {
+    Process *ps = create_processes(context, process_count);
+    U32 i = 0;
+
+    for (Process *p = context->copy_processes.first; p != 0; p = p->next) {
+      Process *new_p = ps + i;
+      i += 1;
+      *new_p = *p;
+      new_p->position = Vector2Add(p->position, center_delta);
+    }
   }
 
   context->copy_processes.first = 0;

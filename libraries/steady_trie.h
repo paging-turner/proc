@@ -86,7 +86,7 @@ typedef U8 Steady_Trie(Slot_Type);
   (1 << Steady_Trie_Slot_Bits)
 
 #define Steady_Trie_Max_Depth\
-  (Steady_Trie_Key_Bits / Steady_Trie_Slot_Bits)
+  (U32)(Steady_Trie_Key_Bits / Steady_Trie_Slot_Bits)
 
 // TODO: The names for Steady_Trie_Single_Slot_Mask and Steady_Trie_Slot_Mask are confusing. Should probably rename!
 #define Steady_Trie_Single_Slot_Mask\
@@ -252,6 +252,7 @@ steady_trie(delete_stack_node)(Arena *arena, Steady_Trie(Stack_Node) *free_stack
   // TODO: Implement and use
 }
 
+
 Steady_Function void steady_trie(iter_next)(Steady_Trie(Iterator) *iter) {
   // Do a depth-first search until we find the next occupied key.
   for (;;) {
@@ -353,10 +354,6 @@ Steady_Function void steady_trie(new_root_with_keys)(
   Steady_Trie(Node) *new_node = arena_push(arena, sizeof(Steady_Trie(Node)));
   Steady_Trie(Root) *new_root = arena_push(arena, sizeof(Steady_Trie(Root)));
 
-  // TODO: `current_node` and `current_new_node` are confusing names.
-  Steady_Trie(Node) *current_node = trie->current_root->node;
-  Steady_Trie(Node) *current_new_node = new_node;
-
   if (new_node && new_root) {
     // Setup new node.
     *new_node = *trie->current_root->node;
@@ -384,6 +381,10 @@ Steady_Function void steady_trie(new_root_with_keys)(
     // Fill out the root with new nodes.
     for (U32 k = 0; k < key_count; ++k) {
       Steady_Trie(Key) key = keys[k];
+
+      // TODO: `current_node` and `current_new_node` are confusing names.
+      Steady_Trie(Node) *current_node = trie->current_root->node;
+      Steady_Trie(Node) *current_new_node = new_node;
 
       for (U32 d = 0; d < Steady_Trie_Max_Depth; ++d) {
         Steady_Trie(Slot_Type) slot_value = Steady_Trie_Get_Slot_Value(key, d);
@@ -427,49 +428,55 @@ Steady_Function void steady_trie(new_root)(
 Steady_Function Steady_Trie(Edit_Result) steady_trie(edit)(
   Arena *arena,
   Steady_Trie(Trie) *trie,
-  Steady_Trie(Key) key,
-  Steady_Trie_Value_Type value,
+  Steady_Trie(Key) *keys,
+  Steady_Trie_Value_Type *values,
+  U32 count,
   Steady_Trie(Edit_Kind) edit_kind
   ) {
   Steady_Trie(Edit_Result) result = (Steady_Trie(Edit_Result)){0};
   if (edit_kind != Steady_Trie(Edit_Search)) {
-    steady_trie(new_root)(arena, trie, key);
+    steady_trie(new_root_with_keys)(arena, trie, keys, count);
   }
   Steady_Trie(Node) *node = trie->current_root->node;
 
-  for (U32 d = 0; (d < Steady_Trie_Max_Depth) && node; ++d) {
-    Steady_Trie(Slot_Type) slot_value = Steady_Trie_Get_Slot_Value(key, d);
-    Assert(slot_value >= 0 && slot_value <= Steady_Trie_Single_Slot_Mask);
+  for (U32 i = 0; i < count; ++i) {
+    Steady_Trie(Key) key = keys[i];
 
-    if (Steady_Trie_Is_Key_At_Final_Depth(key, d)) {
-      if (edit_kind == Steady_Trie(Edit_Insert)) {
-        node->occupied[slot_value] = 1;
+    for (U32 d = 0; (d < Steady_Trie_Max_Depth) && node; ++d) {
+      Steady_Trie(Slot_Type) slot_value = Steady_Trie_Get_Slot_Value(key, d);
+      Assert(slot_value >= 0 && slot_value <= Steady_Trie_Single_Slot_Mask);
+
+      if (Steady_Trie_Is_Key_At_Final_Depth(key, d)) {
+        if (edit_kind == Steady_Trie(Edit_Insert)) {
+          node->occupied[slot_value] = 1;
 #if Steady_Trie_Use_Key_Value_Pair
-        node->values[slot_value] = value;
+          Steady_Trie_Value_Type value = values[i];
+          node->values[slot_value] = value;
 #endif
-      }
-      else if (edit_kind == Steady_Trie(Edit_Delete)) {
-        node->occupied[slot_value] = 0;
-      }
-      else if (edit_kind == Steady_Trie(Edit_Search)) {
-#if Steady_Trie_Use_Key_Value_Pair
-        if (node->occupied[slot_value]) {
-          result.value = &node->values[slot_value];
         }
+        else if (edit_kind == Steady_Trie(Edit_Delete)) {
+          node->occupied[slot_value] = 0;
+        }
+        else if (edit_kind == Steady_Trie(Edit_Search)) {
+#if Steady_Trie_Use_Key_Value_Pair
+          if (node->occupied[slot_value]) {
+            result.value = &node->values[slot_value];
+          }
 #else
-        result.found = node->occupied[slot_value] ? 1 : 0;
+          result.found = node->occupied[slot_value] ? 1 : 0;
 #endif
+        }
+        break;
       }
-      break;
-    }
-    else {
-      if (edit_kind == Steady_Trie(Edit_Insert) && node->slots[slot_value] == 0) {
-        // Add new node
-        node->slots[slot_value] = arena_push(arena, sizeof(Steady_Trie(Node)));
-      }
+      else {
+        if (edit_kind == Steady_Trie(Edit_Insert) && node->slots[slot_value] == 0) {
+          // Add new node
+          node->slots[slot_value] = arena_push(arena, sizeof(Steady_Trie(Node)));
+        }
 
-      // Descend
-      node = node->slots[slot_value];
+        // Descend
+        node = node->slots[slot_value];
+      }
     }
   }
 
@@ -485,7 +492,7 @@ Steady_Function Steady_Trie(Edit_Result) steady_trie(set)(
   Steady_Trie(Key) key,
   Steady_Trie_Value_Type value
   ) {
-  return steady_trie(edit)(arena, trie, key, value, Steady_Trie(Edit_Insert));
+  return steady_trie(edit)(arena, trie, &key, &value, 1, Steady_Trie(Edit_Insert));
 }
 #else
 Steady_Function Steady_Trie(Edit_Result) steady_trie(insert)(
@@ -493,7 +500,8 @@ Steady_Function Steady_Trie(Edit_Result) steady_trie(insert)(
   Steady_Trie(Trie) *trie,
   Steady_Trie(Key) key
   ) {
-  return steady_trie(edit)(arena, trie, key, Steady_Trie_Default_Value, Steady_Trie(Edit_Insert));
+  Steady_Trie_Value_Type value = Steady_Trie_Default_Value;
+  return steady_trie(edit)(arena, trie, &key, &value, 1, Steady_Trie(Edit_Insert));
 }
 #endif
 
@@ -502,7 +510,8 @@ Steady_Function Steady_Trie(Edit_Result) steady_trie(delete)(
   Steady_Trie(Trie) *trie,
   Steady_Trie(Key) key
   ) {
-  return steady_trie(edit)(arena, trie, key, Steady_Trie_Default_Value, Steady_Trie(Edit_Delete));
+  Steady_Trie_Value_Type value = Steady_Trie_Default_Value;
+  return steady_trie(edit)(arena, trie, &key, &value, 1, Steady_Trie(Edit_Delete));
 }
 
 Steady_Function Steady_Trie(Edit_Result) steady_trie(search)(
@@ -510,7 +519,8 @@ Steady_Function Steady_Trie(Edit_Result) steady_trie(search)(
   Steady_Trie(Trie) *trie,
   Steady_Trie(Key) key
   ) {
-  return steady_trie(edit)(arena, trie, key, Steady_Trie_Default_Value, Steady_Trie(Edit_Search));
+  Steady_Trie_Value_Type value = Steady_Trie_Default_Value;
+  return steady_trie(edit)(arena, trie, &key, &value, 1, Steady_Trie(Edit_Search));
 }
 
 
@@ -618,6 +628,65 @@ Steady_Function B32 steady_trie(ensure_key_has_occupation)(
   }
 
   return errors;
+}
+
+
+Steady_Function void steady_trie(print_trie)(
+  Arena *arena,
+  Steady_Trie(Trie) *trie
+  ) {
+  printf("digraph Trie {\n");
+  for (Steady_Trie(Root) *root = trie->root; root != 0; root = root->next_edit) {
+    printf("\"%llx\"->\"root%llx\";\n", (U64)trie, (U64)root);
+    Steady_Trie(Node) *prev_node = 0;
+
+    // Init iterator
+    Steady_Trie(Iterator) *iter = arena_push(arena, sizeof(Steady_Trie(Iterator)));
+    Steady_Trie(Stack_Node) *stack = arena_push(arena, sizeof(Steady_Trie(Stack_Node)));
+    if (iter && stack) {
+      iter->arena = arena;
+      iter->stack = stack;
+      iter->stack->node = root->node;
+
+      printf("\"root%llx\"->\"%llx\";\n", (U64)root, (U64)iter->stack->node);
+
+      for (;;) {
+        if (iter->stack && iter->stack && iter->stack->node) {
+          if (iter->stack->index < Steady_Trie_Slot_Count) {
+            B32 not_visited = ((iter->stack->visited_plus_one == 0) ||
+                               (iter->stack->visited_plus_one-1 < iter->stack->index));
+            B32 occupied = iter->stack->node->occupied[iter->stack->index];
+            if (occupied && not_visited) {
+              iter->stack->visited_plus_one = iter->stack->index+1;
+              printf("\"%llx\"->\"%llx_%d\";\n", (U64)iter->stack->node, (U64)iter->stack->node, iter->stack->index);
+            }
+            else if (iter->stack->node->slots[iter->stack->index]) {
+              // Child slot is present, so descend.
+              // TODO: Recycle free stack-nodes!!!!!
+              Steady_Trie(Node) *next_node = iter->stack->node->slots[iter->stack->index];
+              Steady_Trie(Stack_Node) *new_stack_node = arena_push(iter->arena, sizeof(Steady_Trie(Stack_Node)));
+              iter->stack->index += 1;
+              new_stack_node->node = next_node;
+              printf("\"%llx\"->\"%llx\";\n", (U64)iter->stack->node, (U64)next_node);
+              SLLStackPush(iter->stack, new_stack_node);
+            }
+            else {
+              iter->stack->index += 1;
+            }
+          }
+          else {
+            // Reached the end of the current node's slots, so go back up.
+            SLLStackPop(iter->stack); // TODO: Recycle stack-nodes!!!!!!!!
+          }
+        }
+        else {
+          // The iter-stack or the stack's node is empty, so bail.
+          break;
+        }
+      }
+    }
+  }
+  printf("}\n");
 }
 
 
