@@ -104,8 +104,31 @@ U8 ascii_char_lookup[256][2] = {
 #define Is_Editable_Char(c)  (Is_Ascii_Range(c)?is_editable_char_lookup[c&0xff]:0)
 
 
+#define String8List_Detect_Cycle_N(node, cycle_check_ptr, next)\
+  (((node) && (node)->next && ((node) == (*(cycle_check_ptr)))) ||\
+   ((node)->next == (*(cycle_check_ptr))))
+
+// TODO: Rename String8List_Detect_Cycle to something that is not specific to String8List.
+#define String8List_Detect_Cycle(node, cycle_check_ptr)\
+  String8List_Detect_Cycle_N(node, cycle_check_ptr, next)
 
 
+#define String8List_Detect_Cycle_Next_Iter_N(node, cycle_check, next)\
+  Stmnt(((node)->next\
+         ? (((*(cycle_check)) = (node)->next->next), ((node) = (node)->next))\
+         : ((node) = (node)->next));)
+
+#define String8List_Detect_Cycle_Next_Iter(node, cycle_check)\
+  String8List_Detect_Cycle_Next_Iter_N(node, cycle_check, next)
+
+#if 0
+# define Handle_Cycle_Detection(node)\
+  printf("Cycle detected...%p\n", node)
+#else
+# define Handle_Cycle_Detection(node)\
+  Stmnt(if (node) { printf("Cycle detected...%p\n", node);  \
+      Assert(!"Cycle detected");})
+#endif
 
 // HACK: We should instead just make functions that construct c-strings from string8 and then print the c-string!!!
 function void print_string8(String8 string) {
@@ -115,9 +138,13 @@ function void print_string8(String8 string) {
 }
 
 function void print_string8_list(String8List string_list) {
-  for (String8Node *node = string_list.first;
-       node != 0;
-       node = node->next){
+  String8Node *cycle_check = 0;
+  for (String8Node *node = string_list.first; node != 0;){
+    if (String8List_Detect_Cycle(node, &cycle_check)) {
+      Handle_Cycle_Detection(node);
+      break;
+    }
+    String8List_Detect_Cycle_Next_Iter(node, &cycle_check);
     print_string8(node->string);
   }
 }
@@ -142,7 +169,15 @@ function U64 get_total_size_of_string_chunk_list(String_Chunk_List *scl) {
   // @Speed
   // get the total size
   U64 total_size = 0;
-  for (String_Chunk *sc = scl->first; sc != 0; sc = sc->next) {
+  String_Chunk *cycle_check = 0;
+  String_Chunk *sc = scl ? scl->first : 0;
+  for (; sc != 0;) {
+    if (String8List_Detect_Cycle(sc, &cycle_check)) {
+      Handle_Cycle_Detection(sc);
+      break;
+    }
+    String8List_Detect_Cycle_Next_Iter(sc, &cycle_check);
+
     if (sc == scl->last) {
       S32 char_count = 1;
       for (;; ++char_count) {

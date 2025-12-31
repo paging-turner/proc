@@ -373,19 +373,6 @@ function Process *create_processes(Context *context, U32 process_count) {
 }
 
 
-function void clear_process_list(Process_List *list) {
-  if (list->first) {
-    for (Process *p = list->first; p != 0;) {
-      Process *next_active = p->next_active;
-      p->next_active = 0;
-      p = next_active;
-    }
-  }
-
-  list->first = 0;
-  list->last = 0;
-}
-
 
 function void clear_active_processes(Context *context) {
   if (context->active_processes.first) {
@@ -405,7 +392,12 @@ function void remove_process_from_process_list(Context *context, Process_List *l
   if (list->first == p) {
     SLLQueuePop(list->first, list->last);
   } else {
-    for (Process *test_p = list->first; test_p != 0; test_p = test_p->next) {
+    Process *cycle_check = 0;
+    for (Process *test_p = list->first; test_p != 0;) {
+      if(String8List_Detect_Cycle(test_p, &cycle_check)) {
+        Handle_Cycle_Detection(test_p);
+        break;
+      }
       if (test_p->next == p) {
         test_p->next = p->next;
         if (p == list->last) {
@@ -413,6 +405,7 @@ function void remove_process_from_process_list(Context *context, Process_List *l
         }
         break;
       }
+      String8List_Detect_Cycle_Next_Iter(test_p, &cycle_check);
     }
   }
 
@@ -471,7 +464,7 @@ function void clear_processes(Context *context) {
   clear_active_processes(context);
 
 #if 1
-  clear_process_list(&context->processes);
+  /* clear_active_process_list(&context->processes); */
 #else
   for (Process *p = context->processes.first; p != 0;) {
     Process *next_process = p->next;
@@ -517,7 +510,12 @@ function void copy_active_processes(Context *context) {
   remove_copy_process_list(context, &context->copy_processes);
 
   // copy processes from active-list to copy-list
-  for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
+  Process *cycle_check = 0;
+  for (Process *a = context->active_processes.first; a != 0;) {
+    if (String8List_Detect_Cycle_N(a, &cycle_check, next_active)) {
+      printf("Cycle detected...%p\n", a);
+      break;
+    }
     if (Get_Flag(a->flags, Process_Flag_Wire)) {
       // add connected processes if they have not been added yet
       for (S32 conn = 0; conn < Process_Connection__Count; ++conn) {
@@ -552,6 +550,8 @@ function void copy_active_processes(Context *context) {
       // only add process if it hasn't already been added by a connected wire
       add_process_to_copy_list(context, a, &copy_center, &copy_count);
     }
+
+    String8List_Detect_Cycle_Next_Iter_N(a, &cycle_check, next_active);
   }
 
   // remove all to_copied fields
@@ -635,6 +635,7 @@ function void paste_processes(Context *context) {
   Vector2 mouse_world_pos = GetScreenToWorld2D(context->ui_state.mouse_position, context->camera);
   Vector2 center_delta = Vector2Subtract(mouse_world_pos, context->copy_center);
   U32 process_count = 0;
+  Process *cycle_check = 0;
 
 #if 0
   for (Process *p = context->copy_processes.first; p != 0;) {
@@ -647,11 +648,18 @@ function void paste_processes(Context *context) {
     p = next_p;
   }
 #else
-  for (Process *p = context->copy_processes.first; p != 0; p = p->next) {
+  cycle_check = 0;
+  for (Process *p = context->copy_processes.first; p != 0;) {
     process_count += 1;
     /* Process *new_p = create_processes(context, 1); */
     /* *new_p = *p; */
     /* new_p->position = Vector2Add(p->position, center_delta); */
+    if (String8List_Detect_Cycle(p, &cycle_check)) {
+      Handle_Cycle_Detection(p);
+      break;
+    }
+    String8List_Detect_Cycle_Next_Iter(p, &cycle_check);
+
   }
 #endif
 
@@ -659,11 +667,20 @@ function void paste_processes(Context *context) {
     Process *ps = create_processes(context, process_count);
     U32 i = 0;
 
-    for (Process *p = context->copy_processes.first; p != 0; p = p->next) {
+    cycle_check = 0;
+    for (Process *p = context->copy_processes.first; p != 0;) {
+      if (String8List_Detect_Cycle(p, &cycle_check)) {
+        printf("Cycle detected...%p\n", p);
+        break;
+      }
+      if (i >= process_count) {
+        break;
+      }
       Process *new_p = ps + i;
       i += 1;
       *new_p = *p;
       new_p->position = Vector2Add(p->position, center_delta);
+      String8List_Detect_Cycle_Next_Iter(p, &cycle_check);
     }
   }
 
@@ -2524,7 +2541,12 @@ function void draw_processes(Context *context) {
   B32 rounded = Get_Flag(context->flags, Context_Flag_RoundedShapes);
 
   // draw processes
-  for (Process *p = context->processes.first; p != 0; p = p->next) {
+  Process *cycle_check = 0;
+  for (Process *p = context->processes.first; p != 0;) {
+    if (String8List_Detect_Cycle(p, &cycle_check)) {
+      printf("Cycle detected...%p\n", p);
+      break;
+    }
     B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
     U8 *label_c_string = c_string_from_string_chunk_list(context->temp_arena, &p->label);
     S32 text_width = MeasureText((char *)label_c_string, font_size);
@@ -2646,6 +2668,8 @@ function void draw_processes(Context *context) {
         render_DrawRectangleRec(rc, new_wire_box, color);
       }
     }
+
+    String8List_Detect_Cycle_Next_Iter(p, &cycle_check);
   }
 
   // draw wires

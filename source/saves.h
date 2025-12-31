@@ -151,7 +151,7 @@ function void open_file_and_replace_processes_v1(Context *context, String_Chunk_
         U8 *start_of_cold_string = Save_File_Start_Of_Strings_V1(file_data.str, header->process_count);
         U64 string_offset = 0;
 
-        clear_processes(context);
+        /* clear_processes(context); */
 
         Process **process_lookup = arena_push(context->temp_arena, header->process_count*sizeof(Process *));
 
