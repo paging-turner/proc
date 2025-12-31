@@ -11,6 +11,7 @@
      [x] Undo
      [x] Simple Redo
      [ ] Redo alternate branches
+     [ ] Do a pass of docs after fixing bugs for undo/redo.
    [ ] Allow for identifier renaming (for constructing multiple types of trie)
    [x] Allow configuration to store keys least-to-most significant byte or most-to-least.
    [x] Right now the keys are the values, but we probably want the option of having key/value pairs.
@@ -239,16 +240,21 @@ struct Steady_Trie(Edit_Result) {
 
 
 
-Steady_Function Steady_Trie(Stack_Node) *
-steady_trie(create_stack_node)(Arena *arena, Steady_Trie(Stack_Node) *free_stack) {
+Steady_Function Steady_Trie(Stack_Node) *steady_trie(create_stack_node)(
+  Arena *arena,
+  Steady_Trie(Stack_Node) *free_stack
+  ) {
   Steady_Trie(Stack_Node) *node = 0;
   // TODO: Implement and use
 
   return node;
 }
 
-Steady_Function void
-steady_trie(delete_stack_node)(Arena *arena, Steady_Trie(Stack_Node) *free_stack, Steady_Trie(Stack_Node) *node) {
+Steady_Function void steady_trie(delete_stack_node)(
+  Arena *arena,
+  Steady_Trie(Stack_Node) *free_stack,
+  Steady_Trie(Stack_Node) *node
+  ) {
   // TODO: Implement and use
 }
 
@@ -437,9 +443,9 @@ Steady_Function Steady_Trie(Edit_Result) steady_trie(edit)(
   if (edit_kind != Steady_Trie(Edit_Search)) {
     steady_trie(new_root_with_keys)(arena, trie, keys, count);
   }
-  Steady_Trie(Node) *node = trie->current_root->node;
 
   for (U32 i = 0; i < count; ++i) {
+    Steady_Trie(Node) *node = trie->current_root->node;
     Steady_Trie(Key) key = keys[i];
 
     for (U32 d = 0; (d < Steady_Trie_Max_Depth) && node; ++d) {
@@ -631,13 +637,22 @@ Steady_Function B32 steady_trie(ensure_key_has_occupation)(
 }
 
 
+
+#define Steady_Trie_Print_Connection(gen, a, b)\
+  printf("\"%llx_%llx\"->\"%llx_%llx\";\n", gen, (U64)(a), gen, (U64)(b))
+
+#define Steady_Trie_Print_Leaf(gen, a, b, stack_index)\
+  printf("\"%llx_%llx\"->\"%llx_%llx_%d\";\n", gen, (U64)(a), gen, (U64)(b), stack_index)
+
 Steady_Function void steady_trie(print_trie)(
   Arena *arena,
-  Steady_Trie(Trie) *trie
+  Steady_Trie(Trie) *trie,
+  U64 generation
   ) {
   printf("digraph Trie {\n");
+  char *ref_format = "%llx_%llx";
   for (Steady_Trie(Root) *root = trie->root; root != 0; root = root->next_edit) {
-    printf("\"%llx\"->\"root%llx\";\n", (U64)trie, (U64)root);
+    Steady_Trie_Print_Connection(generation, trie, root);
     Steady_Trie(Node) *prev_node = 0;
 
     // Init iterator
@@ -648,7 +663,7 @@ Steady_Function void steady_trie(print_trie)(
       iter->stack = stack;
       iter->stack->node = root->node;
 
-      printf("\"root%llx\"->\"%llx\";\n", (U64)root, (U64)iter->stack->node);
+      Steady_Trie_Print_Connection(generation, root, iter->stack->node);
 
       for (;;) {
         if (iter->stack && iter->stack && iter->stack->node) {
@@ -658,7 +673,7 @@ Steady_Function void steady_trie(print_trie)(
             B32 occupied = iter->stack->node->occupied[iter->stack->index];
             if (occupied && not_visited) {
               iter->stack->visited_plus_one = iter->stack->index+1;
-              printf("\"%llx\"->\"%llx_%d\";\n", (U64)iter->stack->node, (U64)iter->stack->node, iter->stack->index);
+              Steady_Trie_Print_Leaf(generation, iter->stack->node, iter->stack->node, iter->stack->index);
             }
             else if (iter->stack->node->slots[iter->stack->index]) {
               // Child slot is present, so descend.
@@ -667,7 +682,7 @@ Steady_Function void steady_trie(print_trie)(
               Steady_Trie(Stack_Node) *new_stack_node = arena_push(iter->arena, sizeof(Steady_Trie(Stack_Node)));
               iter->stack->index += 1;
               new_stack_node->node = next_node;
-              printf("\"%llx\"->\"%llx\";\n", (U64)iter->stack->node, (U64)next_node);
+              Steady_Trie_Print_Connection(generation, iter->stack->node, next_node);
               SLLStackPush(iter->stack, new_stack_node);
             }
             else {

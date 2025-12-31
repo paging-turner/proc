@@ -314,12 +314,16 @@ function Process *create_detached_process(Context *context) {
 }
 
 
+
+global_variable U64 global_id_for_printing_tries;
+
 function void gather_processes_from_trie(Context *context) {
   Arena *arena = context->per_frame_arena;
   Proc_Trie_Trie *trie = context->proc_trie;
 
   clear_processes(context);
-  proc_trie_print_trie(arena, trie);
+  /* proc_trie_print_trie(arena, trie, global_id_for_printing_tries); */
+  global_id_for_printing_tries += 1;;
 
   Proc_Trie_Iterate(iter, arena, trie) {
     Process *p = (Process *)iter->key;
