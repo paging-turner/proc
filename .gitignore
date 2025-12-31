@@ -6,4 +6,7 @@ build/
 *.obj
 *.pdb
 
+config/*
+!config/custom_keybinds_example.h
+
 saves/*

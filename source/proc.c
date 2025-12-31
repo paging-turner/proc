@@ -45,6 +45,9 @@ global_variable String8 Build_Filepath;
 
 #include "../source/proc.h"
 #include "../source/keybind.h"
+#ifdef Custom_Keybinds
+# include "../config/custom_keybinds.h"
+#endif
 #include "../source/saves.h"
 
 

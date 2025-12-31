@@ -67,6 +67,11 @@ Settings="$Settings -Wno-unused-variable"
 Settings="$Settings -Wno-char-subscripts"
 Settings="$Settings -Wno-sign-compare"
 Settings="$Settings -fno-inline-functions"
+
+if [ -e ../config/custom_keybinds.h ]; then
+    Settings="$Settings -DCustom_Keybinds"
+fi
+
 # Settings="$Settings -fno-pie"
 # Settings="$Settings -E"
 

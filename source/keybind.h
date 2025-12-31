@@ -165,15 +165,3 @@ Define_Keybind(Proc_Keybind_Def_Default, ToggleTestRecording,
 
 
 
-#if 0
-Define_Keybind(Proc_Keybind_Def_Custom, CreateProcess,
-               Key_Kind_Mouse0, Modifier_Key_Shift,
-               Ui_Constraint_NoHotProcess,
-               "CUSTOM: Create a new process.");
-
-
-Define_Keybind(999, CreateProcess,
-               KEY_L, Modifier_Key_Shift,
-               Ui_Constraint_NoHotProcess,
-               "CUSTOM: Create a new process.");
-#endif

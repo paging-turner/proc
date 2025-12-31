@@ -1,5 +1,7 @@
 @echo off
 
+REM TODO: Define Custom_Keybinds macro if the config-file exists
+
 set Base_Source_File=source\base.c
 set App_Source_File=source\proc.c
 
