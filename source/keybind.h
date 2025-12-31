@@ -80,7 +80,7 @@ typedef enum {
 
 
 // TODO: Gather all keybinds in a single before-main, that way users can override/customize keybinds.
-#define Define_Keybind(bind_value, keybind_name, k, m, c, d)\
+#define Define_Keybind(keybind_name, bind_value, k, m, c, d)\
   static keybind_DECL(keybind_name);\
   MR4TH_BEFORE_MAIN(proc_keybind_##bind_value##_##keybind_name){\
     keybind_Type *keybind = keybind_REF(keybind_name);\
@@ -96,72 +96,83 @@ typedef enum {
     }\
   }
 
-Define_Keybind(Proc_Keybind_Def_Default, Bound,
+
+
+
+Define_Keybind(Bound,
+               Proc_Keybind_Def_Default,
                Key_Kind_Mouse0, 0,
                Ui_Constraint_NoHotProcess|Ui_Constraint_ExitOnKeyup,
                "Select multiple processes by drawing a rectangle with your mouse.");
 
-Define_Keybind(Proc_Keybind_Def_Default, Pan,
+Define_Keybind(Pan,
+               Proc_Keybind_Def_Default,
                Key_Kind_Mouse1, 0,
                Ui_Constraint_ExitOnKeyup,
                "Slide your field of view by moving your mouse.");
 
-Define_Keybind(Proc_Keybind_Def_Default, ZoomIn,
+Define_Keybind(ZoomIn,
+               Proc_Keybind_Def_Default,
                Key_Kind_MouseWheelUp, 0,
                Ui_Constraint_ActionNotOccured,
                "Zoom your field of view in to make objects appear closer.");
 
-Define_Keybind(Proc_Keybind_Def_Default, ZoomOut,
+Define_Keybind(ZoomOut,
+               Proc_Keybind_Def_Default,
                Key_Kind_MouseWheelDown, 0,
                Ui_Constraint_ActionNotOccured,
                "Zoom your field of view out to make objects appear further.");
 
-Define_Keybind(Proc_Keybind_Def_Default, SelectSingleProcess,
+Define_Keybind(SelectSingleProcess,
+               Proc_Keybind_Def_Default,
                Key_Kind_Mouse0, 0,
                Ui_Constraint_HoverProcess|Ui_Constraint_ExitOnKeyup,
                "Select a single process.");
 
-Define_Keybind(Proc_Keybind_Def_Default, SelectAnotherProcess,
+Define_Keybind(SelectAnotherProcess,
+               Proc_Keybind_Def_Default,
                Key_Kind_Mouse0, Modifier_Key_Control,
                Ui_Constraint_HoverProcess,
                "Add a process to the selected processes.");
 
-Define_Keybind(Proc_Keybind_Def_Default, CancelSelection,
+Define_Keybind(CancelSelection,
+               Proc_Keybind_Def_Default,
                Key_Kind_Mouse0, 0,
                Ui_Constraint_NoHotProcess,
                "Clear out the selected processes.");
 
-Define_Keybind(Proc_Keybind_Def_Default, CreateProcess,
+Define_Keybind(CreateProcess,
+               Proc_Keybind_Def_Default,
                Key_Kind_Mouse0, Modifier_Key_Control,
                Ui_Constraint_NoHotProcess,
                "Create a new process.");
 
-Define_Keybind(Proc_Keybind_Def_Default, DeleteProcess,
+Define_Keybind(DeleteProcess,
+               Proc_Keybind_Def_Default,
                KEY_D, Modifier_Key_Control, 0,
                "Delete the selected processes.");
 
-Define_Keybind(Proc_Keybind_Def_Default, CycleProcessDisplay,
+Define_Keybind(CycleProcessDisplay,
+               Proc_Keybind_Def_Default,
                KEY_TAB, 0, 0,
                "Cycle through special displays for selected processes.");
 
-Define_Keybind(Proc_Keybind_Def_Default, ToggleDisplayMode,
+Define_Keybind(ToggleDisplayMode,
+               Proc_Keybind_Def_Default,
                KEY_M, Modifier_Key_Control, 0,
                "Toggle between 'classic' and 'rounded' display modes.");
 
-Define_Keybind(Proc_Keybind_Def_Default, CopyProcess,
+Define_Keybind(CopyProcess,
+               Proc_Keybind_Def_Default,
                KEY_C, Modifier_Key_Control, 0,
                "Copy selected processes.");
 
-Define_Keybind(Proc_Keybind_Def_Default, PasteProcess,
+Define_Keybind(PasteProcess,
+               Proc_Keybind_Def_Default,
                KEY_V, Modifier_Key_Control, 0,
                "Paste copied processes, centered at the mouse.");
 
-Define_Keybind(Proc_Keybind_Def_Default, ToggleTestRecording,
+Define_Keybind(ToggleTestRecording,
+               Proc_Keybind_Def_Default,
                KEY_T, Modifier_Key_Control, 0,
                "Toggle on/off recording of user inputs for creating end-to-end tests.");
-
-
-
-
-
-
