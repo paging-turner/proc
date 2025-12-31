@@ -27,14 +27,8 @@
 === Graphics ===
   [ ] Replace line-drawing calls with a call that draws triangle-strips/fans. This should help deal with how to cleanly connect the ends of lines together.
 === Keybind Config ===
-  [ ] Test some features of the new keybind-config file
-    [ ] Comments
-    [ ] Line without semi-color
-    [ ] Line without equals
-    [ ] Multiple definitions for same feature (should overwrite)
-    [ ] Multiple key-kind definitions for single feature (should error)
-  [ ] Add in error messages for tokenizing/parsing errors.
-  [ ] Rewrite example-config to have good-instructions to help users write their own config.
+  [ ] Write a single before-main gather of keybind symbols
+    [ ] and allow for multiple keybind definitions.
   [ ] Add ability to define bindings for mouse buttons and mouse-wheels
 === Testing ===
   [ ] Enumerate some test cases, to at least be able to manually check that things are working.

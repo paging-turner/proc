@@ -14,6 +14,8 @@
 #include "../libraries/mr4th/src/mr4th_base.h"
 #define push_struct(a, s) arena_push((a), sizeof(s))
 
+#include "../libraries/macho_objdump.h"
+#include "../libraries/mr4th/src/mr4th_symbol_set.h"
 
 
 
@@ -34,7 +36,6 @@
 //////////////////////////////////////
 // Paths
 //////////////////////////////////////
-global_variable String8 Keybind_Config_Filepath;
 global_variable String8 Saves_Filepath;
 global_variable String8 Build_Filepath;
 
@@ -1915,16 +1916,14 @@ get_process_selection(Context *context, Process *p) {
 
 
 
-function Keybind_Result check_keybind(Context *context, Ui_Feature feature, Process_Selection selection) {
+function Keybind_Result check_keybind(Context *context, Keybind *keybind, Process_Selection selection) {
   Keybind_Result result = 0;
-
-  Keybind keybind = global_keybind_lookup[feature];
   Ui_State *ui_state = &context->ui_state;
 
   B32 key_is_pressed = 0;
   B32 key_is_down = 0;
 
-  switch(keybind.key_kind) {
+  switch(keybind->key_kind) {
   case Key_Kind_Mouse0: {
     key_is_pressed = Get_Flag(ui_state->flags, Ui_State_Flag_mouse0_pressed);
     key_is_down = Get_Flag(ui_state->flags, Ui_State_Flag_mouse0_down);
@@ -1940,29 +1939,29 @@ function Keybind_Result check_keybind(Context *context, Ui_Feature feature, Proc
     key_is_pressed = ui_state->mouse_wheel_movement.y < 0.0f;
   } break;
   default: {
-    key_is_pressed = IsKeyPressed(keybind.key_kind);
-    key_is_down = IsKeyDown(keybind.key_kind);
+    key_is_pressed = IsKeyPressed(keybind->key_kind);
+    key_is_down = IsKeyDown(keybind->key_kind);
   } break;
   }
 
-  B32 modifier_control = Get_Flag(keybind.modifiers, Modifier_Key_Control) ? 1 : 0;
-  B32 modifier_shift = Get_Flag(keybind.modifiers, Modifier_Key_Shift) ? 1 : 0;
-  B32 modifier_alt = Get_Flag(keybind.modifiers, Modifier_Key_Alt) ? 1 : 0;
+  B32 modifier_control = Get_Flag(keybind->modifiers, Modifier_Key_Control) ? 1 : 0;
+  B32 modifier_shift = Get_Flag(keybind->modifiers, Modifier_Key_Shift) ? 1 : 0;
+  B32 modifier_alt = Get_Flag(keybind->modifiers, Modifier_Key_Alt) ? 1 : 0;
 
   B32 modifier_matches = ((!(modifier_control ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_control_down))) &&
                           (!(modifier_shift ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_shift_down))) &&
                           (!(modifier_alt ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_alt_down))));
 
   B32 constraint_hover_process =
-    (Get_Flag(keybind.constraint, Ui_Constraint_HoverProcess)
+    (Get_Flag(keybind->constraint, Ui_Constraint_HoverProcess)
      ? selection.type != 0
      : 1);
   B32 constraint_no_hover =
-    (Get_Flag(keybind.constraint, Ui_Constraint_NoHotProcess)
+    (Get_Flag(keybind->constraint, Ui_Constraint_NoHotProcess)
      ? (context->hot_process == 0)
      : 1);
   B32 constraint_action_not_occured =
-    (Get_Flag(keybind.constraint, Ui_Constraint_ActionNotOccured)
+    (Get_Flag(keybind->constraint, Ui_Constraint_ActionNotOccured)
      ? (Get_Flag_Bool(ui_state->flags, Ui_State_Flag_action_occured) == 0)
      : 1);
 
@@ -1974,7 +1973,7 @@ function Keybind_Result check_keybind(Context *context, Ui_Feature feature, Proc
     result = Keybind_Result_Enter;
   }
 
-  if (Get_Flag(keybind.constraint, Ui_Constraint_ExitOnKeyup)) {
+  if (Get_Flag(keybind->constraint, Ui_Constraint_ExitOnKeyup)) {
     if (!key_is_down) {
       result = Keybind_Result_Exit;
     }
@@ -2112,13 +2111,13 @@ function void handle_process_interaction(Context *context) {
   Ui_State *ui_state = &context->ui_state;
   Process_Selection selection = (Process_Selection){0};
 
-  B32 should_stop_dragging = check_keybind(context, Ui_Feature_SelectSingleProcess, selection) == Keybind_Result_Exit;
+  B32 should_stop_dragging = check_keybind(context, keybind_REF(SelectSingleProcess), selection) == Keybind_Result_Exit;
   Process *moved_wire = 0;
   Process_Connection moved_wire_conn = 0;
 
   // initial bounding handling
   if (Get_Flag(context->flags, Context_Flag_Bounding)) {
-    if (check_keybind(context, Ui_Feature_Bound, selection) == Keybind_Result_Exit) {
+    if (check_keybind(context, keybind_REF(Bound), selection) == Keybind_Result_Exit) {
       Unset_Flag(context->flags, Context_Flag_Bounding);
     } else {
       clear_active_processes(context);
@@ -2127,13 +2126,13 @@ function void handle_process_interaction(Context *context) {
 
   // panning
   {
-    if (check_keybind(context, Ui_Feature_Pan, selection) == Keybind_Result_Enter) {
+    if (check_keybind(context, keybind_REF(Pan), selection) == Keybind_Result_Enter) {
       Set_Flag(context->flags, Context_Flag_Panning);
       context->active_position = context->ui_state.mouse_position;
     }
 
     if (Get_Flag(context->flags, Context_Flag_Panning)) {
-      if (check_keybind(context, Ui_Feature_Pan, selection) == Keybind_Result_Exit) {
+      if (check_keybind(context, keybind_REF(Pan), selection) == Keybind_Result_Exit) {
         Unset_Flag(context->flags, Context_Flag_Panning);
       } else {
         // Update camera position
@@ -2146,16 +2145,16 @@ function void handle_process_interaction(Context *context) {
 
   // zooming
   {
-    B32 zoom_in = check_keybind(context, Ui_Feature_ZoomIn, selection) == Keybind_Result_Enter;
-    B32 zoom_out = check_keybind(context, Ui_Feature_ZoomOut, selection) == Keybind_Result_Enter;
+    B32 zoom_in = check_keybind(context, keybind_REF(ZoomIn), selection) == Keybind_Result_Enter;
+    B32 zoom_out = check_keybind(context, keybind_REF(ZoomOut), selection) == Keybind_Result_Enter;
 
     if (zoom_in || zoom_out) {
-      Keybind keybind_in = global_keybind_lookup[Ui_Feature_ZoomIn];
-      Keybind keybind_out = global_keybind_lookup[Ui_Feature_ZoomOut];
-      B32 in_wheel = (keybind_in.key_kind == Key_Kind_MouseWheelUp ||
-                      keybind_in.key_kind == Key_Kind_MouseWheelDown);
-      B32 out_wheel = (keybind_out.key_kind == Key_Kind_MouseWheelUp ||
-                       keybind_out.key_kind == Key_Kind_MouseWheelDown);
+      Keybind *keybind_in = keybind_REF(ZoomIn);
+      Keybind *keybind_out = keybind_REF(ZoomOut);
+      B32 in_wheel = (keybind_in->key_kind == Key_Kind_MouseWheelUp ||
+                      keybind_in->key_kind == Key_Kind_MouseWheelDown);
+      B32 out_wheel = (keybind_out->key_kind == Key_Kind_MouseWheelUp ||
+                       keybind_out->key_kind == Key_Kind_MouseWheelDown);
       Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position, context->camera);
       context->camera.offset = context->ui_state.mouse_position;
       context->camera.target = mouse_world_position;
@@ -2193,7 +2192,7 @@ function void handle_process_interaction(Context *context) {
       }
     }
 
-    if (check_keybind(context, Ui_Feature_SelectSingleProcess, selection) == Keybind_Result_Enter) {
+    if (check_keybind(context, keybind_REF(SelectSingleProcess), selection) == Keybind_Result_Enter) {
       B32 in_selection = selection.type == Process_Selection_In;
       B32 out_selection = selection.type == Process_Selection_Out;
       if (in_selection || out_selection) {
@@ -2235,7 +2234,7 @@ function void handle_process_interaction(Context *context) {
           context->active_position = context->ui_state.mouse_position;
         }
       }
-    } else if (check_keybind(context, Ui_Feature_SelectAnotherProcess, selection) == Keybind_Result_Enter) {
+    } else if (check_keybind(context, keybind_REF(SelectAnotherProcess), selection) == Keybind_Result_Enter) {
       // select another process
       if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
         Process *wire = get_process_wire_by_selection(context, selection);
@@ -2304,7 +2303,7 @@ function void handle_process_interaction(Context *context) {
     B32 hmmm = 0;
   }
   // create process
-  if (check_keybind(context, Ui_Feature_CreateProcess, selection)) {
+  if (check_keybind(context, keybind_REF(CreateProcess), selection)) {
     Process *new_p = create_process(context);
     if (new_p) {
       Set_Flag(new_p->flags, Process_Flag_TextEdit);
@@ -2315,28 +2314,28 @@ function void handle_process_interaction(Context *context) {
   }
 
   // cancel selection
-  if (check_keybind(context, Ui_Feature_CancelSelection, selection)) {
+  if (check_keybind(context, keybind_REF(CancelSelection), selection)) {
     clear_active_processes(context);
     Unset_Flag(context->flags, Context_Flag_NewWire);
   }
 
   // enter bounding
-  if (check_keybind(context, Ui_Feature_Bound, selection) == Keybind_Result_Enter) {
+  if (check_keybind(context, keybind_REF(Bound), selection) == Keybind_Result_Enter) {
     Set_Flag(context->flags, Context_Flag_Bounding);
     context->active_position = context->ui_state.mouse_position;
   }
 
   // toggle between rounded and triangular shapes
-  if (check_keybind(context, Ui_Feature_ToggleDisplayMode, selection) == Keybind_Result_Enter) {
+  if (check_keybind(context, keybind_REF(ToggleDisplayMode), selection) == Keybind_Result_Enter) {
     Toggle_Flag(context->flags, Context_Flag_RoundedShapes);
   }
 
   // copy processes
-  if (check_keybind(context, Ui_Feature_CopyProcess, selection) == Keybind_Result_Enter) {
+  if (check_keybind(context, keybind_REF(CopyProcess), selection) == Keybind_Result_Enter) {
     copy_active_processes(context);
   }
   // paste processes
-  if (check_keybind(context, Ui_Feature_PasteProcess, selection) == Keybind_Result_Enter) {
+  if (check_keybind(context, keybind_REF(PasteProcess), selection) == Keybind_Result_Enter) {
     paste_processes(context);
   }
 
@@ -2377,7 +2376,7 @@ function void handle_process_interaction(Context *context) {
       }
       // stop dragging
       Unset_Flag(context->flags, Context_Flag_Dragging);
-    } else if (check_keybind(context, Ui_Feature_CycleProcessDisplay, selection)) {
+    } else if (check_keybind(context, keybind_REF(CycleProcessDisplay), selection)) {
       // cycle through special process types (cups/caps/empty)
       for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
         if (!Get_Flag(a->flags, Process_Flag_Wire)) {
@@ -2399,7 +2398,7 @@ function void handle_process_interaction(Context *context) {
           }
         }
       }
-    } else if (check_keybind(context, Ui_Feature_DeleteProcess, selection)) {
+    } else if (check_keybind(context, keybind_REF(DeleteProcess), selection)) {
       // delete processes
       for (Process *a = context->active_processes.first; a != 0;) {
         Process *next_active = a->next_active;
@@ -2868,17 +2867,12 @@ function void initialize_globals(Context *context) {
 #else
 # define _ "/"
 #endif
-  Keybind_Config_Filepath = str8_comptime_lit(".."_"config"_"keybind.txt");
   Saves_Filepath = str8_comptime_lit(".."_"saves"_);
   Build_Filepath = str8_comptime_lit(".."_"build"_);
 #undef _
 
   // ensure saves directory exists
   os_file_make_directory(Saves_Filepath);
-
-
-
-  load_keybinds(context);
 }
 
 

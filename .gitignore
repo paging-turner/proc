@@ -6,7 +6,4 @@ build/
 *.obj
 *.pdb
 
-config/*
-!config/example-keybind.txt
-
 saves/*
