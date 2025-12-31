@@ -27,9 +27,9 @@
 === Graphics ===
   [ ] Replace line-drawing calls with a call that draws triangle-strips/fans. This should help deal with how to cleanly connect the ends of lines together.
 === Keybind Config ===
-  [ ] Write a single before-main gather of keybind symbols
-    [ ] and allow for multiple keybind definitions.
+  [X] Allow for multiple keybind definitions.
   [ ] Add ability to define bindings for mouse buttons and mouse-wheels
+  [ ] Create symbol-set to replace Proc_Keybind_Def_Kind enum
 === Testing ===
   [ ] Enumerate some test cases, to at least be able to manually check that things are working.
   === Automated Tests ===

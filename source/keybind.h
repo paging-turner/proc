@@ -27,6 +27,7 @@ typedef enum {
 
 
 typedef struct Keybind {
+  U32 bind;
   U32 key_kind; // Uses raylib's KEY_* enum and some special ones for mouse-keys
   U32 modifiers;
   Ui_Constraint constraint;
@@ -72,81 +73,107 @@ typedef struct {
 #include "../libraries/mr4th/src/mr4th_symbol_set.define.h"
 
 
+typedef enum {
+  Proc_Keybind_Def_Default,
+  Proc_Keybind_Def_Custom,
+} Proc_Keybind_Def_Kind;
+
+
 // TODO: Gather all keybinds in a single before-main, that way users can override/customize keybinds.
-#define Define_Keybind(keybind_name, k, m, c, d)\
+#define Define_Keybind(bind_value, keybind_name, k, m, c, d)\
   static keybind_DECL(keybind_name);\
-  MR4TH_BEFORE_MAIN(BEFORE_MAIN_##keybind_name){\
+  MR4TH_BEFORE_MAIN(proc_keybind_##bind_value##_##keybind_name){\
     keybind_Type *keybind = keybind_REF(keybind_name);\
-    keybind->key_kind = (k);\
-    keybind->modifiers = (m);\
-    keybind->constraint = (c);\
-    keybind->name = str8_lit(Stringify(keybind_name));\
-    keybind->description = str8_lit(d);\
+    B32 both_zero = (U32)(bind_value) == 0 && keybind->bind == 0;\
+    B32 stronger_bind = (U32)(bind_value) >= keybind->bind;\
+    if (both_zero || stronger_bind) {\
+      keybind->bind = (bind_value);\
+      keybind->key_kind = (k);\
+      keybind->modifiers = (m);\
+      keybind->constraint = (c);\
+      keybind->name = str8_lit(Stringify(keybind_name));\
+      keybind->description = str8_lit(d);\
+    }\
   }
 
-
-Define_Keybind(Bound,
+Define_Keybind(Proc_Keybind_Def_Default, Bound,
                Key_Kind_Mouse0, 0,
                Ui_Constraint_NoHotProcess|Ui_Constraint_ExitOnKeyup,
                "Select multiple processes by drawing a rectangle with your mouse.");
 
-Define_Keybind(Pan,
+Define_Keybind(Proc_Keybind_Def_Default, Pan,
                Key_Kind_Mouse1, 0,
                Ui_Constraint_ExitOnKeyup,
                "Slide your field of view by moving your mouse.");
 
-Define_Keybind(ZoomIn,
+Define_Keybind(Proc_Keybind_Def_Default, ZoomIn,
                Key_Kind_MouseWheelUp, 0,
                Ui_Constraint_ActionNotOccured,
                "Zoom your field of view in to make objects appear closer.");
 
-Define_Keybind(ZoomOut,
+Define_Keybind(Proc_Keybind_Def_Default, ZoomOut,
                Key_Kind_MouseWheelDown, 0,
                Ui_Constraint_ActionNotOccured,
                "Zoom your field of view out to make objects appear further.");
 
-Define_Keybind(SelectSingleProcess,
+Define_Keybind(Proc_Keybind_Def_Default, SelectSingleProcess,
                Key_Kind_Mouse0, 0,
                Ui_Constraint_HoverProcess|Ui_Constraint_ExitOnKeyup,
                "Select a single process.");
 
-Define_Keybind(SelectAnotherProcess,
+Define_Keybind(Proc_Keybind_Def_Default, SelectAnotherProcess,
                Key_Kind_Mouse0, Modifier_Key_Control,
                Ui_Constraint_HoverProcess,
                "Add a process to the selected processes.");
 
-Define_Keybind(CancelSelection,
+Define_Keybind(Proc_Keybind_Def_Default, CancelSelection,
                Key_Kind_Mouse0, 0,
                Ui_Constraint_NoHotProcess,
                "Clear out the selected processes.");
 
-Define_Keybind(CreateProcess,
+Define_Keybind(Proc_Keybind_Def_Default, CreateProcess,
                Key_Kind_Mouse0, Modifier_Key_Control,
                Ui_Constraint_NoHotProcess,
                "Create a new process.");
 
-Define_Keybind(DeleteProcess,
+Define_Keybind(Proc_Keybind_Def_Default, DeleteProcess,
                KEY_D, Modifier_Key_Control, 0,
                "Delete the selected processes.");
 
-Define_Keybind(CycleProcessDisplay,
+Define_Keybind(Proc_Keybind_Def_Default, CycleProcessDisplay,
                KEY_TAB, 0, 0,
                "Cycle through special displays for selected processes.");
 
-Define_Keybind(ToggleDisplayMode,
+Define_Keybind(Proc_Keybind_Def_Default, ToggleDisplayMode,
                KEY_M, Modifier_Key_Control, 0,
                "Toggle between 'classic' and 'rounded' display modes.");
 
-Define_Keybind(CopyProcess,
+Define_Keybind(Proc_Keybind_Def_Default, CopyProcess,
                KEY_C, Modifier_Key_Control, 0,
                "Copy selected processes.");
 
-Define_Keybind(PasteProcess,
+Define_Keybind(Proc_Keybind_Def_Default, PasteProcess,
                KEY_V, Modifier_Key_Control, 0,
                "Paste copied processes, centered at the mouse.");
 
-Define_Keybind(ToggleTestRecording,
+Define_Keybind(Proc_Keybind_Def_Default, ToggleTestRecording,
                KEY_T, Modifier_Key_Control, 0,
                "Toggle on/off recording of user inputs for creating end-to-end tests.");
 
 
+
+
+
+
+#if 0
+Define_Keybind(Proc_Keybind_Def_Custom, CreateProcess,
+               Key_Kind_Mouse0, Modifier_Key_Shift,
+               Ui_Constraint_NoHotProcess,
+               "CUSTOM: Create a new process.");
+
+
+Define_Keybind(999, CreateProcess,
+               KEY_L, Modifier_Key_Shift,
+               Ui_Constraint_NoHotProcess,
+               "CUSTOM: Create a new process.");
+#endif
