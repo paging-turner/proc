@@ -121,13 +121,15 @@ U8 ascii_char_lookup[256][2] = {
 #define String8List_Detect_Cycle_Next_Iter(node, cycle_check)\
   String8List_Detect_Cycle_Next_Iter_N(node, cycle_check, next)
 
-#if 0
+#if 0&&Be_Robust
 # define Handle_Cycle_Detection(node)\
   printf("Cycle detected...%p\n", node)
 #else
 # define Handle_Cycle_Detection(node)\
-  Stmnt(if (node) { printf("Cycle detected...%p\n", node);  \
-      Assert(!"Cycle detected");})
+  Stmnt(if (node) {                             \
+      printf("Cycle detected...%p\n", node);    \
+      Assert(!"Cycle detected");                \
+    })
 #endif
 
 // HACK: We should instead just make functions that construct c-strings from string8 and then print the c-string!!!

@@ -4,7 +4,9 @@
 
 
 
-#include <stdio.h> // printf, fopen
+#include <stdio.h> // printf
+
+#define Be_Robust 1
 
 #define MR4TH_NO_INCLUDES 1
 #define MR4TH_NO_CLAMP 1
