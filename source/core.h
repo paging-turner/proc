@@ -128,34 +128,6 @@ U8 ascii_char_lookup[256][2] = {
 #define Is_Editable_Char(c)  (Is_Ascii_Range(c)?is_editable_char_lookup[c&0xff]:0)
 
 
-#define String8List_Detect_Cycle_N(node, cycle_check_ptr, next)\
-  (((node) && (node)->next && ((node) == (*(cycle_check_ptr)))) ||\
-   ((node) && ((node)->next == (*(cycle_check_ptr))) && ((*(cycle_check_ptr)) != 0)))
-
-// TODO: Rename String8List_Detect_Cycle to something that is not specific to String8List.
-#define String8List_Detect_Cycle(node, cycle_check_ptr)\
-  String8List_Detect_Cycle_N(node, cycle_check_ptr, next)
-
-
-#define String8List_Detect_Cycle_Next_Iter_N(node, cycle_check, next)\
-  Stmnt((((node) && *(cycle_check))\
-         ? (((*(cycle_check)) = (node)->next->next),\
-            ((node) = (node) ? (node)->next : 0))   \
-         : ((node) = (node) ? (node)->next : 0));)
-
-#define String8List_Detect_Cycle_Next_Iter(node, cycle_check)\
-  String8List_Detect_Cycle_Next_Iter_N(node, cycle_check, next)
-
-#if 0&&Be_Robust
-# define Handle_Cycle_Detection(node, ...)\
-  printf("Cycle detected...%p\n", (node))
-#else
-# define Handle_Cycle_Detection(node, cycle_check)\
-  Stmnt(if ((node) && (cycle_check)) {\
-      printf("Cycle detected...%p\n", (node));\
-      Assert(!"Cycle detected");\
-    })
-#endif
 
 // HACK: We should instead just make functions that construct c-strings from string8 and then print the c-string!!!
 function void print_string8(String8 string) {
@@ -166,12 +138,7 @@ function void print_string8(String8 string) {
 
 function void print_string8_list(String8List string_list) {
   String8Node *cycle_check = 0;
-  for (String8Node *node = string_list.first; node != 0;){
-    if (String8List_Detect_Cycle(node, &cycle_check)) {
-      Handle_Cycle_Detection(node, cycle_check);
-      break;
-    }
-    String8List_Detect_Cycle_Next_Iter(node, &cycle_check);
+  for (String8Node *node = string_list.first; node != 0; node = node->next){
     print_string8(node->string);
   }
 }
@@ -201,12 +168,7 @@ function U64 get_total_size_of_string_chunk_list(String_Chunk_List *scl) {
   // get the total size
   U64 total_size = 0;
   String_Chunk *cycle_check = 0;
-  for (; sc != 0;) {
-    if (String8List_Detect_Cycle(sc, &cycle_check)) {
-      Handle_Cycle_Detection(sc, cycle_check);
-      break;
-    }
-
+  for (; sc != 0; sc = sc->next) {
     if (sc == scl->last) {
       S32 char_count = 1;
       for (;; ++char_count) {
@@ -218,8 +180,6 @@ function U64 get_total_size_of_string_chunk_list(String_Chunk_List *scl) {
     } else {
       total_size += String_Chunk_Size;
     }
-
-    String8List_Detect_Cycle_Next_Iter(sc, &cycle_check);
   }
 
   return total_size;
@@ -239,12 +199,7 @@ function U8 *c_string_from_string_chunk_list(Arena *arena, String_Chunk_List *sc
 
     String_Chunk *cycle_check = 0;
     String_Chunk *sc = scl ? scl->first : 0;
-    for (; sc != 0;) {
-      if (String8List_Detect_Cycle(sc, &cycle_check)) {
-        Handle_Cycle_Detection(sc, cycle_check);
-        break;
-      }
-
+    for (; sc != 0; sc = sc->next) {
       for (S32 i = 0; i < String_Chunk_Size; ++i) {
         if (c_string_index > total_size) {
           printf("[ Error ] creating c-string from string-chunk-list: c_string_index exceeds total size of string-chunk-list.\n");
@@ -259,8 +214,6 @@ function U8 *c_string_from_string_chunk_list(Arena *arena, String_Chunk_List *sc
 
         c_string_index += 1;
       }
-
-      String8List_Detect_Cycle_Next_Iter(sc, &cycle_check);
     }
 
     // null-terminate
