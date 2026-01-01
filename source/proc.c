@@ -397,7 +397,7 @@ function void remove_process_from_process_list(Context *context, Process_List *l
     Process *cycle_check = 0;
     for (Process *test_p = list->first; test_p != 0;) {
       if(String8List_Detect_Cycle(test_p, &cycle_check)) {
-        Handle_Cycle_Detection(test_p);
+        Handle_Cycle_Detection(test_p, cycle_check);
         break;
       }
       if (test_p->next == p) {
@@ -515,7 +515,7 @@ function void copy_active_processes(Context *context) {
   Process *cycle_check = 0;
   for (Process *a = context->active_processes.first; a != 0;) {
     if (String8List_Detect_Cycle_N(a, &cycle_check, next_active)) {
-      printf("Cycle detected...%p\n", a);
+      Handle_Cycle_Detection(a, &cycle_check);
       break;
     }
     if (Get_Flag(a->flags, Process_Flag_Wire)) {
@@ -653,15 +653,11 @@ function void paste_processes(Context *context) {
   cycle_check = 0;
   for (Process *p = context->copy_processes.first; p != 0;) {
     process_count += 1;
-    /* Process *new_p = create_processes(context, 1); */
-    /* *new_p = *p; */
-    /* new_p->position = Vector2Add(p->position, center_delta); */
     if (String8List_Detect_Cycle(p, &cycle_check)) {
-      Handle_Cycle_Detection(p);
+      Handle_Cycle_Detection(p, cycle_check);
       break;
     }
     String8List_Detect_Cycle_Next_Iter(p, &cycle_check);
-
   }
 #endif
 
@@ -672,7 +668,7 @@ function void paste_processes(Context *context) {
     cycle_check = 0;
     for (Process *p = context->copy_processes.first; p != 0;) {
       if (String8List_Detect_Cycle(p, &cycle_check)) {
-        printf("Cycle detected...%p\n", p);
+        Handle_Cycle_Detection(p, &cycle_check);
         break;
       }
       if (i >= process_count) {
@@ -2544,9 +2540,10 @@ function void draw_processes(Context *context) {
 
   // draw processes
   Process *cycle_check = 0;
+  U64 iter_count = 0;
   for (Process *p = context->processes.first; p != 0;) {
     if (String8List_Detect_Cycle(p, &cycle_check)) {
-      printf("Cycle detected...%p\n", p);
+      Handle_Cycle_Detection(p, &cycle_check);
       break;
     }
     B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
@@ -2672,6 +2669,7 @@ function void draw_processes(Context *context) {
     }
 
     String8List_Detect_Cycle_Next_Iter(p, &cycle_check);
+    iter_count += 1;
   }
 
   // draw wires
