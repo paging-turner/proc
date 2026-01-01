@@ -31,7 +31,36 @@
 # error We have not included the raylib release for this OS yet.
 #endif
 
+
+
+
+
+
+//////////////////////////////////////
+// Cycle detection
+//////////////////////////////////////
+#define Define_Cycle_Detector_Function(func_name, list_type, next)\
+  static B32 func_name(list_type* head) {\
+    list_type *slow = head;\
+    list_type *fast = head;\
+    while (slow && fast && fast->next) {\
+      slow = slow->next;\
+      fast = fast->next->next;\
+      if (slow == fast) {\
+        return 1;\
+      }\
+    }\
+    return 0;\
+  }
+
+
+
+
+
+
+
 #include "../source/core.h"
+
 #include "../source/render.h"
 
 
@@ -46,6 +75,16 @@ global_variable String8 Build_Filepath;
 
 
 #include "../source/proc.h"
+
+Define_Cycle_Detector_Function(
+  process_list_has_cycles,
+  Process, next);
+
+Define_Cycle_Detector_Function(
+  active_process_list_has_cycles,
+  Process, next_active);
+
+
 #include "../source/keybind.h"
 #ifdef Custom_Keybinds
 # include "../config/custom_keybinds.h"
@@ -2540,7 +2579,6 @@ function void draw_processes(Context *context) {
 
   // draw processes
   Process *cycle_check = 0;
-  U64 iter_count = 0;
   for (Process *p = context->processes.first; p != 0;) {
     if (String8List_Detect_Cycle(p, &cycle_check)) {
       Handle_Cycle_Detection(p, &cycle_check);
@@ -2669,7 +2707,6 @@ function void draw_processes(Context *context) {
     }
 
     String8List_Detect_Cycle_Next_Iter(p, &cycle_check);
-    iter_count += 1;
   }
 
   // draw wires
@@ -2933,6 +2970,9 @@ int main(void) {
     if (IsWindowResized()) {
       set_global_window_render_size();
     }
+
+    Assert(!process_list_has_cycles(context.processes.first));
+    Assert(!active_process_list_has_cycles(context.active_processes.first));
 
     handle_user_input(&context);
 
