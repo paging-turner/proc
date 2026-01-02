@@ -238,6 +238,25 @@ global_variable Ui_Box save_file_as_confirm_box = (Ui_Box){
 
 
 
+//////////////////////////
+// Debug diagnostics
+//////////////////////////
+function void check_process_list(Process_List list) {
+  Assert(!process_list_has_cycles(list.first));
+  Assert(!process_list_has_cycles(list.last));
+  for (Process *p = list.first; p != 0; p = p->next) {
+    ensure_string_chunk_list_is_proper(p->label);
+  }
+}
+
+
+function void check_context(Context *context) {
+  check_process_list(context->free_processes);
+  check_process_list(context->active_processes);
+  check_process_list(context->copy_processes);
+}
+
+
 
 function B32 rectangle_contains_point(Rectangle r, Vector2 p) {
   F32 x2 = r.x + r.width;
@@ -433,7 +452,6 @@ function void remove_process_from_process_list(Context *context, Process_List *l
   if (list->first == p) {
     SLLQueuePop(list->first, list->last);
   } else {
-    Process *cycle_check = 0;
     for (Process *test_p = list->first; test_p != 0; test_p = test_p->next) {
       if (test_p->next == p) {
         test_p->next = p->next;
@@ -546,7 +564,6 @@ function void copy_active_processes(Context *context) {
   remove_copy_process_list(context, &context->copy_processes);
 
   // copy processes from active-list to copy-list
-  Process *cycle_check = 0;
   for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
     if (Get_Flag(a->flags, Process_Flag_Wire)) {
       // add connected processes if they have not been added yet
@@ -2332,9 +2349,6 @@ function void handle_process_interaction(Context *context) {
     }
   }
 
-  if (IsMouseButtonPressed(0)) {
-    B32 hmmm = 0;
-  }
   // create process
   if (check_keybind(context, keybind_REF(CreateProcess), selection)) {
     Process *new_p = create_process(context);
@@ -2554,7 +2568,6 @@ function void draw_processes(Context *context) {
   B32 rounded = Get_Flag(context->flags, Context_Flag_RoundedShapes);
 
   // draw processes
-  Process *cycle_check = 0;
   for (Process *p = context->processes.first; p != 0; p = p->next) {
     B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
     U8 *label_c_string = c_string_from_string_chunk_list(context->temp_arena, &p->label);
@@ -2945,6 +2958,8 @@ int main(void) {
     Assert(!active_process_list_has_cycles(context.active_processes.first));
 
     handle_user_input(&context);
+
+    check_context(&context);
 
     render_ClearBackground(prc, global_background_color);
     draw_processes(&context);

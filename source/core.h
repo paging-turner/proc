@@ -73,6 +73,11 @@ function void ensure_string_chunk_has_proper_termination(String_Chunk *head) {
 }
 
 
+function void ensure_string_chunk_list_is_proper(String_Chunk_List scl) {
+  ensure_string_chunk_has_proper_termination(scl.first);
+  ensure_string_chunk_has_proper_termination(scl.last);
+}
+
 typedef struct {
   U64 size;
   U64 offset;
