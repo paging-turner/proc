@@ -1522,6 +1522,7 @@ remove_wire_connection(Context *context, Process *wire, Process_Connection_Flag 
   B32 remove_in = Get_Flag(conn_flags, Process_Connection_Flag_In);
   B32 remove_out = Get_Flag(conn_flags, Process_Connection_Flag_Out);
 
+  // TODO: turn these assignments of process values into trie-edits
   for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
     // adjust in-connections that come after deleted wire
     if (remove_in && test_wire->in == wire->in) {
@@ -1560,6 +1561,11 @@ remove_wire_connection(Context *context, Process *wire, Process_Connection_Flag 
 
 
 
+typedef struct Process_Ref {
+  Process *process;
+  struct Process_Ref *next;
+} Process_Ref;
+
 function void delete_process(Context *context, Process *p) {
   // TODO: Do we really want to check if it is a live process? Maybe sometimes the program wants to delete a process that is *not* in the processes list and still want it to end up in the free-list.
   B32 is_live_process = 0;
@@ -1570,6 +1576,9 @@ function void delete_process(Context *context, Process *p) {
     }
   }
 
+  U32 delete_count = 0;
+  Process_Ref *to_delete = 0;
+
   if (is_live_process) {
     // if deleting a wire, adjust connected processes
     if (Get_Flag(p->flags, Process_Flag_Wire)) {
@@ -1577,8 +1586,14 @@ function void delete_process(Context *context, Process *p) {
       remove_wire_connection(context, p, both_conns);
     }
 
-    // remove p from processes
-    remove_process_from_process_list(context, &context->processes, p);
+
+    // add process to delete-list
+    Process_Ref *new_ref = arena_push(context->temp_arena, sizeof(Process_Ref));
+    if (new_ref) {
+      new_ref->process = p;
+      SLLStackPush(to_delete, new_ref);
+      delete_count += 1;
+    }
 
     // free string-chunks from label
     remove_string_chunk_list(context, &p->label);
@@ -1590,6 +1605,7 @@ function void delete_process(Context *context, Process *p) {
       B32 should_delete = 0;
 
       if (in_match || out_match) {
+        // TODO: replace process value assignment with trie-edits
         if (!in_match) {
           // adjust in-connections to deleted wire
           for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
@@ -1622,14 +1638,34 @@ function void delete_process(Context *context, Process *p) {
       }
 
       if (should_delete) {
-        Process *next_process = wire->next;
-        // remove wire from processes
-        remove_process_from_process_list(context, &context->processes, wire);
-        wire = next_process;
-      } else {
-        wire = wire->next;
+        // add process to delete-list
+        Process_Ref *new_ref = arena_push(context->temp_arena, sizeof(Process_Ref));
+        if (new_ref) {
+          new_ref->process = wire;
+          SLLStackPush(to_delete, new_ref);
+          delete_count += 1;
+        }
+      }
+      wire = wire->next;
+    }
+  }
+
+  if (delete_count) {
+    Proc_Trie_Trie *trie = context->proc_trie;
+    Proc_Trie_Key *delete_keys = push_array(context->temp_arena, Proc_Trie_Key, delete_count);
+
+    if (delete_keys) {
+      U32 count = 0;
+      for (Process_Ref *p_ref = to_delete; p_ref != 0; p_ref = p_ref->next) {
+        if (count < delete_count) {
+          delete_keys[count] = IntFromPtr(p_ref->process);
+        }
+        count += 1;
       }
     }
+
+    proc_trie_edit(context->permanent_arena, trie, delete_keys, 0, delete_count, Proc_Trie_Edit_Delete);
+    gather_processes_from_trie(context);
   }
 }
 
@@ -2483,14 +2519,11 @@ function void handle_process_interaction(Context *context) {
       }
     } else if (check_keybind(context, keybind_REF(DeleteProcess), selection)) {
       // delete processes
-      Assert(!"TODO: We still need to crawl references like in `delete_process` and once we have gathered all the procs to delete, call the trie-edit function!");
-      delete_process_list(context, &context->active_processes);
-
-      /* for (Process *a = context->active_processes.first; a != 0;) { */
-      /*   Process *next_active = a->next_active; */
-      /*   delete_process(context, a); */
-      /*   a = next_active; */
-      /* } */
+      for (Process *a = context->active_processes.first; a != 0;) {
+        Process *next_active = a->next_active;
+        delete_process(context, a);
+        a = next_active;
+      }
       clear_active_processes(context);
     } else if (!Get_Flag(ui_state->flags, Ui_State_Flag_action_occured)) {
       // process label editing
