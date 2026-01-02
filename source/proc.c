@@ -563,6 +563,22 @@ function String_Chunk_List copy_string_chunk_list(Context *context, String_Chunk
 
 
 
+function void replace_process_with(
+  Context *context,
+  Process *to_replace,
+  Process p_lit
+  ) {
+  Process *p = push_permanent_process(context);
+  Proc_Trie_Trie *trie = context->proc_trie;
+
+  if (p) {
+    *p = p_lit;
+    proc_trie_delete(context->permanent_arena, trie, IntFromPtr(to_replace));
+    proc_trie_insert(context->permanent_arena, trie, IntFromPtr(p));
+  }
+}
+
+
 function void remove_copy_process_list(Context *context, Process_List *list) {
   // TODO: @Speed can probably do some fancy stuff with just the ends of the list?
   for (Process *p = list->first; p != 0;) {
@@ -1495,14 +1511,19 @@ add_wire_connection(Context *context, Process *wire, Process *process, Process_C
   process->conn_count[conn] += 1;
 }
 
-function void
-remove_wire_connection(Context *context, Process *wire, Process_Connection_Flag conn_flags) {
+function void remove_wire_connection(
+  Context *context,
+  Process *wire,
+  Process_Connection_Flag conn_flags
+  ) {
   // Remove a wire and move wires to the right of it to the left one.
   B32 in_matched = 0;
   B32 out_matched = 0;
 
   B32 remove_in = Get_Flag(conn_flags, Process_Connection_Flag_In);
   B32 remove_out = Get_Flag(conn_flags, Process_Connection_Flag_Out);
+
+  Assert(!"TODO: Use the tree to update test_wire and wire, like we did in `delete_process`.");
 
   // TODO: turn these assignments of process values into trie-edits
   for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
@@ -1545,29 +1566,90 @@ remove_wire_connection(Context *context, Process *wire, Process_Connection_Flag 
 
 typedef struct Process_Ref {
   Process *process;
+  Process *edit_process;
   struct Process_Ref *next;
 } Process_Ref;
-
 
 function B32 add_process_to_delete_list(
   Context *context,
   Process_Ref **to_delete,
   Process *p
   ) {
-  Process_Ref *new_ref = arena_push(context->temp_arena, sizeof(Process_Ref));
+  // @Copypasta update_process_within_edit_list
+  B32 deleted = 0;
 
-  if (new_ref && to_delete) {
-    new_ref->process = p;
-    SLLStackPush(*to_delete, new_ref);
+  if (to_delete) {
+    Process_Ref *found_ref = 0;
+    B32 should_push = 0;
+
+    for (Process_Ref *ref = *to_delete; ref != 0; ref = ref->next) {
+      if (ref->process == p) {
+        found_ref = ref;
+      }
+    }
+
+    if (found_ref == 0) {
+      found_ref = arena_push(context->temp_arena, sizeof(Process_Ref));
+      should_push = 1;
+    }
+
+    if (found_ref) {
+      if (should_push) {
+        SLLStackPush(*to_delete, found_ref);
+      }
+      found_ref->process = p;
+    }
+
+    deleted = found_ref != 0;
   }
-
-  B32 deleted = new_ref != 0;
   return deleted;
 }
 
+function B32 update_process_within_edit_list(
+  Context *context,
+  Process_Ref **to_edit,
+  Process *p,
+  Process updated_p
+  ) {
+  // @Copypasta add_process_to_delete_list
+  B32 updated = 0;
+
+  if (to_edit) {
+    Process_Ref *found_ref = 0;
+    Process *edit_process = 0;
+    B32 should_push = 0;
+
+    for (Process_Ref *ref = *to_edit; ref != 0; ref = ref->next) {
+      if (ref->process == p) {
+        found_ref = ref;
+        edit_process = ref->edit_process;
+      }
+    }
+
+    if (found_ref == 0) {
+      edit_process = arena_push(context->temp_arena, sizeof(Process));
+      found_ref = arena_push(context->temp_arena, sizeof(Process_Ref));
+      should_push = 1;
+    }
+
+    if (found_ref && edit_process) {
+      if (should_push) {
+        SLLStackPush(*to_edit, found_ref);
+      }
+      found_ref->process = p;
+      *edit_process = updated_p;
+      found_ref->edit_process = edit_process;
+      updated = 1;
+    }
+  }
+
+  return updated;
+}
 
 function void delete_process(Context *context, Process *p) {
+  Proc_Trie_Trie *trie = context->proc_trie;
   Process_Ref *to_delete = 0;
+  Process_Ref *to_edit = 0;
 
   // if deleting a wire, adjust connected processes
   if (Get_Flag(p->flags, Process_Flag_Wire)) {
@@ -1587,32 +1669,41 @@ function void delete_process(Context *context, Process *p) {
     B32 should_delete = 0;
 
     if (in_match || out_match) {
-      // TODO: replace process value assignment with trie-edits
       if (!in_match) {
         // adjust in-connections to deleted wire
         for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
-          if (test_wire->in == wire->in &&
-              test_wire->which_in > wire->which_in) {
-            test_wire->which_in -= 1;
+          if (test_wire->in == wire->in && test_wire->which_in > wire->which_in) {
+            Process edit_p = *test_wire;
+            edit_p.which_in -= 1;
+            update_process_within_edit_list(context, &to_edit, test_wire, edit_p);
+            /* test_wire->which_in -= 1; */
           }
         }
 
         if (wire->in) {
-          wire->in->in_count -= 1;
+          Process edit_p = *wire->in;
+          edit_p.in_count -= 1;
+          update_process_within_edit_list(context, &to_edit, wire->in, edit_p);
+          /* wire->in->in_count -= 1; */
         }
       }
 
       if (!out_match) {
         // adjust out-connections to deleted wire
         for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
-          if (test_wire->out == wire->out &&
-              test_wire->which_out > wire->which_out) {
-            test_wire->which_out -= 1;
+          if (test_wire->out == wire->out && test_wire->which_out > wire->which_out) {
+            Process edit_p = *test_wire;
+            edit_p.which_out -= 1;
+            update_process_within_edit_list(context, &to_edit, test_wire, edit_p);
+            /* test_wire->which_out -= 1; */
           }
         }
 
         if (wire->out) {
-          wire->out->out_count -= 1;
+          Process edit_p = *wire->out;
+          edit_p.out_count -= 1;
+          update_process_within_edit_list(context, &to_edit, wire->out, edit_p);
+          /* wire->out->out_count -= 1; */
         }
       }
 
@@ -1620,10 +1711,20 @@ function void delete_process(Context *context, Process *p) {
     }
 
     if (should_delete) {
-      delete_count += add_process_to_delete_list(context, &to_delete, p);
+      delete_count += add_process_to_delete_list(context, &to_delete, wire);
     }
     wire = wire->next;
   }
+
+  /* Assert(!"TODO: add replaced processes to to_delete (avoiding duplicates)"); */
+  // add replaced processes to the delete-list
+  for (Process_Ref *p_ref = to_edit; p_ref != 0; p_ref = p_ref->next) {
+    /* Assert(!"TODO: add edited processes"); */
+    Proc_Trie_Trie *trie = context->proc_trie;
+    proc_trie_insert(context->permanent_arena, trie, IntFromPtr(p_ref->edit_process));
+    delete_count += add_process_to_delete_list(context, &to_delete, p_ref->process);
+  }
+
 
   if (delete_count) {
     Proc_Trie_Trie *trie = context->proc_trie;
