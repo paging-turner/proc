@@ -434,17 +434,68 @@ function Process *create_processes(Context *context, U32 process_count) {
 
 
 
-function void clear_active_processes(Context *context) {
-  if (context->active_processes.first) {
-    for (Process *p = context->active_processes.first; p != 0;) {
-      Process *next_active = p->next_active;
+function void clear_active_process_list(Process_List *list) {
+  if (list && list->first) {
+    for (Process *p = list->first; p != 0;) {
+      Process *next = p->next_active;
       p->next_active = 0;
-      p = next_active;
+      p = next;
+    }
+
+    list->first = 0;
+    list->last = 0;
+  }
+}
+
+function void clear_process_list(Process_List *list) {
+  if (list && list->first) {
+    for (Process *p = list->first; p != 0;) {
+      Process *next = p->next;
+      p->next = 0;
+      p = next;
+    }
+
+    list->first = 0;
+    list->last = 0;
+  }
+}
+
+function void clear_processes(Context *context) {
+  clear_process_list(&context->processes);
+}
+
+function void clear_active_processes(Context *context) {
+  clear_active_process_list(&context->active_processes);
+}
+
+
+function void delete_process_list(Context *context, Process_List *list) {
+  Arena *arena = context->permanent_arena;
+  Proc_Trie_Trie *trie = context->proc_trie;
+
+  if (list) {
+    // @Speed
+    U32 process_count = 0;
+    for (Process *p = list->first; p != 0; p = p->next) {
+      process_count += 1;
+    }
+
+    Proc_Trie_Key *keys = push_array(context->temp_arena, Proc_Trie_Key, process_count);
+
+    if (keys) {
+      U32 idx = 0;
+      for (Process *p = list->first; p != 0; p = p->next) {
+        if (idx < process_count) {
+          keys[idx] = IntFromPtr(p);
+          printf("keys[%d] = %llx\n", idx, IntFromPtr(p));
+        }
+        idx += 1;
+      }
+
+      proc_trie_edit(arena, trie, keys, 0, process_count, Proc_Trie_Edit_Delete);
+      gather_processes_from_trie(context);
     }
   }
-
-  context->active_processes.first = 0;
-  context->active_processes.last = 0;
 }
 
 
@@ -476,6 +527,9 @@ function void remove_string_chunk_list(Context *context, String_Chunk_List *scl)
       context->free_strings.first = scl->first;
       context->free_strings.last = scl->last;
     }
+
+    scl->first = 0;
+    scl->last = 0;
   }
 }
 
@@ -513,24 +567,6 @@ function String_Chunk_List copy_string_chunk_list(Context *context, String_Chunk
   return result;
 }
 
-
-function void clear_processes(Context *context) {
-  clear_active_processes(context);
-
-#if 1
-  /* clear_active_process_list(&context->processes); */
-#else
-  for (Process *p = context->processes.first; p != 0;) {
-    Process *next_process = p->next;
-    remove_process_from_process_list(context, &context->processes, p);
-
-    // remove string-chunks
-    remove_string_chunk_list(context, &p->label);
-
-    p = next_process;
-  }
-#endif
-}
 
 
 function void remove_copy_process_list(Context *context, Process_List *list) {
@@ -2447,11 +2483,14 @@ function void handle_process_interaction(Context *context) {
       }
     } else if (check_keybind(context, keybind_REF(DeleteProcess), selection)) {
       // delete processes
-      for (Process *a = context->active_processes.first; a != 0;) {
-        Process *next_active = a->next_active;
-        delete_process(context, a);
-        a = next_active;
-      }
+      Assert(!"TODO: We still need to crawl references like in `delete_process` and once we have gathered all the procs to delete, call the trie-edit function!");
+      delete_process_list(context, &context->active_processes);
+
+      /* for (Process *a = context->active_processes.first; a != 0;) { */
+      /*   Process *next_active = a->next_active; */
+      /*   delete_process(context, a); */
+      /*   a = next_active; */
+      /* } */
       clear_active_processes(context);
     } else if (!Get_Flag(ui_state->flags, Ui_State_Flag_action_occured)) {
       // process label editing
