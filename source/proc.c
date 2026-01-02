@@ -6,8 +6,6 @@
 
 #include <stdio.h> // printf
 
-#define Be_Robust 1
-
 #define MR4TH_NO_INCLUDES 1
 #define MR4TH_NO_CLAMP 1
 #if !No_Assert
@@ -238,6 +236,7 @@ global_variable Ui_Box save_file_as_confirm_box = (Ui_Box){
 
 
 
+
 //////////////////////////
 // Debug diagnostics
 //////////////////////////
@@ -258,14 +257,15 @@ function void check_context(Context *context) {
 
 
 
+
+
+
 function B32 rectangle_contains_point(Rectangle r, Vector2 p) {
   F32 x2 = r.x + r.width;
   F32 y2 = r.y + r.height;
   B32 contains = (p.x >= r.x) && (p.y >= r.y) && (p.x <= x2) && (p.y <= y2);
   return contains;
 }
-
-
 
 
 function String_Chunk *create_string_chunk(Context *context) {
@@ -399,16 +399,10 @@ function void gather_processes_from_trie(Context *context) {
 function Process *create_process(Context *context) {
   Process *p = push_permanent_process(context);
 
-#if 0
-  if (p) {
-    SLLQueuePush(context->processes.first, context->processes.last, p);
-  }
-#else
   if (p) {
     proc_trie_insert(context->permanent_arena, context->proc_trie, (U64)p);
     gather_processes_from_trie(context);
   }
-#endif
 
   return p;
 }
@@ -717,23 +711,11 @@ function void copy_active_processes(Context *context) {
 function void paste_processes(Context *context) {
   Vector2 mouse_world_pos = GetScreenToWorld2D(context->ui_state.mouse_position, context->camera);
   Vector2 center_delta = Vector2Subtract(mouse_world_pos, context->copy_center);
+
   U32 process_count = 0;
-
-#if 0
-  for (Process *p = context->copy_processes.first; p != 0;) {
-    Process *next_p = p->next;
-    if (!Get_Flag(p->flags, Process_Flag_Wire)) {
-      p->position = Vector2Add(p->position, center_delta);
-    }
-
-    SLLQueuePush(context->processes.first, context->processes.last, p);
-    p = next_p;
-  }
-#else
   for (Process *p = context->copy_processes.first; p != 0; p = p->next) {
     process_count += 1;
   }
-#endif
 
   if (process_count) {
     Process *ps = create_processes(context, process_count);
