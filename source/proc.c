@@ -1548,88 +1548,81 @@ typedef struct Process_Ref {
   struct Process_Ref *next;
 } Process_Ref;
 
-function void delete_process(Context *context, Process *p) {
-  // TODO: Do we really want to check if it is a live process? Maybe sometimes the program wants to delete a process that is *not* in the processes list and still want it to end up in the free-list.
-  B32 is_live_process = 0;
-  for (Process *test_p = context->processes.first; test_p != 0; test_p = test_p->next) {
-    if (test_p == p) {
-      is_live_process = 1;
-      break;
-    }
+
+function B32 add_process_to_delete_list(
+  Context *context,
+  Process_Ref **to_delete,
+  Process *p
+  ) {
+  Process_Ref *new_ref = arena_push(context->temp_arena, sizeof(Process_Ref));
+
+  if (new_ref && to_delete) {
+    new_ref->process = p;
+    SLLStackPush(*to_delete, new_ref);
   }
 
-  U32 delete_count = 0;
+  B32 deleted = new_ref != 0;
+  return deleted;
+}
+
+
+function void delete_process(Context *context, Process *p) {
   Process_Ref *to_delete = 0;
 
-  if (is_live_process) {
-    // if deleting a wire, adjust connected processes
-    if (Get_Flag(p->flags, Process_Flag_Wire)) {
-      U32 both_conns = Process_Connection_Flag_In | Process_Connection_Flag_Out;
-      remove_wire_connection(context, p, both_conns);
-    }
+  // if deleting a wire, adjust connected processes
+  if (Get_Flag(p->flags, Process_Flag_Wire)) {
+    U32 both_conns = Process_Connection_Flag_In | Process_Connection_Flag_Out;
+    remove_wire_connection(context, p, both_conns);
+  }
 
+  U32 delete_count = add_process_to_delete_list(context, &to_delete, p);
 
-    // add process to delete-list
-    Process_Ref *new_ref = arena_push(context->temp_arena, sizeof(Process_Ref));
-    if (new_ref) {
-      new_ref->process = p;
-      SLLStackPush(to_delete, new_ref);
-      delete_count += 1;
-    }
+  // free string-chunks from label
+  remove_string_chunk_list(context, &p->label);
 
-    // free string-chunks from label
-    remove_string_chunk_list(context, &p->label);
+  // check for wires connected to the deleted process, and delete those also
+  for (Process *wire = context->processes.first; wire != 0;) {
+    B32 in_match = wire->in == p;
+    B32 out_match = wire->out == p;
+    B32 should_delete = 0;
 
-    // check for wires connected to the deleted process, and delete those also
-    for (Process *wire = context->processes.first; wire != 0;) {
-      B32 in_match = wire->in == p;
-      B32 out_match = wire->out == p;
-      B32 should_delete = 0;
-
-      if (in_match || out_match) {
-        // TODO: replace process value assignment with trie-edits
-        if (!in_match) {
-          // adjust in-connections to deleted wire
-          for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
-            if (test_wire->in == wire->in &&
-                test_wire->which_in > wire->which_in) {
-              test_wire->which_in -= 1;
-            }
-          }
-
-          if (wire->in) {
-            wire->in->in_count -= 1;
+    if (in_match || out_match) {
+      // TODO: replace process value assignment with trie-edits
+      if (!in_match) {
+        // adjust in-connections to deleted wire
+        for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
+          if (test_wire->in == wire->in &&
+              test_wire->which_in > wire->which_in) {
+            test_wire->which_in -= 1;
           }
         }
 
-        if (!out_match) {
-          // adjust out-connections to deleted wire
-          for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
-            if (test_wire->out == wire->out &&
-                test_wire->which_out > wire->which_out) {
-              test_wire->which_out -= 1;
-            }
-          }
-
-          if (wire->out) {
-            wire->out->out_count -= 1;
-          }
-        }
-
-        should_delete = 1;
-      }
-
-      if (should_delete) {
-        // add process to delete-list
-        Process_Ref *new_ref = arena_push(context->temp_arena, sizeof(Process_Ref));
-        if (new_ref) {
-          new_ref->process = wire;
-          SLLStackPush(to_delete, new_ref);
-          delete_count += 1;
+        if (wire->in) {
+          wire->in->in_count -= 1;
         }
       }
-      wire = wire->next;
+
+      if (!out_match) {
+        // adjust out-connections to deleted wire
+        for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
+          if (test_wire->out == wire->out &&
+              test_wire->which_out > wire->which_out) {
+            test_wire->which_out -= 1;
+          }
+        }
+
+        if (wire->out) {
+          wire->out->out_count -= 1;
+        }
+      }
+
+      should_delete = 1;
     }
+
+    if (should_delete) {
+      delete_count += add_process_to_delete_list(context, &to_delete, p);
+    }
+    wire = wire->next;
   }
 
   if (delete_count) {
@@ -1644,10 +1637,10 @@ function void delete_process(Context *context, Process *p) {
         }
         count += 1;
       }
-    }
 
-    proc_trie_edit(context->permanent_arena, trie, delete_keys, 0, delete_count, Proc_Trie_Edit_Delete);
-    gather_processes_from_trie(context);
+      proc_trie_edit(context->permanent_arena, trie, delete_keys, 0, delete_count, Proc_Trie_Edit_Delete);
+      gather_processes_from_trie(context);
+    }
   }
 }
 
