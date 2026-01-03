@@ -1490,6 +1490,13 @@ function void remove_process_from_active_processes(Context *context, Process *p)
 }
 
 
+function void exit_add_wire_mode(Context *context) {
+  clear_active_processes(context);
+  Unset_Flag(context->flags, Context_Flag_NewWire);
+}
+
+
+
 function void add_wire_connection(
   Context *context,
   Process *wire,
@@ -1497,23 +1504,41 @@ function void add_wire_connection(
   Process_Connection conn,
   U32 which_conn
   ) {
-  // Add wire at the given connection index, moving any wires that come after that index over to the right.
-  wire->conn[conn] = process;
-  wire->which_conn[conn] = which_conn;
+  if (wire && process) {
+    Process new_process_lit = *process;
+    Process new_wire_lit = *wire;
+    /* Process *new_in = replace_process_with(context, in, new_in_lit); */
 
-  Assert(!"TODO: Use the tree to update test_wire and wire and process, like we did in `delete_process`.");
+    /* process->conn_count[conn] += 1; */
+    new_process_lit.conn_count[conn] += 1;
+    Process *new_process = replace_process_with(context, process, new_process_lit);
 
-  for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
-    if (wire != test_wire &&
-        test_wire->conn[conn] == process &&
-        test_wire->which_conn[conn] >= which_conn) {
-      // increment the wire's which_conn if it comes at or after the added wire's which_conn
-      test_wire->which_conn[conn] += 1;
+    // Add wire at the given connection index, moving any wires that come after that index over to the right.
+    new_wire_lit.conn[conn] = new_process;
+    new_wire_lit.which_conn[conn] = which_conn;
+    replace_process_with(context, wire, new_wire_lit);
+    /* wire->conn[conn] = process; */
+    /* wire->which_conn[conn] = which_conn; */
+
+    for (Process *test_wire = context->processes.first;
+         test_wire != 0;
+         test_wire = test_wire->next) {
+      // `test_wire` should NEVER be the same as either `wire` or `process`, because then we would end up adding multiple versions of the same process into the trie.
+      if (wire != test_wire &&
+          test_wire->conn[conn] == process &&
+          test_wire->which_conn[conn] >= which_conn) {
+        // increment the wire's which_conn if it comes at or after the added wire's which_conn
+        Process new_test_wire_lit = *test_wire;
+        /* test_wire->which_conn[conn] += 1; */
+        new_test_wire_lit.which_conn[conn] += 1;
+        replace_process_with(context, test_wire, new_test_wire_lit);
+      }
     }
   }
 
-  process->conn_count[conn] += 1;
+  exit_add_wire_mode(context);
 }
+
 
 function void remove_wire_connection(
   Context *context,
@@ -1530,7 +1555,9 @@ function void remove_wire_connection(
   Assert(!"TODO: Use the tree to update test_wire and wire, like we did in `delete_process`.");
 
   // TODO: turn these assignments of process values into trie-edits
-  for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
+  for (Process *test_wire = context->processes.first;
+       test_wire != 0;
+       test_wire = test_wire->next) {
     // adjust in-connections that come after deleted wire
     if (remove_in && test_wire->in == wire->in) {
       if (test_wire->which_in > wire->which_in) {
@@ -1719,10 +1746,8 @@ function void delete_process(Context *context, Process *p) {
     wire = wire->next;
   }
 
-  /* Assert(!"TODO: add replaced processes to to_delete (avoiding duplicates)"); */
   // add replaced processes to the delete-list
   for (Process_Ref *p_ref = to_edit; p_ref != 0; p_ref = p_ref->next) {
-    /* Assert(!"TODO: add edited processes"); */
     Proc_Trie_Trie *trie = context->proc_trie;
     proc_trie_insert(context->permanent_arena, trie, IntFromPtr(p_ref->edit_process));
     delete_count += add_process_to_delete_list(context, &to_delete, p_ref->process);
@@ -2421,6 +2446,7 @@ function void handle_process_interaction(Context *context) {
         if (Get_Flag(context->flags, Context_Flag_NewWire)) {
           // connect processes
           connect_processes(context, context->active_processes.first, p);
+          exit_add_wire_mode(context);
         } else {
           // select process
           context->hot_process = p;
@@ -2511,8 +2537,7 @@ function void handle_process_interaction(Context *context) {
 
   // cancel selection
   if (check_keybind(context, keybind_REF(CancelSelection), selection)) {
-    clear_active_processes(context);
-    Unset_Flag(context->flags, Context_Flag_NewWire);
+    exit_add_wire_mode(context);
   }
 
   // enter bounding
