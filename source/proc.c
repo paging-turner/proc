@@ -134,6 +134,8 @@ global_variable String_Chunk global_null_string_chunk;
 #define Half_Circle_Radius_Fudge 1.0f
 
 
+
+
 ////////////////////////
 // UI Globals
 ////////////////////////
@@ -563,7 +565,7 @@ function String_Chunk_List copy_string_chunk_list(Context *context, String_Chunk
 
 
 
-function void replace_process_with(
+function Process *replace_process_with(
   Context *context,
   Process *to_replace,
   Process p_lit
@@ -576,6 +578,8 @@ function void replace_process_with(
     proc_trie_delete(context->permanent_arena, trie, IntFromPtr(to_replace));
     proc_trie_insert(context->permanent_arena, trie, IntFromPtr(p));
   }
+
+  return p;
 }
 
 
@@ -787,6 +791,7 @@ function void clear_ui_state(Context *context) {
   arena_pop_to(context->ui_arena, 0);
 }
 
+
 function void set_menu_state(Context *context, Menu_State menu_state) {
   switch(context->menu_state) {
   case Menu_State_OpenFile:
@@ -805,9 +810,11 @@ function void set_menu_state(Context *context, Menu_State menu_state) {
   context->menu_state = menu_state;
 }
 
+
 function void set_menu_state_as_open_file(Context *context, Process *element) {
   set_menu_state(context, Menu_State_OpenFile);
 }
+
 
 function void set_menu_state_as_save_file_as(Context *context, Process *element) {
   set_menu_state(context, Menu_State_SaveFileAs);
@@ -873,7 +880,6 @@ function void handle_label_editing(Context *context, Process_List ps) {
 }
 
 
-
 function Vector2 get_ui_element_size(Context *context, Process *element, B32 fit_to_text, U8 *label_c_string) {
   Vector2 size = element->size;
   U8 *label = label_c_string;
@@ -936,6 +942,7 @@ function Vector2 get_box_size(Ui_Box *box) {
   return size;
 }
 
+
 function B32 ui_box_should_set_x(Ui_Box *box) {
   B32 result = (box->sizing == Ui_Sizing_FitContents ||
                 box->sizing == Ui_Sizing_FitContentsX);
@@ -943,12 +950,14 @@ function B32 ui_box_should_set_x(Ui_Box *box) {
   return result;
 }
 
+
 function B32 ui_box_should_set_y(Ui_Box *box) {
   B32 result = (box->sizing == Ui_Sizing_FitContents ||
                 box->sizing == Ui_Sizing_FitContentsY);
 
   return result;
 }
+
 
 function void set_ui_box_size(Ui_Box *box, Vector2 size, B32 set_box_x, B32 set_box_y) {
   if (set_box_x) {
@@ -1131,7 +1140,6 @@ function Process *create_button(Arena *arena, Vector2 position, String_Chunk_Lis
 }
 
 
-
 function void ui_box_begin(Context *context, Ui_Box *box, B32 sizing) {
   Render_Context *rc = &context->ui_render_context;
   Ui_State *ui_state = &context->ui_state;
@@ -1174,6 +1182,7 @@ function void ui_box_begin(Context *context, Ui_Box *box, B32 sizing) {
     }
   }
 }
+
 
 function void ui_box_end(Context *context, Ui_Box *box, B32 sizing) {
   Render_Context *rc = &context->ui_render_context;
@@ -1330,6 +1339,8 @@ function void handle_paste(Context *context, Process *element) {
 
 
 
+
+
 function Vector2 get_percentage_between_points(Vector2 p0, Vector2 p1, F32 percentage) {
   Vector2 norm_delta = Vector2Normalize(Vector2Subtract(p1, p0));
   F32 distance_along_delta = percentage * Vector2Distance(p1, p0);
@@ -1337,10 +1348,6 @@ function Vector2 get_percentage_between_points(Vector2 p0, Vector2 p1, F32 perce
 
   return center;
 }
-
-
-
-
 
 
 
@@ -1357,12 +1364,6 @@ function Vector2 get_process_position(Context *context, Process *process) {
 
   return position;
 }
-
-
-
-
-
-
 
 
 function Vector2
@@ -1407,14 +1408,12 @@ get_process_wire_position(Context *context, Process *p, Process_Shape shape, Pro
 }
 
 
-
 function Rectangle get_wire_box(Context *context, Vector2 position) {
   F32 size = context->camera.zoom * global_box_size;
   F32 half_size = context->camera.zoom * global_box_half_size;
   Rectangle box = (Rectangle){position.x-half_size, position.y-half_size, size, size};
   return box;
 }
-
 
 
 function Rectangle get_new_wire_box(Context *context, Process *p, Process_Shape shape) {
@@ -1439,8 +1438,6 @@ function Rectangle get_selection_rectangle(Context *context) {
 
   return selection_rect;
 }
-
-
 
 
 function Process *get_process_wire_by_selection(Context *context, Process_Selection selection) {
@@ -1493,11 +1490,18 @@ function void remove_process_from_active_processes(Context *context, Process *p)
 }
 
 
-function void
-add_wire_connection(Context *context, Process *wire, Process *process, Process_Connection conn, U32 which_conn) {
+function void add_wire_connection(
+  Context *context,
+  Process *wire,
+  Process *process,
+  Process_Connection conn,
+  U32 which_conn
+  ) {
   // Add wire at the given connection index, moving any wires that come after that index over to the right.
   wire->conn[conn] = process;
   wire->which_conn[conn] = which_conn;
+
+  Assert(!"TODO: Use the tree to update test_wire and wire and process, like we did in `delete_process`.");
 
   for (Process *test_wire = context->processes.first; test_wire != 0; test_wire = test_wire->next) {
     if (wire != test_wire &&
@@ -1561,7 +1565,6 @@ function void remove_wire_connection(
     }
   }
 }
-
 
 
 typedef struct Process_Ref {
@@ -1746,25 +1749,29 @@ function void delete_process(Context *context, Process *p) {
 }
 
 
-
-
-
-
 function void connect_processes(Context *context, Process *out, Process *in) {
   Process *new_wire = create_process(context);
 
   if (new_wire && out && in) {
+    Process new_in_lit = *in;
+    Process new_out_lit = *out;
+    new_in_lit.in_count += 1;
+    new_out_lit.out_count += 1;
+    Process *new_in = replace_process_with(context, in, new_in_lit);
+    Process *new_out = replace_process_with(context, out, new_out_lit);
+
     Set_Flag(new_wire->flags, Process_Flag_Wire);
-    new_wire->out = out;
-    new_wire->in = in;
+    new_wire->out = new_out;
+    new_wire->in = new_in;
 
     new_wire->which_out = out->out_count;
     new_wire->which_in = in->in_count;
-
-    out->out_count += 1;
-    in->in_count += 1;
   }
+
+  gather_processes_from_trie(context);
 }
+
+
 
 
 function Half_Circle_Points
@@ -1839,7 +1846,6 @@ fill_out_half_circle_shape(Context *context, Process_Shape *shape, Process *p, V
     shape->first_control, shape->second_control,
     shape->points, Process_Shape_Max_Points, shape->triangle_count);
 }
-
 
 
 function Process_Shape
@@ -1972,7 +1978,6 @@ get_process_shape(Context *context, Process *p) {
 }
 
 
-
 function B32
 triangle_fan_contains_point(Vector2 *points, S32 triangle_count, Vector2 point) {
   B32 contains = 0;
@@ -1990,7 +1995,6 @@ triangle_fan_contains_point(Vector2 *points, S32 triangle_count, Vector2 point) 
 
   return contains;
 }
-
 
 
 function B32
@@ -2017,7 +2021,6 @@ triangle_strip_contains_point(Vector2 *points, S32 triangle_count, Vector2 point
 
   return contains;
 }
-
 
 
 function B32
@@ -2210,9 +2213,6 @@ function void reset_ui_box(Context *context, Ui_Box *box) {
 }
 
 
-
-
-
 function Process create_lit_button(Context *context, String8 label, F32 x_pos, F32 y_pos) {
   Process button = Zero_Struct(Process);
 
@@ -2226,6 +2226,9 @@ function Process create_lit_button(Context *context, String8 label, F32 x_pos, F
 
   return button;
 }
+
+
+
 
 function void do_menu_ui(Context *context, B32 sizing) {
   S32 clicked_active_menu_button = -1;
@@ -2282,7 +2285,6 @@ function void do_menu_ui(Context *context, B32 sizing) {
 }
 
 
-
 function void handle_ui(Context *context) {
   reset_ui_box(context, &sub_menu_box);
 
@@ -2302,7 +2304,6 @@ function void handle_ui(Context *context) {
   do_menu_ui(context, 1);
   do_menu_ui(context, 0);
 }
-
 
 
 function void handle_process_interaction(Context *context) {
@@ -2609,7 +2610,6 @@ function void handle_process_interaction(Context *context) {
 }
 
 
-
 function void handle_user_input(Context *context) {
   context->ui_state = get_ui_state(context);
 
@@ -2630,6 +2630,8 @@ function void handle_user_input(Context *context) {
 }
 
 
+
+
 function void draw_circular_process(Context *context, Vector2 center, F32 radius, F32 thickness, Color bg_color, Color stroke_color) {
   Render_Context *rc = &context->process_render_context;
 
@@ -2644,8 +2646,6 @@ function void draw_circular_process(Context *context, Vector2 center, F32 radius
   Vector2 control3 = (Vector2){second_point.x, second_point.y+fudge};
   render_DrawLineBezierCubic(rc, first_point, second_point, control2, control3, thickness, stroke_color);
 }
-
-
 
 
 function void draw_process_with_triangle_fan(Context *context, Process_Shape shape, F32 thickness, Color bg_color, Color stroke_color) {
@@ -2667,7 +2667,6 @@ function void draw_process_with_triangle_fan(Context *context, Process_Shape sha
   Vector2 p1 = shape.points[shape.point_count-1];
   render_DrawLine(rc, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
 }
-
 
 
 function void draw_process_with_triangle_strip(Context *context, Process_Shape shape, F32 thickness, Color bg_color, Color stroke_color) {
@@ -2917,6 +2916,7 @@ function void draw_processes(Context *context) {
 
 
 
+
 function S32 debug_process_list_count(Process_List list) {
   S32 count = 0;
   for (Process *p = list.first; p != 0; p = p->next) {
@@ -2924,6 +2924,8 @@ function S32 debug_process_list_count(Process_List list) {
   }
   return count;
 }
+
+
 function S32 debug_process_active_list_count(Process_List list) {
   S32 count = 0;
   for (Process *p = list.first; p != 0; p = p->next_active) {
@@ -2931,6 +2933,7 @@ function S32 debug_process_active_list_count(Process_List list) {
   }
   return count;
 }
+
 
 function void draw_info_panel(Context *context) {
   Render_Context *rc = &context->ui_render_context;
@@ -3002,11 +3005,6 @@ function Context initialize_context(void) {
 }
 
 
-
-
-
-
-
 function void initialize_globals(Context *context) {
   S32 monitor_id = GetCurrentMonitor();
   S32 screen_width = GetMonitorWidth(monitor_id);
@@ -3069,11 +3067,6 @@ function void initialize_globals(Context *context) {
   // ensure saves directory exists
   os_file_make_directory(Saves_Filepath);
 }
-
-
-
-
-
 
 
 function void set_global_window_render_size(void) {
