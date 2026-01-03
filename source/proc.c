@@ -1545,50 +1545,64 @@ function void remove_wire_connection(
   Process *wire,
   Process_Connection_Flag conn_flags
   ) {
-  // Remove a wire and move wires to the right of it to the left one.
-  B32 in_matched = 0;
-  B32 out_matched = 0;
+  if (wire) {
+    // Remove a wire and move wires to the right of the moved wire to the left.
+    B32 in_matched = 0;
+    B32 out_matched = 0;
 
-  B32 remove_in = Get_Flag(conn_flags, Process_Connection_Flag_In);
-  B32 remove_out = Get_Flag(conn_flags, Process_Connection_Flag_Out);
+    B32 remove_in = Get_Flag(conn_flags, Process_Connection_Flag_In);
+    B32 remove_out = Get_Flag(conn_flags, Process_Connection_Flag_Out);
 
-  Assert(!"TODO: Use the tree to update test_wire and wire, like we did in `delete_process`.");
+    Assert(!"TODO: Use the tree to update test_wire and wire, like we did in `delete_process`.");
 
-  // TODO: turn these assignments of process values into trie-edits
-  for (Process *test_wire = context->processes.first;
-       test_wire != 0;
-       test_wire = test_wire->next) {
-    // adjust in-connections that come after deleted wire
-    if (remove_in && test_wire->in == wire->in) {
-      if (test_wire->which_in > wire->which_in) {
-        test_wire->which_in -= 1;
+    for (Process *test_wire = context->processes.first;
+         test_wire != 0;
+         test_wire = test_wire->next) {
+      B32 should_replace = 0;
+      Process new_test_wire_lit = *test_wire;
+
+      // adjust in-connections that come after deleted wire
+      if (remove_in && test_wire->in == wire->in) {
+        if (test_wire->which_in > wire->which_in) {
+          new_test_wire_lit.which_in -= 1;
+          should_replace = 1;
+        }
+        in_matched = 1;
       }
-      in_matched = 1;
-    }
 
-    // adjust out-connections that come after deleted wire
-    if (remove_out && test_wire->out == wire->out) {
-      if (test_wire->which_out > wire->which_out) {
-        test_wire->which_out -= 1;
+      // adjust out-connections that come after deleted wire
+      if (remove_out && test_wire->out == wire->out) {
+        if (test_wire->which_out > wire->which_out) {
+          new_test_wire_lit.which_out -= 1;
+          should_replace = 1;
+        }
+        out_matched = 1;
       }
-      out_matched = 1;
+
+      if (should_replace) {
+        replace_process_with(context, test_wire, new_test_wire_lit);
+      }
     }
-  }
 
-  B32 only_in_conn = wire->in != 0 && wire->which_in == 0;
-  B32 only_out_conn = wire->out != 0 && wire->which_out == 0;
+    B32 only_in_conn = wire->in != 0 && wire->which_in == 0;
+    B32 only_out_conn = wire->out != 0 && wire->which_out == 0;
 
-  // decrement process' in-count
-  if (remove_in && (in_matched || only_in_conn)) {
-    if (wire->in) {
-      wire->in->in_count -= 1;
+    // decrement process' in-count
+    if (remove_in && (in_matched || only_in_conn)) {
+      if (wire->in) {
+        Process new_in_lit = *wire->in;
+        new_in_lit.in_count -= 1;
+        replace_process_with(context, wire->in, new_in_lit);
+      }
     }
-  }
 
-  // decrement process' out-count
-  if (remove_out && (out_matched || only_out_conn)) {
-    if (wire->out) {
-      wire->out->out_count -= 1;
+    // decrement process' out-count
+    if (remove_out && (out_matched || only_out_conn)) {
+      if (wire->out) {
+        Process new_out_lit = *wire->out;
+        new_out_lit.out_count -= 1;
+        replace_process_with(context, wire->out, new_out_lit);
+      }
     }
   }
 }
