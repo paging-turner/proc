@@ -176,3 +176,14 @@ Define_Keybind(ToggleTestRecording,
                Proc_Keybind_Def_Default,
                KEY_T, Modifier_Key_Control, 0,
                "Toggle on/off recording of user inputs for creating end-to-end tests.");
+
+
+Define_Keybind(Undo,
+               Proc_Keybind_Def_Default,
+               KEY_Z, Modifier_Key_Control, 0,
+               "Performs undo on the proc-trie.");
+
+Define_Keybind(Redo,
+               Proc_Keybind_Def_Default,
+               KEY_Z, Modifier_Key_Control|Modifier_Key_Shift, 0,
+               "Performs redo on the proc-trie.");

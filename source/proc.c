@@ -124,6 +124,7 @@ global_variable Color global_button_dormant_bg_color;
 global_variable Color global_button_hot_bg_color;
 global_variable Color global_button_font_color;
 global_variable Color global_container_bg_color;
+global_variable Color global_process_bg_color;
 
 global_variable Process global_null_process;
 global_variable String_Chunk global_null_string_chunk;
@@ -387,11 +388,15 @@ function void gather_processes_from_trie(Context *context) {
   Arena *arena = context->per_frame_arena;
   Proc_Trie_Trie *trie = context->proc_trie;
 
+  proc_trie_commit(trie);
+
   clear_processes(context);
   /* proc_trie_print_trie(arena, trie, global_id_for_printing_tries); */
   global_id_for_printing_tries += 1;;
-
-  Proc_Trie_Iterate(iter, arena, trie) {
+  for (Proc_Trie_Iterator *iter = proc_trie_iter_init(arena, trie->current_root->node);
+       proc_trie_iter_test(iter);
+       proc_trie_iter_next(iter)) {
+  /* Proc_Trie_Iterate(iter, arena, trie) { */
     Process *p = (Process *)iter->key;
     SLLQueuePush(context->processes.first, context->processes.last, p);
   }
@@ -402,7 +407,11 @@ function Process *create_process(Context *context) {
   Process *p = push_permanent_process(context);
 
   if (p) {
+#if Proc_Trie_Use_Key_Value
+    proc_trie_set(context->permanent_arena, context->proc_trie, (U64)p, p);
+#else
     proc_trie_insert(context->permanent_arena, context->proc_trie, (U64)p);
+#endif
     gather_processes_from_trie(context);
   }
 
@@ -576,7 +585,11 @@ function Process *replace_process_with(
   if (p) {
     *p = p_lit;
     proc_trie_delete(context->permanent_arena, trie, IntFromPtr(to_replace));
+#if Proc_Trie_Use_Key_Value
+    proc_trie_set(context->permanent_arena, context->proc_trie, (U64)p, p);
+#else
     proc_trie_insert(context->permanent_arena, trie, IntFromPtr(p));
+#endif
   }
 
   return p;
@@ -1553,8 +1566,6 @@ function void remove_wire_connection(
     B32 remove_in = Get_Flag(conn_flags, Process_Connection_Flag_In);
     B32 remove_out = Get_Flag(conn_flags, Process_Connection_Flag_Out);
 
-    Assert(!"TODO: Use the tree to update test_wire and wire, like we did in `delete_process`.");
-
     for (Process *test_wire = context->processes.first;
          test_wire != 0;
          test_wire = test_wire->next) {
@@ -1671,7 +1682,7 @@ function B32 update_process_within_edit_list(
     }
 
     if (found_ref == 0) {
-      edit_process = arena_push(context->temp_arena, sizeof(Process));
+      edit_process = arena_push(context->permanent_arena, sizeof(Process));
       found_ref = arena_push(context->temp_arena, sizeof(Process_Ref));
       should_push = 1;
     }
@@ -1763,7 +1774,12 @@ function void delete_process(Context *context, Process *p) {
   // add replaced processes to the delete-list
   for (Process_Ref *p_ref = to_edit; p_ref != 0; p_ref = p_ref->next) {
     Proc_Trie_Trie *trie = context->proc_trie;
-    proc_trie_insert(context->permanent_arena, trie, IntFromPtr(p_ref->edit_process));
+    Process *edit_process = p_ref->edit_process;
+#if Proc_Trie_Use_Key_Value
+    proc_trie_set(context->permanent_arena, trie, IntFromPtr(edit_process), edit_process);
+#else
+    proc_trie_insert(context->permanent_arena, trie, IntFromPtr(edit_process));
+#endif
     delete_count += add_process_to_delete_list(context, &to_delete, p_ref->process);
   }
 
@@ -2362,6 +2378,21 @@ function void handle_process_interaction(Context *context) {
     }
   }
 
+  // undo/redo
+  {
+    if (check_keybind(context, keybind_REF(Undo), selection) == Keybind_Result_Enter) {
+      proc_trie_undo(context->proc_trie);
+      gather_processes_from_trie(context);
+      printf("undo %p\n", context->proc_trie->current_root);
+    }
+
+    if (check_keybind(context, keybind_REF(Redo), selection) == Keybind_Result_Enter) {
+      proc_trie_redo(context->proc_trie);
+      gather_processes_from_trie(context);
+      printf("redo %p\n", context->proc_trie->current_root);
+    }
+  }
+
   // panning
   {
     if (check_keybind(context, keybind_REF(Pan), selection) == Keybind_Result_Enter) {
@@ -2739,7 +2770,7 @@ function void draw_process_with_triangle_strip(Context *context, Process_Shape s
 function void draw_processes(Context *context) {
   Render_Context *rc = &context->process_render_context;
 
-  Color bg_color = (Color){255, 255, 255, 255};
+  Color bg_color = global_process_bg_color;
   Color invisible_bg_color = (Color){0, 0, 0, 0};
   Color stroke_color = (Color){0, 0, 0, 255};
   Color invisible_stroke_color = (Color){0, 0, 0, 100};
@@ -3004,34 +3035,43 @@ function void draw_info_panel(Context *context) {
                   x, y, global_panel_font_size, text_color, 1);
   y += global_panel_font_size + padding;
 #elif 1
-  S32 arena_font_size = 12;
-  y = global_window_size.y - arena_font_size - padding;
-  render_DrawText(rc, TextFormat("per-frame arena %llu/%llu\n", context->per_frame_arena->chunk_pos, context->per_frame_arena->chunk_cap), x, y, arena_font_size, text_color, 1);
-  y -= arena_font_size + padding;
-  render_DrawText(rc, TextFormat("ui arena %llu/%llu\n", context->ui_arena->chunk_pos, context->ui_arena->chunk_cap), x, y, arena_font_size, text_color, 1);
-  y -= arena_font_size + padding;
-  render_DrawText(rc, TextFormat("temp arena %llu/%llu\n", context->temp_arena->chunk_pos, context->temp_arena->chunk_cap), x, y, arena_font_size, text_color, 1);
-  y -= arena_font_size + padding;
-  render_DrawText(rc, TextFormat("render arena %llu/%llu\n", context->render_arena->chunk_pos, context->render_arena->chunk_cap), x, y, arena_font_size, text_color, 1);
-  y -= arena_font_size + padding;
-  render_DrawText(rc, TextFormat("permanent arena %llu/%llu\n", context->permanent_arena->chunk_pos, context->permanent_arena->chunk_cap), x, y, arena_font_size, text_color, 1);
-  y -= arena_font_size + padding;
+  {
+# define Debug_Draw_Arena_Info(arena)\
+    render_DrawText(rc, TextFormat("%s (%3.1f%%) %llu/%llu\n",\
+                                   #arena,\
+                                   (F32)context->arena->chunk_pos/(F32)context->arena->chunk_cap,\
+                                   context->arena->chunk_pos, context->arena->chunk_cap),\
+                                   x, y, arena_font_size, text_color, 1);\
+    y -= arena_font_size + padding
+// end define Debug_Draw_Arena_Info(arena)
+
+    S32 arena_font_size = 12;
+    y = global_window_size.y - arena_font_size - padding;
+    Debug_Draw_Arena_Info(render_arena);
+    Debug_Draw_Arena_Info(permanent_arena);
+    Debug_Draw_Arena_Info(ui_arena);
+    Debug_Draw_Arena_Info(temp_arena);
+    Debug_Draw_Arena_Info(per_frame_arena);
+# undef Debug_Draw_Arena_Info
+  }
 #endif
 }
 
 
 
 
+#define    Context_Render_Arena_Size   Megabytes(10)
+#define Context_Permanent_Arena_Size   Megabytes(100)
+#define      Context_Temp_Arena_Size   Megabytes(10)
 
 function Context initialize_context(void) {
   Context context = (Context){0};
 
-  context.render_arena = arena_alloc_reserve(Megabytes(1), 0);
-  context.permanent_arena = arena_alloc_reserve(Megabytes(1), 0);
-  context.temp_arena = arena_alloc_reserve(Megabytes(1), 0);
-  context.ui_arena = arena_alloc_reserve(Megabytes(1), 0);
-  context.per_frame_arena = arena_alloc_reserve(Megabytes(1), 0);
-  context.test_arena = arena_alloc_reserve(Megabytes(1), 0);
+  context.render_arena    = arena_alloc_reserve(Context_Render_Arena_Size, 0);
+  context.permanent_arena = arena_alloc_reserve(Context_Permanent_Arena_Size, 0);
+  context.ui_arena        = arena_alloc_reserve(Megabytes(1), 0);
+  context.temp_arena      = arena_alloc_reserve(Context_Temp_Arena_Size, 0);
+  context.per_frame_arena = arena_alloc_reserve(Context_Temp_Arena_Size, 0);
 
   context.ui_render_context.arena = context.render_arena;
   context.process_render_context.arena = context.render_arena;
@@ -3049,7 +3089,11 @@ function void initialize_globals(Context *context) {
   S32 screen_width = GetMonitorWidth(monitor_id);
   S32 screen_height = GetMonitorHeight(monitor_id);
 
+#if 1 || defined(DarkMode)
+  global_background_color = (Color){180, 180, 170, 255};
+#else
   global_background_color = (Color){220, 220, 200, 255};
+#endif
 
   global_window_size.x = 0.7f*(F32)screen_width;
   global_window_size.y = 0.7f*(F32)screen_height;
@@ -3074,6 +3118,8 @@ function void initialize_globals(Context *context) {
   global_button_hot_bg_color = (Color){100, 80, 100, 255};
   global_button_font_color = (Color){220, 220, 160, 255};
   global_container_bg_color = (Color){170, 170, 170, 255};
+  global_process_bg_color = (Color){190, 190, 199, 255};
+
 
 
   // init ui elements

@@ -102,16 +102,20 @@ struct Process {
 };
 
 // Process Trie
-#define Steady_Trie(ident)  Proc_Trie_##ident
-#define steady_trie(ident)  proc_trie_##ident
-#define Steady_Trie_Key_Bits 64
-#define Steady_Trie_Slot_Bits 2
+#define Proc_Trie_Use_Key_Value          1
+#define Steady_Trie(ident)               Proc_Trie_##ident
+#define steady_trie(ident)               proc_trie_##ident
+#define Steady_Trie_Key_Bits             64
+#define Steady_Trie_Slot_Bits            2
 #define Steady_Trie_Root_Is_Lowest_Significant_Byte 0
+#define Steady_Trie_Use_Key_Value_Pair   Proc_Trie_Use_Key_Value
+#define Steady_Trie_Value_Type           Process
+#define Steady_Trie_Default_Value        (Process){0}
+#include "../libraries/steady_trie.h"
 #define Proc_Trie_Iterate(iter_name, arena, trie)\
   for (Proc_Trie_Iterator *iter_name = proc_trie_iter_init(arena, trie->current_root->node);\
        proc_trie_iter_test(iter_name);\
        proc_trie_iter_next(iter_name))
-#include "../libraries/steady_trie.h"
 
 
 
@@ -298,7 +302,6 @@ struct Context {
   Arena *ui_arena;
   Arena *temp_arena;
   Arena *per_frame_arena;
-  Arena *test_arena;
 
   U32 flags;
 
