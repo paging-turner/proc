@@ -26,20 +26,20 @@ typedef enum {
 } Modifier_Key;
 
 
-typedef struct Keybind {
+struct Keybind {
   U32 bind;
   U32 key_kind; // Uses raylib's KEY_* enum and some special ones for mouse-keys
   U32 modifiers;
   Ui_Constraint constraint;
   String8 name;
   String8 description;
-} Keybind;
+};
 
-typedef enum {
+enum Keybind_Result {
   Keybind_Result__Null,
   Keybind_Result_Enter,
   Keybind_Result_Exit,
-} Keybind_Result;
+};
 
 typedef enum {
   Keybind_Config_Token_Kind__Null,
@@ -96,6 +96,24 @@ typedef enum {
     }\
   }
 
+// TODO: Rename to `Define_Keybind` once all keybinds are migrated to `Define_Keybind_NEW`
+#define Define_Keybind_NEW(keybind_name, bind_value, k, m, c, d)\
+  static keybind_DECL(keybind_name);\
+  MR4TH_BEFORE_MAIN(proc_keybind_##bind_value##_##keybind_name){\
+    keybind_Type *keybind = keybind_REF(keybind_name);\
+    B32 both_zero = (U32)(bind_value) == 0 && keybind->bind == 0;\
+    B32 stronger_bind = (U32)(bind_value) >= keybind->bind;\
+    if (both_zero || stronger_bind) {\
+      keybind->bind = (bind_value);\
+      keybind->key_kind = (k);\
+      keybind->modifiers = (m);\
+      keybind->constraint = (c);\
+      keybind->name = str8_lit(Stringify(keybind_name));\
+      keybind->description = str8_lit(d);\
+    }\
+  }\
+  function B32 handle_keybind_##keybind_name(Context *context, Process_Selection selection)
+
 
 
 
@@ -105,11 +123,13 @@ Define_Keybind(Bound,
                Ui_Constraint_NoHotProcess|Ui_Constraint_ExitOnKeyup,
                "Select multiple processes by drawing a rectangle with your mouse.");
 
+
 Define_Keybind(Pan,
                Proc_Keybind_Def_Default,
                Key_Kind_Mouse1, 0,
                Ui_Constraint_ExitOnKeyup,
                "Slide your field of view by moving your mouse.");
+
 
 Define_Keybind(ZoomIn,
                Proc_Keybind_Def_Default,
@@ -117,11 +137,13 @@ Define_Keybind(ZoomIn,
                Ui_Constraint_ActionNotOccured,
                "Zoom your field of view in to make objects appear closer.");
 
+
 Define_Keybind(ZoomOut,
                Proc_Keybind_Def_Default,
                Key_Kind_MouseWheelDown, 0,
                Ui_Constraint_ActionNotOccured,
                "Zoom your field of view out to make objects appear further.");
+
 
 Define_Keybind(SelectSingleProcess,
                Proc_Keybind_Def_Default,
@@ -129,11 +151,37 @@ Define_Keybind(SelectSingleProcess,
                Ui_Constraint_HoverProcess|Ui_Constraint_ExitOnKeyup,
                "Select a single process.");
 
-Define_Keybind(SelectAnotherProcess,
-               Proc_Keybind_Def_Default,
-               Key_Kind_Mouse0, Modifier_Key_Control,
-               Ui_Constraint_HoverProcess,
-               "Add a process to the selected processes.");
+Define_Keybind_NEW(SelectAnotherProcess,
+                   Proc_Keybind_Def_Default,
+                   Key_Kind_Mouse0, Modifier_Key_Control,
+                   Ui_Constraint_HoverProcess,
+                   "Add a process to the selected processes."
+  ) {
+  B32 handled = 0;
+  Keybind_Result kb_result = check_keybind(context, keybind_REF(SelectAnotherProcess), selection);
+  if (kb_result == Keybind_Result_Enter) {
+    handled = 1;
+    if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
+      Process *wire = get_process_wire_by_selection(context, selection);
+      if (wire) {
+        if (is_active_process(context, wire)) {
+          remove_process_from_active_processes(context, wire);
+        } else {
+          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, wire, next_active, 0);
+        }
+      }
+    } else if (selection.type == Process_Selection_Process) {
+      if (is_active_process(context, selection.process)) {
+        remove_process_from_active_processes(context, selection.process);
+      } else {
+        SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, selection.process, next_active, 0);
+      }
+    }
+  }
+
+  return handled;
+}
+
 
 Define_Keybind(CancelSelection,
                Proc_Keybind_Def_Default,
@@ -141,36 +189,43 @@ Define_Keybind(CancelSelection,
                Ui_Constraint_NoHotProcess,
                "Clear out the selected processes.");
 
+
 Define_Keybind(CreateProcess,
                Proc_Keybind_Def_Default,
                Key_Kind_Mouse0, Modifier_Key_Control,
                Ui_Constraint_NoHotProcess,
                "Create a new process.");
 
+
 Define_Keybind(DeleteProcess,
                Proc_Keybind_Def_Default,
                KEY_D, Modifier_Key_Control, 0,
                "Delete the selected processes.");
+
 
 Define_Keybind(CycleProcessDisplay,
                Proc_Keybind_Def_Default,
                KEY_TAB, 0, 0,
                "Cycle through special displays for selected processes.");
 
+
 Define_Keybind(ToggleDisplayMode,
                Proc_Keybind_Def_Default,
                KEY_M, Modifier_Key_Control, 0,
                "Toggle between 'classic' and 'rounded' display modes.");
+
 
 Define_Keybind(CopyProcess,
                Proc_Keybind_Def_Default,
                KEY_C, Modifier_Key_Control, 0,
                "Copy selected processes.");
 
+
 Define_Keybind(PasteProcess,
                Proc_Keybind_Def_Default,
                KEY_V, Modifier_Key_Control, 0,
                "Paste copied processes, centered at the mouse.");
+
 
 Define_Keybind(ToggleTestRecording,
                Proc_Keybind_Def_Default,
@@ -178,10 +233,12 @@ Define_Keybind(ToggleTestRecording,
                "Toggle on/off recording of user inputs for creating end-to-end tests.");
 
 
+
 Define_Keybind(Undo,
                Proc_Keybind_Def_Default,
                KEY_Z, Modifier_Key_Control, 0,
                "Performs undo on the proc-trie.");
+
 
 Define_Keybind(Redo,
                Proc_Keybind_Def_Default,

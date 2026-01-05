@@ -3,12 +3,22 @@
 //////////////////////////////////////
 
 typedef struct Process Process;
+typedef struct Process_Shape Process_Shape;
+typedef struct Process_Selection Process_Selection;
+typedef enum Process_Connection Process_Connection;
+typedef enum Keybind_Result Keybind_Result;
+typedef struct Keybind Keybind;
 typedef struct Context Context;
 function void clear_processes(Context *context);
 function Process *create_process(Context *context);
 function String_Chunk *create_string_chunk(Context *context);
 function String_Chunk_List string_chunk_list_from_string8(Context *context, String8 string8);
 function S32 collect_save_files(Context *context);
+function Vector2 get_process_wire_position(Context *context, Process *p, Process_Shape shape, Process_Connection conn, U32 wire_index);
+function Process *get_process_wire_by_selection(Context *context, Process_Selection selection);
+function B32 is_active_process(Context *context, Process *p);
+function void remove_process_from_active_processes(Context *context, Process *p);
+function Keybind_Result check_keybind(Context *context, Keybind *keybind, Process_Selection selection);
 
 
 
@@ -35,13 +45,13 @@ typedef enum {
 #define Process_Connection_Xlist\
   X(In, 0) X(Out, 1)
 
-typedef enum {
+enum Process_Connection {
 #define X(conn, ...)\
   Process_Connection_##conn,
   Process_Connection_Xlist
 #undef X
   Process_Connection__Count,
-} Process_Connection;
+};
 
 typedef enum {
 #define X(conn, i)\
@@ -127,12 +137,12 @@ typedef enum {
   Process_Selection_Process,
 } Process_Selection_Type;
 
-typedef struct {
+struct Process_Selection {
   Process *process;
   Process_Selection_Type type;
   S32 index;
   B32 hot_id_assigned;
-} Process_Selection;
+};
 
 typedef struct {
   Process *first;
@@ -162,7 +172,7 @@ typedef enum {
 } Process_Shape_Kind;
 
 
-typedef struct {
+struct Process_Shape {
   Process_Shape_Kind kind;
 #define Process_Shape_Max_Points 16
   Vector2 points[Process_Shape_Max_Points];
@@ -174,7 +184,7 @@ typedef struct {
   Vector2 second_control;
   B32 downward;
   Vector2 new_wire_position;
-} Process_Shape;
+};
 
 
 //////////////////////////////////////

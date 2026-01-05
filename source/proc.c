@@ -2383,13 +2383,11 @@ function void handle_process_interaction(Context *context) {
     if (check_keybind(context, keybind_REF(Undo), selection) == Keybind_Result_Enter) {
       proc_trie_undo(context->proc_trie);
       gather_processes_from_trie(context);
-      printf("undo %p\n", context->proc_trie->current_root);
     }
 
     if (check_keybind(context, keybind_REF(Redo), selection) == Keybind_Result_Enter) {
       proc_trie_redo(context->proc_trie);
       gather_processes_from_trie(context);
-      printf("redo %p\n", context->proc_trie->current_root);
     }
   }
 
@@ -2504,24 +2502,8 @@ function void handle_process_interaction(Context *context) {
           context->active_position = context->ui_state.mouse_position;
         }
       }
-    } else if (check_keybind(context, keybind_REF(SelectAnotherProcess), selection) == Keybind_Result_Enter) {
-      // select another process
-      if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
-        Process *wire = get_process_wire_by_selection(context, selection);
-        if (wire) {
-          if (is_active_process(context, wire)) {
-            remove_process_from_active_processes(context, wire);
-          } else {
-            SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, wire, next_active, 0);
-          }
-        }
-      } else if (selection.type == Process_Selection_Process) {
-        if (is_active_process(context, selection.process)) {
-          remove_process_from_active_processes(context, selection.process);
-        } else {
-          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, selection.process, next_active, 0);
-        }
-      }
+    } else if (handle_keybind_SelectAnotherProcess(context, selection)) {
+      // handled
     } else if (selection.type == Process_Selection_Process) {
       // process hover
       context->hot_process = p;
