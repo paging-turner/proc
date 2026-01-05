@@ -19,6 +19,7 @@ function Process *get_process_wire_by_selection(Context *context, Process_Select
 function B32 is_active_process(Context *context, Process *p);
 function void remove_process_from_active_processes(Context *context, Process *p);
 function Keybind_Result check_keybind(Context *context, Keybind *keybind, Process_Selection selection);
+function void clear_active_processes(Context *context);
 
 
 

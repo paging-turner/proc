@@ -112,16 +112,44 @@ typedef enum {
       keybind->description = str8_lit(d);\
     }\
   }\
-  function B32 handle_keybind_##keybind_name(Context *context, Process_Selection selection)
+  function B32 handle_keybind_##keybind_name(Context *context, Process_Selection selection, Keybind_Result desired_kb_res)
 
 
 
 
-Define_Keybind(Bound,
-               Proc_Keybind_Def_Default,
-               Key_Kind_Mouse0, 0,
-               Ui_Constraint_NoHotProcess|Ui_Constraint_ExitOnKeyup,
-               "Select multiple processes by drawing a rectangle with your mouse.");
+Define_Keybind_NEW(Bound,
+                   Proc_Keybind_Def_Default,
+                   Key_Kind_Mouse0, 0,
+                   Ui_Constraint_NoHotProcess|Ui_Constraint_ExitOnKeyup,
+                   "Select multiple processes by drawing a rectangle with your mouse."
+  ) {
+  Keybind_Result kb_res = check_keybind(context, keybind_REF(Bound), selection);
+  B32 handled = 0;
+
+  if (desired_kb_res == Keybind_Result_Exit) {
+    if (Get_Flag(context->flags, Context_Flag_Bounding)) {
+      // exit
+      if (kb_res == Keybind_Result_Exit) {
+        Unset_Flag(context->flags, Context_Flag_Bounding);
+        handled = 1;
+      }
+      else {
+        clear_active_processes(context);
+      }
+    }
+  }
+  else if (desired_kb_res == Keybind_Result_Enter) {
+    // enter
+    if (kb_res == Keybind_Result_Enter) {
+      Set_Flag(context->flags, Context_Flag_Bounding);
+      context->active_position = context->ui_state.mouse_position;
+      handled = 1;
+    }
+  }
+
+  return handled;
+}
+
 
 
 Define_Keybind(Pan,
@@ -151,6 +179,7 @@ Define_Keybind(SelectSingleProcess,
                Ui_Constraint_HoverProcess|Ui_Constraint_ExitOnKeyup,
                "Select a single process.");
 
+
 Define_Keybind_NEW(SelectAnotherProcess,
                    Proc_Keybind_Def_Default,
                    Key_Kind_Mouse0, Modifier_Key_Control,
@@ -158,8 +187,7 @@ Define_Keybind_NEW(SelectAnotherProcess,
                    "Add a process to the selected processes."
   ) {
   B32 handled = 0;
-  Keybind_Result kb_result = check_keybind(context, keybind_REF(SelectAnotherProcess), selection);
-  if (kb_result == Keybind_Result_Enter) {
+  if (desired_kb_res == check_keybind(context, keybind_REF(SelectAnotherProcess), selection)) {
     handled = 1;
     if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
       Process *wire = get_process_wire_by_selection(context, selection);

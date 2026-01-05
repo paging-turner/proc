@@ -2369,13 +2369,9 @@ function void handle_process_interaction(Context *context) {
   Process *moved_wire = 0;
   Process_Connection moved_wire_conn = 0;
 
-  // initial bounding handling
-  if (Get_Flag(context->flags, Context_Flag_Bounding)) {
-    if (check_keybind(context, keybind_REF(Bound), selection) == Keybind_Result_Exit) {
-      Unset_Flag(context->flags, Context_Flag_Bounding);
-    } else {
-      clear_active_processes(context);
-    }
+  // exit bounding
+  if (handle_keybind_Bound(context, selection, Keybind_Result_Exit)) {
+    // handled
   }
 
   // undo/redo
@@ -2502,7 +2498,7 @@ function void handle_process_interaction(Context *context) {
           context->active_position = context->ui_state.mouse_position;
         }
       }
-    } else if (handle_keybind_SelectAnotherProcess(context, selection)) {
+    } else if (handle_keybind_SelectAnotherProcess(context, selection, Keybind_Result_Enter)) {
       // handled
     } else if (selection.type == Process_Selection_Process) {
       // process hover
@@ -2568,9 +2564,8 @@ function void handle_process_interaction(Context *context) {
   }
 
   // enter bounding
-  if (check_keybind(context, keybind_REF(Bound), selection) == Keybind_Result_Enter) {
-    Set_Flag(context->flags, Context_Flag_Bounding);
-    context->active_position = context->ui_state.mouse_position;
+  if (handle_keybind_Bound(context, selection, Keybind_Result_Enter)) {
+    // handled
   }
 
   // toggle between rounded and triangular shapes
