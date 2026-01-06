@@ -2172,76 +2172,6 @@ get_process_selection(Context *context, Process *p) {
 
 
 
-function Keybind_Result check_keybind(Context *context, Keybind *keybind, Process_Selection selection) {
-  Keybind_Result result = 0;
-  Ui_State *ui_state = &context->ui_state;
-
-  B32 key_is_pressed = 0;
-  B32 key_is_down = 0;
-
-  switch(keybind->key_kind) {
-  case Key_Kind_Mouse0: {
-    key_is_pressed = Get_Flag(ui_state->flags, Ui_State_Flag_mouse0_pressed);
-    key_is_down = Get_Flag(ui_state->flags, Ui_State_Flag_mouse0_down);
-  } break;
-  case Key_Kind_Mouse1: {
-    key_is_pressed = Get_Flag(ui_state->flags, Ui_State_Flag_mouse1_pressed);
-    key_is_down = Get_Flag(ui_state->flags, Ui_State_Flag_mouse1_down);
-  } break;
-  case Key_Kind_MouseWheelUp: {
-    key_is_pressed = ui_state->mouse_wheel_movement.y > 0.0f;
-  } break;
-  case Key_Kind_MouseWheelDown: {
-    key_is_pressed = ui_state->mouse_wheel_movement.y < 0.0f;
-  } break;
-  default: {
-    key_is_pressed = IsKeyPressed(keybind->key_kind);
-    key_is_down = IsKeyDown(keybind->key_kind);
-  } break;
-  }
-
-  B32 modifier_control = Get_Flag(keybind->modifiers, Modifier_Key_Control) ? 1 : 0;
-  B32 modifier_shift = Get_Flag(keybind->modifiers, Modifier_Key_Shift) ? 1 : 0;
-  B32 modifier_alt = Get_Flag(keybind->modifiers, Modifier_Key_Alt) ? 1 : 0;
-
-  B32 modifier_matches = ((!(modifier_control ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_control_down))) &&
-                          (!(modifier_shift ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_shift_down))) &&
-                          (!(modifier_alt ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_alt_down))));
-
-  B32 constraint_hover_process =
-    (Get_Flag(keybind->constraint, Ui_Constraint_HoverProcess)
-     ? selection.type != 0
-     : 1);
-  B32 constraint_no_hover =
-    (Get_Flag(keybind->constraint, Ui_Constraint_NoHotProcess)
-     ? (context->hot_process == 0)
-     : 1);
-  B32 constraint_action_not_occured =
-    (Get_Flag(keybind->constraint, Ui_Constraint_ActionNotOccured)
-     ? (Get_Flag_Bool(ui_state->flags, Ui_State_Flag_action_occured) == 0)
-     : 1);
-
-  B32 constraints_met = (constraint_hover_process &&
-                         constraint_no_hover &&
-                         constraint_action_not_occured);
-
-  if (key_is_pressed && modifier_matches && constraints_met) {
-    result = Keybind_Result_Enter;
-  }
-
-  if (Get_Flag(keybind->constraint, Ui_Constraint_ExitOnKeyup)) {
-    if (!key_is_down) {
-      result = Keybind_Result_Exit;
-    }
-  }
-
-  if (result == Keybind_Result_Enter) {
-    Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
-  }
-
-  return result;
-}
-
 
 
 function Ui_State get_ui_state(Context *context) {
@@ -2365,32 +2295,23 @@ function void handle_process_interaction(Context *context) {
   Ui_State *ui_state = &context->ui_state;
   Process_Selection selection = (Process_Selection){0};
 
-  B32 should_stop_dragging = check_keybind(context, keybind_REF(SelectSingleProcess), selection) == Keybind_Result_Exit;
+  B32 should_stop_dragging = handle_keybind_SelectSingleProcess(context, selection, Keybind_Result_Exit, 0, 0);
   Process *moved_wire = 0;
   Process_Connection moved_wire_conn = 0;
 
   // exit bounding
-  handle_keybind_Bound(context, selection, Keybind_Result_Exit);
+  handle_keybind_Bound(context, selection, Keybind_Result_Exit, 0, 0);
 
   // undo/redo
-  {
-    if (check_keybind(context, keybind_REF(Undo), selection) == Keybind_Result_Enter) {
-      proc_trie_undo(context->proc_trie);
-      gather_processes_from_trie(context);
-    }
-
-    if (check_keybind(context, keybind_REF(Redo), selection) == Keybind_Result_Enter) {
-      proc_trie_redo(context->proc_trie);
-      gather_processes_from_trie(context);
-    }
-  }
+  handle_keybind_Undo(context, selection, 0, 0, 0);
+  handle_keybind_Redo(context, selection, 0, 0, 0);
 
   // panning
-  handle_keybind_Pan(context, selection, 0);
+  handle_keybind_Pan(context, selection, 0, 0, 0);
 
   // zooming
-  handle_keybind_ZoomIn(context, selection, 0);
-  handle_keybind_ZoomOut(context, selection, 0);
+  handle_keybind_ZoomIn(context, selection, 0, 0, 0);
+  handle_keybind_ZoomOut(context, selection, 0, 0, 0);
 
   // process interaction
   for (Process *p = context->processes.first; p != 0; p = p->next) {
@@ -2411,51 +2332,9 @@ function void handle_process_interaction(Context *context) {
       }
     }
 
-    if (check_keybind(context, keybind_REF(SelectSingleProcess), selection) == Keybind_Result_Enter) {
-      B32 in_selection = selection.type == Process_Selection_In;
-      B32 out_selection = selection.type == Process_Selection_Out;
-      if (in_selection || out_selection) {
-        // select wire
-        Process *wire = get_process_wire_by_selection(context, selection);
-        B32 is_active_wire = is_active_process(context, wire);
-
-        if (wire) {
-          U32 drag_flag = in_selection ? Process_Flag_Drag_In : Process_Flag_Drag_Out;
-          Unset_Flag(context->flags, Context_Flag_NewWire);
-          Set_Flag(wire->flags, drag_flag);
-          context->active_position = context->ui_state.mouse_position;
-          if (!is_active_wire) {
-            clear_active_processes(context);
-            SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, wire, next_active, 0);
-          }
-        }
-      } else if ((is_active || context->hot_process == p) &&
-                 selection.type == Process_Selection_NewWire) {
-        // begin new-wire
-        Set_Flag(context->flags, Context_Flag_NewWire);
-        if (!is_active) {
-          clear_active_processes(context);
-          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, p, next_active, 0);
-        }
-      } else if (selection.type == Process_Selection_Process) {
-        if (Get_Flag(context->flags, Context_Flag_NewWire)) {
-          // connect processes
-          connect_processes(context, context->active_processes.first, p);
-          exit_add_wire_mode(context);
-        } else {
-          // select process
-          context->hot_process = p;
-          if (!is_active) {
-            clear_active_processes(context);
-            SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, p, next_active, 0);
-          }
-          Unset_Flag(context->flags, Context_Flag_NewWire);
-          Set_Flag(context->flags, Context_Flag_Dragging);
-          context->active_position = context->ui_state.mouse_position;
-        }
-      }
+    if (handle_keybind_SelectSingleProcess(context, selection, 0, is_active, p)) {
     }
-    else if (handle_keybind_SelectAnotherProcess(context, selection, Keybind_Result_Enter)) {
+    else if (handle_keybind_SelectAnotherProcess(context, selection, Keybind_Result_Enter, is_active, p)) {
       // handled
     } else if (selection.type == Process_Selection_Process) {
       // process hover
@@ -2505,27 +2384,21 @@ function void handle_process_interaction(Context *context) {
   }
 
   // create process
-  handle_keybind_CreateProcess(context, selection, 0);
+  handle_keybind_CreateProcess(context, selection, 0, 0, 0);
 
   // cancel selection
-  handle_keybind_CancelSelection(context, selection, 0);
+  handle_keybind_CancelSelection(context, selection, 0, 0, 0);
 
   // enter bounding
-  handle_keybind_Bound(context, selection, Keybind_Result_Enter);
+  handle_keybind_Bound(context, selection, Keybind_Result_Enter, 0, 0);
 
   // toggle between rounded and triangular shapes
-  if (check_keybind(context, keybind_REF(ToggleDisplayMode), selection) == Keybind_Result_Enter) {
-    Toggle_Flag(context->flags, Context_Flag_RoundedShapes);
-  }
+  handle_keybind_ToggleDisplayMode(context, selection, 0, 0, 0);
 
-  // copy processes
-  if (check_keybind(context, keybind_REF(CopyProcess), selection) == Keybind_Result_Enter) {
-    copy_active_processes(context);
-  }
-  // paste processes
-  if (check_keybind(context, keybind_REF(PasteProcess), selection) == Keybind_Result_Enter) {
-    paste_processes(context);
-  }
+  // copy/paste processes
+  handle_keybind_CopyProcess(context, selection, 0, 0, 0);
+  handle_keybind_PasteProcess(context, selection, 0, 0, 0);
+
 
   // handle moved wire
   if (moved_wire && context->hot_process) {
@@ -2564,36 +2437,18 @@ function void handle_process_interaction(Context *context) {
       }
       // stop dragging
       Unset_Flag(context->flags, Context_Flag_Dragging);
-    } else if (check_keybind(context, keybind_REF(CycleProcessDisplay), selection)) {
-      // cycle through special process types (cups/caps/empty)
-      for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
-        if (!Get_Flag(a->flags, Process_Flag_Wire)) {
-          U32 toggle_flags = (Process_Flag_Empty | Process_Flag_Cup | Process_Flag_Cap | Process_Flag_Identity);
-          if (Get_Flag(a->flags, toggle_flags)) {
-            // toggle off process-display flags first, before trying to toggle them on
-            Unset_Flag(a->flags, toggle_flags);
-          } else if ((a->in_count == 0 && a->out_count == 0) ||
-                     (a->in_count == 1 && a->out_count == 0) ||
-                     (a->in_count == 0 && a->out_count == 1)) {
-            // toggle single in/out or unconnected process
-            Toggle_Flag(a->flags, Process_Flag_Empty);
-          } else if (a->in_count == 0 && a->out_count == 2) {
-            Toggle_Flag(a->flags, Process_Flag_Cup);
-          } else if (a->in_count == 2 && a->out_count == 0) {
-            Toggle_Flag(a->flags, Process_Flag_Cap);
-          } else if (a->in_count == 1 && a->out_count == 1) {
-            Toggle_Flag(a->flags, Process_Flag_Identity);
-          }
-        }
-      }
-    }
-    else {
-      if (handle_keybind_DeleteProcess(context, selection, 0)) {
+    } else {
+      if (handle_keybind_CycleProcessDisplay(context, selection, 0, 0, 0)) {
         // handled
       }
-      else if (!Get_Flag(ui_state->flags, Ui_State_Flag_action_occured)) {
-        // process label editing
-        handle_label_editing(context, context->active_processes);
+      else {
+        if (handle_keybind_DeleteProcess(context, selection, 0, 0, 0)) {
+          // handled
+        }
+        else if (!Get_Flag(ui_state->flags, Ui_State_Flag_action_occured)) {
+          // process label editing
+          handle_label_editing(context, context->active_processes);
+        }
       }
     }
   }

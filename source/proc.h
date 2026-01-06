@@ -22,6 +22,10 @@ function Keybind_Result check_keybind(Context *context, Keybind *keybind, Proces
 function void clear_active_processes(Context *context);
 function void exit_add_wire_mode(Context *context);
 function void delete_process(Context *context, Process *p);
+function void copy_active_processes(Context *context);
+function void paste_processes(Context *context);
+function void gather_processes_from_trie(Context *context);
+function void connect_processes(Context *context, Process *out, Process *in);
 
 
 

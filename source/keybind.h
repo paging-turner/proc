@@ -79,7 +79,7 @@ typedef enum {
 } Proc_Keybind_Def_Kind;
 
 
-// TODO: Gather all keybinds in a single before-main, that way users can override/customize keybinds.
+
 #define Define_Keybind(keybind_name, bind_value, k, m, c, d)\
   static keybind_DECL(keybind_name);\
   MR4TH_BEFORE_MAIN(proc_keybind_##bind_value##_##keybind_name){\
@@ -94,34 +94,93 @@ typedef enum {
       keybind->name = str8_lit(Stringify(keybind_name));\
       keybind->description = str8_lit(d);\
     }\
+  }\
+  function B32 handle_keybind_##keybind_name(Context *context, Process_Selection selection, Keybind_Result desired_kb_res, B32 is_active, Process *p)
+
+
+
+
+
+function Keybind_Result check_keybind(Context *context, Keybind *keybind, Process_Selection selection) {
+  Keybind_Result result = 0;
+  Ui_State *ui_state = &context->ui_state;
+
+  B32 key_is_pressed = 0;
+  B32 key_is_down = 0;
+
+  switch(keybind->key_kind) {
+  case Key_Kind_Mouse0: {
+    key_is_pressed = Get_Flag(ui_state->flags, Ui_State_Flag_mouse0_pressed);
+    key_is_down = Get_Flag(ui_state->flags, Ui_State_Flag_mouse0_down);
+  } break;
+  case Key_Kind_Mouse1: {
+    key_is_pressed = Get_Flag(ui_state->flags, Ui_State_Flag_mouse1_pressed);
+    key_is_down = Get_Flag(ui_state->flags, Ui_State_Flag_mouse1_down);
+  } break;
+  case Key_Kind_MouseWheelUp: {
+    key_is_pressed = ui_state->mouse_wheel_movement.y > 0.0f;
+  } break;
+  case Key_Kind_MouseWheelDown: {
+    key_is_pressed = ui_state->mouse_wheel_movement.y < 0.0f;
+  } break;
+  default: {
+    key_is_pressed = IsKeyPressed(keybind->key_kind);
+    key_is_down = IsKeyDown(keybind->key_kind);
+  } break;
   }
 
-// TODO: Rename to `Define_Keybind` once all keybinds are migrated to `Define_Keybind_NEW`
-#define Define_Keybind_NEW(keybind_name, bind_value, k, m, c, d)\
-  static keybind_DECL(keybind_name);\
-  MR4TH_BEFORE_MAIN(proc_keybind_##bind_value##_##keybind_name){\
-    keybind_Type *keybind = keybind_REF(keybind_name);\
-    B32 both_zero = (U32)(bind_value) == 0 && keybind->bind == 0;\
-    B32 stronger_bind = (U32)(bind_value) >= keybind->bind;\
-    if (both_zero || stronger_bind) {\
-      keybind->bind = (bind_value);\
-      keybind->key_kind = (k);\
-      keybind->modifiers = (m);\
-      keybind->constraint = (c);\
-      keybind->name = str8_lit(Stringify(keybind_name));\
-      keybind->description = str8_lit(d);\
-    }\
-  }\
-  function B32 handle_keybind_##keybind_name(Context *context, Process_Selection selection, Keybind_Result desired_kb_res)
+  B32 modifier_control = Get_Flag(keybind->modifiers, Modifier_Key_Control) ? 1 : 0;
+  B32 modifier_shift = Get_Flag(keybind->modifiers, Modifier_Key_Shift) ? 1 : 0;
+  B32 modifier_alt = Get_Flag(keybind->modifiers, Modifier_Key_Alt) ? 1 : 0;
+
+  B32 modifier_matches = ((!(modifier_control ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_control_down))) &&
+                          (!(modifier_shift ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_shift_down))) &&
+                          (!(modifier_alt ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_alt_down))));
+
+  B32 constraint_hover_process =
+    (Get_Flag(keybind->constraint, Ui_Constraint_HoverProcess)
+     ? selection.type != 0
+     : 1);
+  B32 constraint_no_hover =
+    (Get_Flag(keybind->constraint, Ui_Constraint_NoHotProcess)
+     ? (context->hot_process == 0)
+     : 1);
+  B32 constraint_action_not_occured =
+    (Get_Flag(keybind->constraint, Ui_Constraint_ActionNotOccured)
+     ? (Get_Flag_Bool(ui_state->flags, Ui_State_Flag_action_occured) == 0)
+     : 1);
+
+  B32 constraints_met = (constraint_hover_process &&
+                         constraint_no_hover &&
+                         constraint_action_not_occured);
+
+  if (key_is_pressed && modifier_matches && constraints_met) {
+    result = Keybind_Result_Enter;
+  }
+
+  if (Get_Flag(keybind->constraint, Ui_Constraint_ExitOnKeyup)) {
+    if (!key_is_down) {
+      result = Keybind_Result_Exit;
+    }
+  }
+
+  if (result == Keybind_Result_Enter) {
+    Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
+  }
+
+  return result;
+}
 
 
 
 
-Define_Keybind_NEW(Bound,
-                   Proc_Keybind_Def_Default,
-                   Key_Kind_Mouse0, 0,
-                   Ui_Constraint_NoHotProcess|Ui_Constraint_ExitOnKeyup,
-                   "Select multiple processes by drawing a rectangle with your mouse."
+
+Define_Keybind(
+  Bound,
+  Proc_Keybind_Def_Default,
+  Key_Kind_Mouse0, 0,
+  Ui_Constraint_NoHotProcess|Ui_Constraint_ExitOnKeyup,
+  "Select multiple processes by drawing a rectangle with your mouse."
   ) {
   Keybind_Result kb_res = check_keybind(context, keybind_REF(Bound), selection);
   B32 handled = 0;
@@ -152,11 +211,12 @@ Define_Keybind_NEW(Bound,
 
 
 
-Define_Keybind_NEW(Pan,
-               Proc_Keybind_Def_Default,
-               Key_Kind_Mouse1, 0,
-               Ui_Constraint_ExitOnKeyup,
-               "Slide your field of view by moving your mouse."
+Define_Keybind(
+  Pan,
+  Proc_Keybind_Def_Default,
+  Key_Kind_Mouse1, 0,
+  Ui_Constraint_ExitOnKeyup,
+  "Slide your field of view by moving your mouse."
   ) {
   B32 handled = 1;
   Assert(desired_kb_res == 0);
@@ -190,19 +250,21 @@ Define_Keybind_NEW(Pan,
 
 function B32 keybind_zoom_handler(Context *context, Process_Selection selection, Keybind_Result desired_kb_res);
 
-Define_Keybind_NEW(ZoomIn,
-                   Proc_Keybind_Def_Default,
-                   Key_Kind_MouseWheelUp, 0,
-                   Ui_Constraint_ActionNotOccured,
-                   "Zoom your field of view in to make objects appear closer.") {
+Define_Keybind(
+  ZoomIn,
+  Proc_Keybind_Def_Default,
+  Key_Kind_MouseWheelUp, 0,
+  Ui_Constraint_ActionNotOccured,
+  "Zoom your field of view in to make objects appear closer.") {
   return keybind_zoom_handler(context, selection, desired_kb_res);
 }
 
-Define_Keybind_NEW(ZoomOut,
-                   Proc_Keybind_Def_Default,
-                   Key_Kind_MouseWheelDown, 0,
-                   Ui_Constraint_ActionNotOccured,
-                   "Zoom your field of view out to make objects appear further.") {
+Define_Keybind(
+  ZoomOut,
+  Proc_Keybind_Def_Default,
+  Key_Kind_MouseWheelDown, 0,
+  Ui_Constraint_ActionNotOccured,
+  "Zoom your field of view out to make objects appear further.") {
   return keybind_zoom_handler(context, selection, desired_kb_res);
 }
 
@@ -236,18 +298,73 @@ function B32 keybind_zoom_handler(
 
 
 
-Define_Keybind(SelectSingleProcess,
-               Proc_Keybind_Def_Default,
-               Key_Kind_Mouse0, 0,
-               Ui_Constraint_HoverProcess|Ui_Constraint_ExitOnKeyup,
-               "Select a single process.");
+Define_Keybind(
+  SelectSingleProcess,
+  Proc_Keybind_Def_Default,
+  Key_Kind_Mouse0, 0,
+  Ui_Constraint_HoverProcess|Ui_Constraint_ExitOnKeyup,
+  "Select a single process."
+  ) {
+  B32 handled = 0;
+
+  if (check_keybind(context, keybind_REF(SelectSingleProcess), selection) == Keybind_Result_Enter) {
+    handled = 1;
+    B32 in_selection = selection.type == Process_Selection_In;
+    B32 out_selection = selection.type == Process_Selection_Out;
+    if (in_selection || out_selection) {
+      // select wire
+      Process *wire = get_process_wire_by_selection(context, selection);
+      B32 is_active_wire = is_active_process(context, wire);
+
+      if (wire) {
+        U32 drag_flag = in_selection ? Process_Flag_Drag_In : Process_Flag_Drag_Out;
+        Unset_Flag(context->flags, Context_Flag_NewWire);
+        Set_Flag(wire->flags, drag_flag);
+        context->active_position = context->ui_state.mouse_position;
+        if (!is_active_wire) {
+          clear_active_processes(context);
+          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, wire, next_active, 0);
+        }
+      }
+    } else if ((is_active || context->hot_process == p) &&
+               selection.type == Process_Selection_NewWire) {
+      // begin new-wire
+      Set_Flag(context->flags, Context_Flag_NewWire);
+      if (!is_active) {
+        clear_active_processes(context);
+        SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, p, next_active, 0);
+      }
+    } else if (selection.type == Process_Selection_Process) {
+      if (Get_Flag(context->flags, Context_Flag_NewWire)) {
+        // connect processes
+        connect_processes(context, context->active_processes.first, p);
+        exit_add_wire_mode(context);
+      } else {
+        // select process
+        context->hot_process = p;
+        if (!is_active) {
+          clear_active_processes(context);
+          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, p, next_active, 0);
+        }
+        Unset_Flag(context->flags, Context_Flag_NewWire);
+        Set_Flag(context->flags, Context_Flag_Dragging);
+        context->active_position = context->ui_state.mouse_position;
+      }
+    }
+  }
+
+  return handled;
+}
 
 
-Define_Keybind_NEW(SelectAnotherProcess,
-                   Proc_Keybind_Def_Default,
-                   Key_Kind_Mouse0, Modifier_Key_Control,
-                   Ui_Constraint_HoverProcess,
-                   "Add a process to the selected processes."
+
+
+Define_Keybind(
+  SelectAnotherProcess,
+  Proc_Keybind_Def_Default,
+  Key_Kind_Mouse0, Modifier_Key_Control,
+  Ui_Constraint_HoverProcess,
+  "Add a process to the selected processes."
   ) {
   B32 handled = 0;
   if (desired_kb_res == check_keybind(context, keybind_REF(SelectAnotherProcess), selection)) {
@@ -274,11 +391,13 @@ Define_Keybind_NEW(SelectAnotherProcess,
 }
 
 
-Define_Keybind_NEW(CancelSelection,
-               Proc_Keybind_Def_Default,
-               Key_Kind_Mouse0, 0,
-               Ui_Constraint_NoHotProcess,
-               "Clear out the selected processes."
+
+Define_Keybind(
+  CancelSelection,
+  Proc_Keybind_Def_Default,
+  Key_Kind_Mouse0, 0,
+  Ui_Constraint_NoHotProcess,
+  "Clear out the selected processes."
   ) {
   B32 handled = 0;
 
@@ -292,11 +411,12 @@ Define_Keybind_NEW(CancelSelection,
 
 
 
-Define_Keybind_NEW(CreateProcess,
-                   Proc_Keybind_Def_Default,
-                   Key_Kind_Mouse0, Modifier_Key_Control,
-                   Ui_Constraint_NoHotProcess,
-                   "Create a new process."
+Define_Keybind(
+  CreateProcess,
+  Proc_Keybind_Def_Default,
+  Key_Kind_Mouse0, Modifier_Key_Control,
+  Ui_Constraint_NoHotProcess,
+  "Create a new process."
   ) {
   B32 handled = 0;
 
@@ -315,10 +435,12 @@ Define_Keybind_NEW(CreateProcess,
 }
 
 
-Define_Keybind_NEW(DeleteProcess,
-                   Proc_Keybind_Def_Default,
-                   KEY_D, Modifier_Key_Control, 0,
-                   "Delete the selected processes."
+
+Define_Keybind(
+  DeleteProcess,
+  Proc_Keybind_Def_Default,
+  KEY_D, Modifier_Key_Control, 0,
+  "Delete the selected processes."
   ) {
   B32 handled = 0;
 
@@ -337,44 +459,133 @@ Define_Keybind_NEW(DeleteProcess,
 }
 
 
-Define_Keybind(CycleProcessDisplay,
-               Proc_Keybind_Def_Default,
-               KEY_TAB, 0, 0,
-               "Cycle through special displays for selected processes.");
+
+Define_Keybind(
+  CycleProcessDisplay,
+  Proc_Keybind_Def_Default,
+  KEY_TAB, 0, 0,
+  "Cycle through special displays for selected processes."
+  ) {
+  B32 handled = 0;
+
+  if (check_keybind(context, keybind_REF(CycleProcessDisplay), selection)) {
+    handled = 1;
+    // cycle through special process types (cups/caps/empty)
+    for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
+      if (!Get_Flag(a->flags, Process_Flag_Wire)) {
+        U32 toggle_flags = (Process_Flag_Empty | Process_Flag_Cup | Process_Flag_Cap | Process_Flag_Identity);
+        if (Get_Flag(a->flags, toggle_flags)) {
+          // toggle off process-display flags first, before trying to toggle them on
+          Unset_Flag(a->flags, toggle_flags);
+        } else if ((a->in_count == 0 && a->out_count == 0) ||
+                   (a->in_count == 1 && a->out_count == 0) ||
+                   (a->in_count == 0 && a->out_count == 1)) {
+          // toggle single in/out or unconnected process
+          Toggle_Flag(a->flags, Process_Flag_Empty);
+        } else if (a->in_count == 0 && a->out_count == 2) {
+          Toggle_Flag(a->flags, Process_Flag_Cup);
+        } else if (a->in_count == 2 && a->out_count == 0) {
+          Toggle_Flag(a->flags, Process_Flag_Cap);
+        } else if (a->in_count == 1 && a->out_count == 1) {
+          Toggle_Flag(a->flags, Process_Flag_Identity);
+        }
+      }
+    }
+  }
+
+  return handled;
+}
 
 
-Define_Keybind(ToggleDisplayMode,
-               Proc_Keybind_Def_Default,
-               KEY_M, Modifier_Key_Control, 0,
-               "Toggle between 'classic' and 'rounded' display modes.");
 
+Define_Keybind(
+  ToggleDisplayMode,
+  Proc_Keybind_Def_Default,
+  KEY_M, Modifier_Key_Control, 0,
+  "Toggle between 'classic' and 'rounded' display modes."
+  ) {
+  B32 handler = 0;
 
-Define_Keybind(CopyProcess,
-               Proc_Keybind_Def_Default,
-               KEY_C, Modifier_Key_Control, 0,
-               "Copy selected processes.");
+  if (check_keybind(context, keybind_REF(ToggleDisplayMode), selection) == Keybind_Result_Enter) {
+    handler = 1;
+    Toggle_Flag(context->flags, Context_Flag_RoundedShapes);
+  }
 
-
-Define_Keybind(PasteProcess,
-               Proc_Keybind_Def_Default,
-               KEY_V, Modifier_Key_Control, 0,
-               "Paste copied processes, centered at the mouse.");
-
-
-Define_Keybind(ToggleTestRecording,
-               Proc_Keybind_Def_Default,
-               KEY_T, Modifier_Key_Control, 0,
-               "Toggle on/off recording of user inputs for creating end-to-end tests.");
+  return handler;
+}
 
 
 
-Define_Keybind(Undo,
-               Proc_Keybind_Def_Default,
-               KEY_Z, Modifier_Key_Control, 0,
-               "Performs undo on the proc-trie.");
+
+Define_Keybind(
+  CopyProcess,
+  Proc_Keybind_Def_Default,
+  KEY_C, Modifier_Key_Control, 0,
+  "Copy selected processes."
+  ) {
+  B32 handled = 0;
+
+  if (check_keybind(context, keybind_REF(CopyProcess), selection) == Keybind_Result_Enter) {
+    handled = 1;
+    copy_active_processes(context);
+  }
+
+  return handled;
+}
 
 
-Define_Keybind(Redo,
-               Proc_Keybind_Def_Default,
-               KEY_Z, Modifier_Key_Control|Modifier_Key_Shift, 0,
-               "Performs redo on the proc-trie.");
+
+Define_Keybind(
+  PasteProcess,
+  Proc_Keybind_Def_Default,
+  KEY_V, Modifier_Key_Control, 0,
+  "Paste copied processes, centered at the mouse."
+  ) {
+  B32 handled = 0;
+
+  if (check_keybind(context, keybind_REF(PasteProcess), selection) == Keybind_Result_Enter) {
+    handled = 1;
+    paste_processes(context);
+  }
+
+  return handled;
+}
+
+
+
+
+Define_Keybind(
+  Undo,
+  Proc_Keybind_Def_Default,
+  KEY_Z, Modifier_Key_Control, 0,
+  "Performs undo on the proc-trie."
+  ) {
+  B32 handled = 0;
+
+  if (check_keybind(context, keybind_REF(Undo), selection) == Keybind_Result_Enter) {
+    handled = 1;
+    proc_trie_undo(context->proc_trie);
+    gather_processes_from_trie(context);
+  }
+
+  return handled;
+}
+
+
+
+Define_Keybind(
+  Redo,
+  Proc_Keybind_Def_Default,
+  KEY_Z, Modifier_Key_Control|Modifier_Key_Shift, 0,
+  "Performs redo on the proc-trie."
+  ) {
+  B32 handled = 0;
+
+  if (check_keybind(context, keybind_REF(Redo), selection) == Keybind_Result_Enter) {
+    handled = 1;
+    proc_trie_redo(context->proc_trie);
+    gather_processes_from_trie(context);
+  }
+
+  return handled;
+}
