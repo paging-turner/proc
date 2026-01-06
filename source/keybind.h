@@ -274,24 +274,67 @@ Define_Keybind_NEW(SelectAnotherProcess,
 }
 
 
-Define_Keybind(CancelSelection,
+Define_Keybind_NEW(CancelSelection,
                Proc_Keybind_Def_Default,
                Key_Kind_Mouse0, 0,
                Ui_Constraint_NoHotProcess,
-               "Clear out the selected processes.");
+               "Clear out the selected processes."
+  ) {
+  B32 handled = 0;
+
+  if (check_keybind(context, keybind_REF(CancelSelection), selection)) {
+    handled = 1;
+    exit_add_wire_mode(context);
+  }
+
+  return handled;
+}
 
 
-Define_Keybind(CreateProcess,
-               Proc_Keybind_Def_Default,
-               Key_Kind_Mouse0, Modifier_Key_Control,
-               Ui_Constraint_NoHotProcess,
-               "Create a new process.");
+
+Define_Keybind_NEW(CreateProcess,
+                   Proc_Keybind_Def_Default,
+                   Key_Kind_Mouse0, Modifier_Key_Control,
+                   Ui_Constraint_NoHotProcess,
+                   "Create a new process."
+  ) {
+  B32 handled = 0;
+
+  if (check_keybind(context, keybind_REF(CreateProcess), selection)) {
+    handled = 1;
+    Process *new_p = create_process(context);
+    if (new_p) {
+      Set_Flag(new_p->flags, Process_Flag_TextEdit);
+      new_p->position = GetScreenToWorld2D(context->ui_state.mouse_position, context->camera);
+      clear_active_processes(context);
+      SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, new_p, next_active, 0);
+    }
+  }
+
+  return handled;
+}
 
 
-Define_Keybind(DeleteProcess,
-               Proc_Keybind_Def_Default,
-               KEY_D, Modifier_Key_Control, 0,
-               "Delete the selected processes.");
+Define_Keybind_NEW(DeleteProcess,
+                   Proc_Keybind_Def_Default,
+                   KEY_D, Modifier_Key_Control, 0,
+                   "Delete the selected processes."
+  ) {
+  B32 handled = 0;
+
+  if (check_keybind(context, keybind_REF(DeleteProcess), selection)) {
+    handled = 1;
+    // delete processes
+    for (Process *a = context->active_processes.first; a != 0;) {
+      Process *next_active = a->next_active;
+      delete_process(context, a);
+      a = next_active;
+    }
+    clear_active_processes(context);
+  }
+
+  return handled;
+}
 
 
 Define_Keybind(CycleProcessDisplay,

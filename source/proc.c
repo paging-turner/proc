@@ -2505,20 +2505,10 @@ function void handle_process_interaction(Context *context) {
   }
 
   // create process
-  if (check_keybind(context, keybind_REF(CreateProcess), selection)) {
-    Process *new_p = create_process(context);
-    if (new_p) {
-      Set_Flag(new_p->flags, Process_Flag_TextEdit);
-      new_p->position = GetScreenToWorld2D(context->ui_state.mouse_position, context->camera);
-      clear_active_processes(context);
-      SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, new_p, next_active, 0);
-    }
-  }
+  handle_keybind_CreateProcess(context, selection, 0);
 
   // cancel selection
-  if (check_keybind(context, keybind_REF(CancelSelection), selection)) {
-    exit_add_wire_mode(context);
-  }
+  handle_keybind_CancelSelection(context, selection, 0);
 
   // enter bounding
   handle_keybind_Bound(context, selection, Keybind_Result_Enter);
@@ -2597,18 +2587,14 @@ function void handle_process_interaction(Context *context) {
         }
       }
     }
-    else if (check_keybind(context, keybind_REF(DeleteProcess), selection)) {
-      // delete processes
-      for (Process *a = context->active_processes.first; a != 0;) {
-        Process *next_active = a->next_active;
-        delete_process(context, a);
-        a = next_active;
+    else {
+      if (handle_keybind_DeleteProcess(context, selection, 0)) {
+        // handled
       }
-      clear_active_processes(context);
-    }
-    else if (!Get_Flag(ui_state->flags, Ui_State_Flag_action_occured)) {
-      // process label editing
-      handle_label_editing(context, context->active_processes);
+      else if (!Get_Flag(ui_state->flags, Ui_State_Flag_action_occured)) {
+        // process label editing
+        handle_label_editing(context, context->active_processes);
+      }
     }
   }
 }
