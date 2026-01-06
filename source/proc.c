@@ -2295,23 +2295,24 @@ function void handle_process_interaction(Context *context) {
   Ui_State *ui_state = &context->ui_state;
   Process_Selection selection = (Process_Selection){0};
 
-  B32 should_stop_dragging = keybind_REF(SelectSingleProcess)->handle(context, selection, Keybind_Result_Exit, 0, 0);
+  Keybind *select_single_process_keybind = keybind_action_REF(SelectSingleProcess);
+  B32 should_stop_dragging = select_single_process_keybind->handle(context, selection, Keybind_Result_Exit, 0, 0);
   Process *moved_wire = 0;
   Process_Connection moved_wire_conn = 0;
 
   // exit bounding
-  keybind_REF(Bound)->handle(context, selection, Keybind_Result_Exit, 0, 0);
+  keybind_action_REF(Bound)->handle(context, selection, Keybind_Result_Exit, 0, 0);
 
   // undo/redo
-  keybind_REF(Undo)->handle(context, selection, 0, 0, 0);
-  keybind_REF(Redo)->handle(context, selection, 0, 0, 0);
+  keybind_action_REF(Undo)->handle(context, selection, 0, 0, 0);
+  keybind_action_REF(Redo)->handle(context, selection, 0, 0, 0);
 
   // panning
-  keybind_REF(Pan)->handle(context, selection, 0, 0, 0);
+  keybind_action_REF(Pan)->handle(context, selection, 0, 0, 0);
 
   // zooming
-  keybind_REF(ZoomIn)->handle(context, selection, 0, 0, 0);
-  keybind_REF(ZoomOut)->handle(context, selection, 0, 0, 0);
+  keybind_action_REF(ZoomIn)->handle(context, selection, 0, 0, 0);
+  keybind_action_REF(ZoomOut)->handle(context, selection, 0, 0, 0);
 
   // process interaction
   for (Process *p = context->processes.first; p != 0; p = p->next) {
@@ -2332,9 +2333,9 @@ function void handle_process_interaction(Context *context) {
       }
     }
 
-    if (keybind_REF(SelectSingleProcess)->handle(context, selection, 0, is_active, p)) {
+    if (keybind_action_REF(SelectSingleProcess)->handle(context, selection, 0, is_active, p)) {
     }
-    else if (keybind_REF(SelectAnotherProcess)->handle(context, selection, Keybind_Result_Enter, is_active, p)) {
+    else if (keybind_action_REF(SelectAnotherProcess)->handle(context, selection, Keybind_Result_Enter, is_active, p)) {
       // handled
     } else if (selection.type == Process_Selection_Process) {
       // process hover
@@ -2385,20 +2386,20 @@ function void handle_process_interaction(Context *context) {
   }
 
   // create process
-  keybind_REF(CreateProcess)->handle(context, selection, 0, 0, 0);
+  keybind_action_REF(CreateProcess)->handle(context, selection, 0, 0, 0);
 
   // cancel selection
-  keybind_REF(CancelSelection)->handle(context, selection, 0, 0, 0);
+  keybind_action_REF(CancelSelection)->handle(context, selection, 0, 0, 0);
 
   // enter bounding
-  keybind_REF(Bound)->handle(context, selection, Keybind_Result_Enter, 0, 0);
+  keybind_action_REF(Bound)->handle(context, selection, Keybind_Result_Enter, 0, 0);
 
   // toggle between rounded and triangular shapes
-  keybind_REF(ToggleDisplayMode)->handle(context, selection, 0, 0, 0);
+  keybind_action_REF(ToggleDisplayMode)->handle(context, selection, 0, 0, 0);
 
   // copy/paste processes
-  keybind_REF(CopyProcess)->handle(context, selection, 0, 0, 0);
-  keybind_REF(PasteProcess)->handle(context, selection, 0, 0, 0);
+  keybind_action_REF(CopyProcess)->handle(context, selection, 0, 0, 0);
+  keybind_action_REF(PasteProcess)->handle(context, selection, 0, 0, 0);
 
 
   // handle moved wire
@@ -2439,10 +2440,10 @@ function void handle_process_interaction(Context *context) {
       // stop dragging
       Unset_Flag(context->flags, Context_Flag_Dragging);
     }
-    else if (keybind_REF(CycleProcessDisplay)->handle(context, selection, 0, 0, 0)) {
+    else if (keybind_action_REF(CycleProcessDisplay)->handle(context, selection, 0, 0, 0)) {
       // handled
     }
-    else if (keybind_REF(DeleteProcess)->handle(context, selection, 0, 0, 0)) {
+    else if (keybind_action_REF(DeleteProcess)->handle(context, selection, 0, 0, 0)) {
       // handled
     }
     else if (!Get_Flag(ui_state->flags, Ui_State_Flag_action_occured)) {

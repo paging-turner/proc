@@ -3,6 +3,11 @@
 //////////////////////////////////
 
 typedef enum {
+  Keybind_Behavior_Overwrite,
+  Keybind_Behavior_Alternate
+} Keybind_Behavior;
+
+typedef enum {
   Ui_Constraint__Null            = 0,
   Ui_Constraint_HoverProcess     = (1 << 1),
   Ui_Constraint_NoHotProcess     = (1 << 2),
@@ -27,6 +32,7 @@ typedef enum {
 
 
 struct Keybind {
+  Keybind_Behavior behavior;
   U32 bind;
   U32 key_kind; // Uses raylib's KEY_* enum and some special ones for mouse-keys
   U32 modifiers;
@@ -34,6 +40,7 @@ struct Keybind {
   String8 name;
   String8 description;
   B32 (*handle)(Context *context, Process_Selection selection, Keybind_Result desired_kb_res, B32 is_active, Process *p);
+  Keybind *next;
 };
 
 enum Keybind_Result {
@@ -64,6 +71,45 @@ typedef struct {
 
 
 
+
+///////////////////////////
+// Keybind Action
+///////////////////////////
+
+#define SYMBOL_SET_DEFINE keybind_action
+#define keybind_action_Type      Keybind
+#define keybind_action_section   "_prckbac"
+#define keybind_action_ID(N)    SymbolID(keybind_action, N)
+#define keybind_action_RAW(N)   SymbolRaw(keybind_action, N)
+#define keybind_action_DECL(N)  SymbolDeclare(keybind_action, N)
+#define keybind_action_REF(N)   SymbolMetadata(keybind_action, N)
+#include "../libraries/mr4th/src/mr4th_symbol_set.define.h"
+
+static keybind_action_DECL(Bound);
+static keybind_action_DECL(Pan);
+static keybind_action_DECL(ZoomIn);
+static keybind_action_DECL(ZoomOut);
+static keybind_action_DECL(SelectSingleProcess);
+static keybind_action_DECL(SelectAnotherProcess);
+static keybind_action_DECL(CancelSelection);
+static keybind_action_DECL(CreateProcess);
+static keybind_action_DECL(DeleteProcess);
+static keybind_action_DECL(CycleProcessDisplay);
+static keybind_action_DECL(ToggleDisplayMode);
+static keybind_action_DECL(CopyProcess);
+static keybind_action_DECL(PasteProcess);
+static keybind_action_DECL(Undo);
+static keybind_action_DECL(Redo);
+
+
+
+
+
+
+
+///////////////////////////
+// Keybind
+///////////////////////////
 #define SYMBOL_SET_DEFINE keybind
 #define keybind_Type      Keybind
 #define keybind_section   "_prckbnd"
@@ -73,17 +119,16 @@ typedef struct {
 #define keybind_REF(N)   SymbolMetadata(keybind, N)
 #include "../libraries/mr4th/src/mr4th_symbol_set.define.h"
 
-
-
-
-#define Define_Keybind(keybind_name, bind_value, k, m, c, d)\
-  static keybind_DECL(keybind_name);\
+#define Define_Keybind(keybind_name, alt_name, behavior_name, bind_value, k, m, c, d)\
+  static keybind_DECL(keybind_name##alt_name);\
   function B32 handle_keybind_##keybind_name##bind_value(Context *context, Process_Selection selection, Keybind_Result desired_kb_res, B32 is_active, Process *p);\
   MR4TH_BEFORE_MAIN(proc_keybind_##keybind_name##_##bind_value){\
-    keybind_Type *keybind = keybind_REF(keybind_name);\
+    keybind_Type *keybind = keybind_action_REF(keybind_name);\
     B32 both_zero = (U32)(bind_value) == 0 && keybind->bind == 0;\
     B32 stronger_bind = (U32)(bind_value) >= keybind->bind;\
-    if (both_zero || stronger_bind) {\
+    if (keybind->handle == 0 ||\
+        (behavior_name == Keybind_Behavior_Overwrite && stronger_bind)) {\
+      keybind->behavior = (behavior_name);\
       keybind->bind = (bind_value);\
       keybind->key_kind = (k);\
       keybind->modifiers = (m);\
@@ -91,6 +136,10 @@ typedef struct {
       keybind->name = str8_lit(Stringify(keybind_name));\
       keybind->description = str8_lit(d);\
       keybind->handle = handle_keybind_##keybind_name##bind_value;\
+      printf("setting handle %s %p %p\n", #keybind_name, keybind, handle_keybind_##keybind_name##bind_value);\
+    }\
+    else if (behavior_name == Keybind_Behavior_Alternate &&\
+             keybind->behavior != Keybind_Behavior_Overwrite) {\
     }\
   }\
   function B32 handle_keybind_##keybind_name##bind_value(Context *context, Process_Selection selection, Keybind_Result desired_kb_res, B32 is_active, Process *p)
@@ -174,13 +223,13 @@ function Keybind_Result check_keybind(Context *context, Keybind *keybind, Proces
 
 
 Define_Keybind(
-  Bound,
-  0,
+  Bound, ,
+  Keybind_Behavior_Alternate, 0,
   Key_Kind_Mouse0, 0,
   Ui_Constraint_NoHotProcess|Ui_Constraint_ExitOnKeyup,
   "Select multiple processes by drawing a rectangle with your mouse."
   ) {
-  Keybind_Result kb_res = check_keybind(context, keybind_REF(Bound), selection);
+  Keybind_Result kb_res = check_keybind(context, keybind_action_REF(Bound), selection);
   B32 handled = 0;
 
   if (desired_kb_res == Keybind_Result_Exit) {
@@ -210,15 +259,15 @@ Define_Keybind(
 
 
 Define_Keybind(
-  Pan,
-  0,
+  Pan, ,
+  Keybind_Behavior_Alternate, 0,
   Key_Kind_Mouse1, 0,
   Ui_Constraint_ExitOnKeyup,
   "Slide your field of view by moving your mouse."
   ) {
   B32 handled = 1;
   Assert(desired_kb_res == 0);
-  Keybind_Result kb_res = check_keybind(context, keybind_REF(Pan), selection);
+  Keybind_Result kb_res = check_keybind(context, keybind_action_REF(Pan), selection);
 
   if (kb_res == Keybind_Result_Enter) {
     Set_Flag(context->flags, Context_Flag_Panning);
@@ -249,8 +298,8 @@ Define_Keybind(
 function B32 keybind_zoom_handler(Context *context, Process_Selection selection);
 
 Define_Keybind(
-  ZoomIn,
-  0,
+  ZoomIn, ,
+  Keybind_Behavior_Alternate, 0,
   Key_Kind_MouseWheelUp, 0,
   Ui_Constraint_ActionNotOccured,
   "Zoom your field of view in to make objects appear closer.") {
@@ -258,21 +307,26 @@ Define_Keybind(
 }
 
 Define_Keybind(
-  ZoomOut,
-  0,
+  ZoomOut, ,
+  Keybind_Behavior_Alternate, 0,
   Key_Kind_MouseWheelDown, 0,
   Ui_Constraint_ActionNotOccured,
   "Zoom your field of view out to make objects appear further.") {
   return keybind_zoom_handler(context, selection);
 }
 
+#define Keybind_Has_Mouse_Wheel_Movement(keybind_name)\
+  (keybind_action_REF(keybind_name)->key_kind == Key_Kind_MouseWheelUp ||\
+   keybind_action_REF(keybind_name)->key_kind == Key_Kind_MouseWheelDown)
+
+
 function B32 keybind_zoom_handler(
   Context *context,
   Process_Selection selection
   ) {
   B32 handled = 0;
-  B32 zoom_in = check_keybind(context, keybind_REF(ZoomIn), selection) == Keybind_Result_Enter;
-  B32 zoom_out = check_keybind(context, keybind_REF(ZoomOut), selection) == Keybind_Result_Enter;
+  B32 zoom_in = check_keybind(context, keybind_action_REF(ZoomIn), selection) == Keybind_Result_Enter;
+  B32 zoom_out = check_keybind(context, keybind_action_REF(ZoomOut), selection) == Keybind_Result_Enter;
 
   Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position, context->camera);
   context->camera.offset = context->ui_state.mouse_position;
@@ -280,8 +334,7 @@ function B32 keybind_zoom_handler(
 
   if (zoom_in) {
     handled = 1;
-    if (keybind_REF(ZoomIn)->key_kind == Key_Kind_MouseWheelUp ||
-        keybind_REF(ZoomIn)->key_kind == Key_Kind_MouseWheelDown) {
+    if (Keybind_Has_Mouse_Wheel_Movement(ZoomIn)) {
       context->camera.zoom += -0.1f*context->ui_state.mouse_wheel_movement.y;
     }
     else {
@@ -290,8 +343,7 @@ function B32 keybind_zoom_handler(
   }
   else if (zoom_out) {
     handled = 1;
-    if (keybind_REF(ZoomOut)->key_kind == Key_Kind_MouseWheelUp ||
-        keybind_REF(ZoomOut)->key_kind == Key_Kind_MouseWheelDown) {
+    if (Keybind_Has_Mouse_Wheel_Movement(ZoomOut)) {
       context->camera.zoom += -0.1f*context->ui_state.mouse_wheel_movement.y;
     }
     else {
@@ -310,15 +362,15 @@ function B32 keybind_zoom_handler(
 
 
 Define_Keybind(
-  SelectSingleProcess,
-  0,
+  SelectSingleProcess, ,
+  Keybind_Behavior_Alternate, 0,
   Key_Kind_Mouse0, 0,
   Ui_Constraint_HoverProcess|Ui_Constraint_ExitOnKeyup,
   "Select a single process."
   ) {
   B32 handled = 0;
 
-  if (check_keybind(context, keybind_REF(SelectSingleProcess), selection) == Keybind_Result_Enter) {
+  if (check_keybind(context, keybind_action_REF(SelectSingleProcess), selection) == Keybind_Result_Enter) {
     handled = 1;
     B32 in_selection = selection.type == Process_Selection_In;
     B32 out_selection = selection.type == Process_Selection_Out;
@@ -371,14 +423,14 @@ Define_Keybind(
 
 
 Define_Keybind(
-  SelectAnotherProcess,
-  0,
+  SelectAnotherProcess, ,
+  Keybind_Behavior_Alternate, 0,
   Key_Kind_Mouse0, Modifier_Key_Control,
   Ui_Constraint_HoverProcess,
   "Add a process to the selected processes."
   ) {
   B32 handled = 0;
-  if (desired_kb_res == check_keybind(context, keybind_REF(SelectAnotherProcess), selection)) {
+  if (desired_kb_res == check_keybind(context, keybind_action_REF(SelectAnotherProcess), selection)) {
     handled = 1;
     if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
       Process *wire = get_process_wire_by_selection(context, selection);
@@ -404,15 +456,15 @@ Define_Keybind(
 
 
 Define_Keybind(
-  CancelSelection,
-  0,
+  CancelSelection, ,
+  Keybind_Behavior_Alternate, 0,
   Key_Kind_Mouse0, 0,
   Ui_Constraint_NoHotProcess,
   "Clear out the selected processes."
   ) {
   B32 handled = 0;
 
-  if (check_keybind(context, keybind_REF(CancelSelection), selection)) {
+  if (check_keybind(context, keybind_action_REF(CancelSelection), selection)) {
     handled = 1;
     exit_add_wire_mode(context);
   }
@@ -423,15 +475,15 @@ Define_Keybind(
 
 
 Define_Keybind(
-  CreateProcess,
-  0,
+  CreateProcess, ,
+  Keybind_Behavior_Alternate, 0,
   Key_Kind_Mouse0, Modifier_Key_Control,
   Ui_Constraint_NoHotProcess,
   "Create a new process."
   ) {
   B32 handled = 0;
 
-  if (check_keybind(context, keybind_REF(CreateProcess), selection)) {
+  if (check_keybind(context, keybind_action_REF(CreateProcess), selection)) {
     handled = 1;
     Process *new_p = create_process(context);
     if (new_p) {
@@ -448,14 +500,14 @@ Define_Keybind(
 
 
 Define_Keybind(
-  DeleteProcess,
-  0,
+  DeleteProcess, ,
+  Keybind_Behavior_Alternate, 0,
   KEY_D, Modifier_Key_Control, 0,
   "Delete the selected processes."
   ) {
   B32 handled = 0;
 
-  if (check_keybind(context, keybind_REF(DeleteProcess), selection)) {
+  if (check_keybind(context, keybind_action_REF(DeleteProcess), selection)) {
     handled = 1;
     // delete processes
     for (Process *a = context->active_processes.first; a != 0;) {
@@ -472,14 +524,14 @@ Define_Keybind(
 
 
 Define_Keybind(
-  CycleProcessDisplay,
-  0,
+  CycleProcessDisplay, ,
+  Keybind_Behavior_Alternate, 0,
   KEY_TAB, 0, 0,
   "Cycle through special displays for selected processes."
   ) {
   B32 handled = 0;
 
-  if (check_keybind(context, keybind_REF(CycleProcessDisplay), selection)) {
+  if (check_keybind(context, keybind_action_REF(CycleProcessDisplay), selection)) {
     handled = 1;
     // cycle through special process types (cups/caps/empty)
     for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
@@ -510,14 +562,14 @@ Define_Keybind(
 
 
 Define_Keybind(
-  ToggleDisplayMode,
-  0,
+  ToggleDisplayMode, ,
+  Keybind_Behavior_Alternate, 0,
   KEY_M, Modifier_Key_Control, 0,
   "Toggle between 'classic' and 'rounded' display modes."
   ) {
   B32 handler = 0;
 
-  if (check_keybind(context, keybind_REF(ToggleDisplayMode), selection) == Keybind_Result_Enter) {
+  if (check_keybind(context, keybind_action_REF(ToggleDisplayMode), selection) == Keybind_Result_Enter) {
     handler = 1;
     Toggle_Flag(context->flags, Context_Flag_RoundedShapes);
   }
@@ -529,14 +581,14 @@ Define_Keybind(
 
 
 Define_Keybind(
-  CopyProcess,
-  0,
+  CopyProcess, ,
+  Keybind_Behavior_Alternate, 0,
   KEY_C, Modifier_Key_Control, 0,
   "Copy selected processes."
   ) {
   B32 handled = 0;
 
-  if (check_keybind(context, keybind_REF(CopyProcess), selection) == Keybind_Result_Enter) {
+  if (check_keybind(context, keybind_action_REF(CopyProcess), selection) == Keybind_Result_Enter) {
     handled = 1;
     copy_active_processes(context);
   }
@@ -547,14 +599,14 @@ Define_Keybind(
 
 
 Define_Keybind(
-  PasteProcess,
-  0,
+  PasteProcess, ,
+  Keybind_Behavior_Alternate, 0,
   KEY_V, Modifier_Key_Control, 0,
   "Paste copied processes, centered at the mouse."
   ) {
   B32 handled = 0;
 
-  if (check_keybind(context, keybind_REF(PasteProcess), selection) == Keybind_Result_Enter) {
+  if (check_keybind(context, keybind_action_REF(PasteProcess), selection) == Keybind_Result_Enter) {
     handled = 1;
     paste_processes(context);
   }
@@ -566,14 +618,14 @@ Define_Keybind(
 
 
 Define_Keybind(
-  Undo,
-  0,
+  Undo, ,
+  Keybind_Behavior_Alternate, 0,
   KEY_Z, Modifier_Key_Control, 0,
   "Performs undo on the proc-trie."
   ) {
   B32 handled = 0;
 
-  if (check_keybind(context, keybind_REF(Undo), selection) == Keybind_Result_Enter) {
+  if (check_keybind(context, keybind_action_REF(Undo), selection) == Keybind_Result_Enter) {
     handled = 1;
     proc_trie_undo(context->proc_trie);
     gather_processes_from_trie(context);
@@ -585,14 +637,14 @@ Define_Keybind(
 
 
 Define_Keybind(
-  Redo,
-  0,
+  Redo, ,
+  Keybind_Behavior_Alternate, 0,
   KEY_Z, Modifier_Key_Control|Modifier_Key_Shift, 0,
   "Performs redo on the proc-trie."
   ) {
   B32 handled = 0;
 
-  if (check_keybind(context, keybind_REF(Redo), selection) == Keybind_Result_Enter) {
+  if (check_keybind(context, keybind_action_REF(Redo), selection) == Keybind_Result_Enter) {
     handled = 1;
     proc_trie_redo(context->proc_trie);
     gather_processes_from_trie(context);
