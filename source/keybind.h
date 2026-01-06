@@ -33,6 +33,7 @@ struct Keybind {
   Ui_Constraint constraint;
   String8 name;
   String8 description;
+  B32 (*handle)(Context *context, Process_Selection selection, Keybind_Result desired_kb_res, B32 is_active, Process *p);
 };
 
 enum Keybind_Result {
@@ -73,16 +74,12 @@ typedef struct {
 #include "../libraries/mr4th/src/mr4th_symbol_set.define.h"
 
 
-typedef enum {
-  Proc_Keybind_Def_Default,
-  Proc_Keybind_Def_Custom,
-} Proc_Keybind_Def_Kind;
-
 
 
 #define Define_Keybind(keybind_name, bind_value, k, m, c, d)\
   static keybind_DECL(keybind_name);\
-  MR4TH_BEFORE_MAIN(proc_keybind_##bind_value##_##keybind_name){\
+  function B32 handle_keybind_##keybind_name##bind_value(Context *context, Process_Selection selection, Keybind_Result desired_kb_res, B32 is_active, Process *p);\
+  MR4TH_BEFORE_MAIN(proc_keybind_##keybind_name##_##bind_value){\
     keybind_Type *keybind = keybind_REF(keybind_name);\
     B32 both_zero = (U32)(bind_value) == 0 && keybind->bind == 0;\
     B32 stronger_bind = (U32)(bind_value) >= keybind->bind;\
@@ -93,9 +90,10 @@ typedef enum {
       keybind->constraint = (c);\
       keybind->name = str8_lit(Stringify(keybind_name));\
       keybind->description = str8_lit(d);\
+      keybind->handle = handle_keybind_##keybind_name##bind_value;\
     }\
   }\
-  function B32 handle_keybind_##keybind_name(Context *context, Process_Selection selection, Keybind_Result desired_kb_res, B32 is_active, Process *p)
+  function B32 handle_keybind_##keybind_name##bind_value(Context *context, Process_Selection selection, Keybind_Result desired_kb_res, B32 is_active, Process *p)
 
 
 
@@ -177,7 +175,7 @@ function Keybind_Result check_keybind(Context *context, Keybind *keybind, Proces
 
 Define_Keybind(
   Bound,
-  Proc_Keybind_Def_Default,
+  0,
   Key_Kind_Mouse0, 0,
   Ui_Constraint_NoHotProcess|Ui_Constraint_ExitOnKeyup,
   "Select multiple processes by drawing a rectangle with your mouse."
@@ -213,7 +211,7 @@ Define_Keybind(
 
 Define_Keybind(
   Pan,
-  Proc_Keybind_Def_Default,
+  0,
   Key_Kind_Mouse1, 0,
   Ui_Constraint_ExitOnKeyup,
   "Slide your field of view by moving your mouse."
@@ -248,47 +246,60 @@ Define_Keybind(
 
 
 
-function B32 keybind_zoom_handler(Context *context, Process_Selection selection, Keybind_Result desired_kb_res);
+function B32 keybind_zoom_handler(Context *context, Process_Selection selection);
 
 Define_Keybind(
   ZoomIn,
-  Proc_Keybind_Def_Default,
+  0,
   Key_Kind_MouseWheelUp, 0,
   Ui_Constraint_ActionNotOccured,
   "Zoom your field of view in to make objects appear closer.") {
-  return keybind_zoom_handler(context, selection, desired_kb_res);
+  return keybind_zoom_handler(context, selection);
 }
 
 Define_Keybind(
   ZoomOut,
-  Proc_Keybind_Def_Default,
+  0,
   Key_Kind_MouseWheelDown, 0,
   Ui_Constraint_ActionNotOccured,
   "Zoom your field of view out to make objects appear further.") {
-  return keybind_zoom_handler(context, selection, desired_kb_res);
+  return keybind_zoom_handler(context, selection);
 }
 
 function B32 keybind_zoom_handler(
   Context *context,
-  Process_Selection selection,
-  Keybind_Result desired_kb_res
+  Process_Selection selection
   ) {
-  Assert(desired_kb_res == 0);
   B32 handled = 0;
   B32 zoom_in = check_keybind(context, keybind_REF(ZoomIn), selection) == Keybind_Result_Enter;
   B32 zoom_out = check_keybind(context, keybind_REF(ZoomOut), selection) == Keybind_Result_Enter;
 
-  if (zoom_in || zoom_out) {
-    handled = 1;
-    Keybind *keybind_in = keybind_REF(ZoomIn);
-    Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position, context->camera);
-    context->camera.offset = context->ui_state.mouse_position;
-    context->camera.target = mouse_world_position;
-    F32 zoom_delta = -0.1f * context->ui_state.mouse_wheel_movement.y;
+  Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position, context->camera);
+  context->camera.offset = context->ui_state.mouse_position;
+  context->camera.target = mouse_world_position;
 
-    context->camera.zoom += zoom_delta;
-    context->camera.zoom = Max(0.1f, context->camera.zoom);
+  if (zoom_in) {
+    handled = 1;
+    if (keybind_REF(ZoomIn)->key_kind == Key_Kind_MouseWheelUp ||
+        keybind_REF(ZoomIn)->key_kind == Key_Kind_MouseWheelDown) {
+      context->camera.zoom += -0.1f*context->ui_state.mouse_wheel_movement.y;
+    }
+    else {
+      context->camera.zoom *= 1.4f;
+    }
   }
+  else if (zoom_out) {
+    handled = 1;
+    if (keybind_REF(ZoomOut)->key_kind == Key_Kind_MouseWheelUp ||
+        keybind_REF(ZoomOut)->key_kind == Key_Kind_MouseWheelDown) {
+      context->camera.zoom += -0.1f*context->ui_state.mouse_wheel_movement.y;
+    }
+    else {
+      context->camera.zoom *= (1.0f/1.4f);
+    }
+  }
+
+  context->camera.zoom = Max(0.1f, context->camera.zoom);
 
   return handled;
 }
@@ -300,7 +311,7 @@ function B32 keybind_zoom_handler(
 
 Define_Keybind(
   SelectSingleProcess,
-  Proc_Keybind_Def_Default,
+  0,
   Key_Kind_Mouse0, 0,
   Ui_Constraint_HoverProcess|Ui_Constraint_ExitOnKeyup,
   "Select a single process."
@@ -361,7 +372,7 @@ Define_Keybind(
 
 Define_Keybind(
   SelectAnotherProcess,
-  Proc_Keybind_Def_Default,
+  0,
   Key_Kind_Mouse0, Modifier_Key_Control,
   Ui_Constraint_HoverProcess,
   "Add a process to the selected processes."
@@ -394,7 +405,7 @@ Define_Keybind(
 
 Define_Keybind(
   CancelSelection,
-  Proc_Keybind_Def_Default,
+  0,
   Key_Kind_Mouse0, 0,
   Ui_Constraint_NoHotProcess,
   "Clear out the selected processes."
@@ -413,7 +424,7 @@ Define_Keybind(
 
 Define_Keybind(
   CreateProcess,
-  Proc_Keybind_Def_Default,
+  0,
   Key_Kind_Mouse0, Modifier_Key_Control,
   Ui_Constraint_NoHotProcess,
   "Create a new process."
@@ -438,7 +449,7 @@ Define_Keybind(
 
 Define_Keybind(
   DeleteProcess,
-  Proc_Keybind_Def_Default,
+  0,
   KEY_D, Modifier_Key_Control, 0,
   "Delete the selected processes."
   ) {
@@ -462,7 +473,7 @@ Define_Keybind(
 
 Define_Keybind(
   CycleProcessDisplay,
-  Proc_Keybind_Def_Default,
+  0,
   KEY_TAB, 0, 0,
   "Cycle through special displays for selected processes."
   ) {
@@ -500,7 +511,7 @@ Define_Keybind(
 
 Define_Keybind(
   ToggleDisplayMode,
-  Proc_Keybind_Def_Default,
+  0,
   KEY_M, Modifier_Key_Control, 0,
   "Toggle between 'classic' and 'rounded' display modes."
   ) {
@@ -519,7 +530,7 @@ Define_Keybind(
 
 Define_Keybind(
   CopyProcess,
-  Proc_Keybind_Def_Default,
+  0,
   KEY_C, Modifier_Key_Control, 0,
   "Copy selected processes."
   ) {
@@ -537,7 +548,7 @@ Define_Keybind(
 
 Define_Keybind(
   PasteProcess,
-  Proc_Keybind_Def_Default,
+  0,
   KEY_V, Modifier_Key_Control, 0,
   "Paste copied processes, centered at the mouse."
   ) {
@@ -556,7 +567,7 @@ Define_Keybind(
 
 Define_Keybind(
   Undo,
-  Proc_Keybind_Def_Default,
+  0,
   KEY_Z, Modifier_Key_Control, 0,
   "Performs undo on the proc-trie."
   ) {
@@ -575,7 +586,7 @@ Define_Keybind(
 
 Define_Keybind(
   Redo,
-  Proc_Keybind_Def_Default,
+  0,
   KEY_Z, Modifier_Key_Control|Modifier_Key_Shift, 0,
   "Performs redo on the proc-trie."
   ) {

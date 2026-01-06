@@ -2295,23 +2295,23 @@ function void handle_process_interaction(Context *context) {
   Ui_State *ui_state = &context->ui_state;
   Process_Selection selection = (Process_Selection){0};
 
-  B32 should_stop_dragging = handle_keybind_SelectSingleProcess(context, selection, Keybind_Result_Exit, 0, 0);
+  B32 should_stop_dragging = keybind_REF(SelectSingleProcess)->handle(context, selection, Keybind_Result_Exit, 0, 0);
   Process *moved_wire = 0;
   Process_Connection moved_wire_conn = 0;
 
   // exit bounding
-  handle_keybind_Bound(context, selection, Keybind_Result_Exit, 0, 0);
+  keybind_REF(Bound)->handle(context, selection, Keybind_Result_Exit, 0, 0);
 
   // undo/redo
-  handle_keybind_Undo(context, selection, 0, 0, 0);
-  handle_keybind_Redo(context, selection, 0, 0, 0);
+  keybind_REF(Undo)->handle(context, selection, 0, 0, 0);
+  keybind_REF(Redo)->handle(context, selection, 0, 0, 0);
 
   // panning
-  handle_keybind_Pan(context, selection, 0, 0, 0);
+  keybind_REF(Pan)->handle(context, selection, 0, 0, 0);
 
   // zooming
-  handle_keybind_ZoomIn(context, selection, 0, 0, 0);
-  handle_keybind_ZoomOut(context, selection, 0, 0, 0);
+  keybind_REF(ZoomIn)->handle(context, selection, 0, 0, 0);
+  keybind_REF(ZoomOut)->handle(context, selection, 0, 0, 0);
 
   // process interaction
   for (Process *p = context->processes.first; p != 0; p = p->next) {
@@ -2332,9 +2332,9 @@ function void handle_process_interaction(Context *context) {
       }
     }
 
-    if (handle_keybind_SelectSingleProcess(context, selection, 0, is_active, p)) {
+    if (keybind_REF(SelectSingleProcess)->handle(context, selection, 0, is_active, p)) {
     }
-    else if (handle_keybind_SelectAnotherProcess(context, selection, Keybind_Result_Enter, is_active, p)) {
+    else if (keybind_REF(SelectAnotherProcess)->handle(context, selection, Keybind_Result_Enter, is_active, p)) {
       // handled
     } else if (selection.type == Process_Selection_Process) {
       // process hover
@@ -2364,6 +2364,7 @@ function void handle_process_interaction(Context *context) {
       }
     }
   }
+  // end process interaction
 
   // zero out selection
   selection = (Process_Selection){0};
@@ -2384,20 +2385,20 @@ function void handle_process_interaction(Context *context) {
   }
 
   // create process
-  handle_keybind_CreateProcess(context, selection, 0, 0, 0);
+  keybind_REF(CreateProcess)->handle(context, selection, 0, 0, 0);
 
   // cancel selection
-  handle_keybind_CancelSelection(context, selection, 0, 0, 0);
+  keybind_REF(CancelSelection)->handle(context, selection, 0, 0, 0);
 
   // enter bounding
-  handle_keybind_Bound(context, selection, Keybind_Result_Enter, 0, 0);
+  keybind_REF(Bound)->handle(context, selection, Keybind_Result_Enter, 0, 0);
 
   // toggle between rounded and triangular shapes
-  handle_keybind_ToggleDisplayMode(context, selection, 0, 0, 0);
+  keybind_REF(ToggleDisplayMode)->handle(context, selection, 0, 0, 0);
 
   // copy/paste processes
-  handle_keybind_CopyProcess(context, selection, 0, 0, 0);
-  handle_keybind_PasteProcess(context, selection, 0, 0, 0);
+  keybind_REF(CopyProcess)->handle(context, selection, 0, 0, 0);
+  keybind_REF(PasteProcess)->handle(context, selection, 0, 0, 0);
 
 
   // handle moved wire
@@ -2437,19 +2438,16 @@ function void handle_process_interaction(Context *context) {
       }
       // stop dragging
       Unset_Flag(context->flags, Context_Flag_Dragging);
-    } else {
-      if (handle_keybind_CycleProcessDisplay(context, selection, 0, 0, 0)) {
-        // handled
-      }
-      else {
-        if (handle_keybind_DeleteProcess(context, selection, 0, 0, 0)) {
-          // handled
-        }
-        else if (!Get_Flag(ui_state->flags, Ui_State_Flag_action_occured)) {
-          // process label editing
-          handle_label_editing(context, context->active_processes);
-        }
-      }
+    }
+    else if (keybind_REF(CycleProcessDisplay)->handle(context, selection, 0, 0, 0)) {
+      // handled
+    }
+    else if (keybind_REF(DeleteProcess)->handle(context, selection, 0, 0, 0)) {
+      // handled
+    }
+    else if (!Get_Flag(ui_state->flags, Ui_State_Flag_action_occured)) {
+      // process label editing
+      handle_label_editing(context, context->active_processes);
     }
   }
 }
