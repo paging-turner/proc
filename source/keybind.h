@@ -152,25 +152,88 @@ Define_Keybind_NEW(Bound,
 
 
 
-Define_Keybind(Pan,
+Define_Keybind_NEW(Pan,
                Proc_Keybind_Def_Default,
                Key_Kind_Mouse1, 0,
                Ui_Constraint_ExitOnKeyup,
-               "Slide your field of view by moving your mouse.");
+               "Slide your field of view by moving your mouse."
+  ) {
+  B32 handled = 1;
+  Assert(desired_kb_res == 0);
+  Keybind_Result kb_res = check_keybind(context, keybind_REF(Pan), selection);
+
+  if (kb_res == Keybind_Result_Enter) {
+    Set_Flag(context->flags, Context_Flag_Panning);
+    context->active_position = context->ui_state.mouse_position;
+    handled = 1;
+  }
+
+  if (Get_Flag(context->flags, Context_Flag_Panning)) {
+    if (kb_res == Keybind_Result_Exit) {
+      Unset_Flag(context->flags, Context_Flag_Panning);
+      handled = 1;
+    }
+    else {
+      // Update camera position
+      Vector2 delta = GetMouseDelta();
+      delta = Vector2Scale(delta, -1.0f/context->camera.zoom);
+      context->camera.target = Vector2Add(context->camera.target, delta);
+      handled = 1;
+    }
+  }
+
+  return handled;
+}
 
 
-Define_Keybind(ZoomIn,
-               Proc_Keybind_Def_Default,
-               Key_Kind_MouseWheelUp, 0,
-               Ui_Constraint_ActionNotOccured,
-               "Zoom your field of view in to make objects appear closer.");
 
 
-Define_Keybind(ZoomOut,
-               Proc_Keybind_Def_Default,
-               Key_Kind_MouseWheelDown, 0,
-               Ui_Constraint_ActionNotOccured,
-               "Zoom your field of view out to make objects appear further.");
+function B32 keybind_zoom_handler(Context *context, Process_Selection selection, Keybind_Result desired_kb_res);
+
+Define_Keybind_NEW(ZoomIn,
+                   Proc_Keybind_Def_Default,
+                   Key_Kind_MouseWheelUp, 0,
+                   Ui_Constraint_ActionNotOccured,
+                   "Zoom your field of view in to make objects appear closer.") {
+  return keybind_zoom_handler(context, selection, desired_kb_res);
+}
+
+Define_Keybind_NEW(ZoomOut,
+                   Proc_Keybind_Def_Default,
+                   Key_Kind_MouseWheelDown, 0,
+                   Ui_Constraint_ActionNotOccured,
+                   "Zoom your field of view out to make objects appear further.") {
+  return keybind_zoom_handler(context, selection, desired_kb_res);
+}
+
+function B32 keybind_zoom_handler(
+  Context *context,
+  Process_Selection selection,
+  Keybind_Result desired_kb_res
+  ) {
+  Assert(desired_kb_res == 0);
+  B32 handled = 0;
+  B32 zoom_in = check_keybind(context, keybind_REF(ZoomIn), selection) == Keybind_Result_Enter;
+  B32 zoom_out = check_keybind(context, keybind_REF(ZoomOut), selection) == Keybind_Result_Enter;
+
+  if (zoom_in || zoom_out) {
+    handled = 1;
+    Keybind *keybind_in = keybind_REF(ZoomIn);
+    Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position, context->camera);
+    context->camera.offset = context->ui_state.mouse_position;
+    context->camera.target = mouse_world_position;
+    F32 zoom_delta = -0.1f * context->ui_state.mouse_wheel_movement.y;
+
+    context->camera.zoom += zoom_delta;
+    context->camera.zoom = Max(0.1f, context->camera.zoom);
+  }
+
+  return handled;
+}
+
+
+
+
 
 
 Define_Keybind(SelectSingleProcess,

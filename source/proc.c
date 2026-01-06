@@ -2370,9 +2370,7 @@ function void handle_process_interaction(Context *context) {
   Process_Connection moved_wire_conn = 0;
 
   // exit bounding
-  if (handle_keybind_Bound(context, selection, Keybind_Result_Exit)) {
-    // handled
-  }
+  handle_keybind_Bound(context, selection, Keybind_Result_Exit);
 
   // undo/redo
   {
@@ -2388,59 +2386,17 @@ function void handle_process_interaction(Context *context) {
   }
 
   // panning
-  {
-    if (check_keybind(context, keybind_REF(Pan), selection) == Keybind_Result_Enter) {
-      Set_Flag(context->flags, Context_Flag_Panning);
-      context->active_position = context->ui_state.mouse_position;
-    }
-
-    if (Get_Flag(context->flags, Context_Flag_Panning)) {
-      if (check_keybind(context, keybind_REF(Pan), selection) == Keybind_Result_Exit) {
-        Unset_Flag(context->flags, Context_Flag_Panning);
-      } else {
-        // Update camera position
-        Vector2 delta = GetMouseDelta();
-        delta = Vector2Scale(delta, -1.0f/context->camera.zoom);
-        context->camera.target = Vector2Add(context->camera.target, delta);
-      }
-    }
-  }
+  handle_keybind_Pan(context, selection, 0);
 
   // zooming
-  {
-    B32 zoom_in = check_keybind(context, keybind_REF(ZoomIn), selection) == Keybind_Result_Enter;
-    B32 zoom_out = check_keybind(context, keybind_REF(ZoomOut), selection) == Keybind_Result_Enter;
-
-    if (zoom_in || zoom_out) {
-      Keybind *keybind_in = keybind_REF(ZoomIn);
-      Keybind *keybind_out = keybind_REF(ZoomOut);
-      B32 in_wheel = (keybind_in->key_kind == Key_Kind_MouseWheelUp ||
-                      keybind_in->key_kind == Key_Kind_MouseWheelDown);
-      B32 out_wheel = (keybind_out->key_kind == Key_Kind_MouseWheelUp ||
-                       keybind_out->key_kind == Key_Kind_MouseWheelDown);
-      Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position, context->camera);
-      context->camera.offset = context->ui_state.mouse_position;
-      context->camera.target = mouse_world_position;
-      F32 zoom_delta;
-
-      // HACK: is it hacky that when check the mouse wheel and handle it differently like this? maybe not.
-      if ((zoom_in && in_wheel) || (zoom_out && out_wheel)) {
-        zoom_delta = -0.1f * ui_state->mouse_wheel_movement.y;
-      } else if (zoom_in) {
-        zoom_delta = 0.2f;
-      } else {
-        zoom_delta = -0.2f;
-      }
-
-      context->camera.zoom += zoom_delta;
-      context->camera.zoom = Max(0.1f, context->camera.zoom);
-    }
-  }
+  handle_keybind_ZoomIn(context, selection, 0);
+  handle_keybind_ZoomOut(context, selection, 0);
 
   // process interaction
   for (Process *p = context->processes.first; p != 0; p = p->next) {
     selection = get_process_selection(context, p);
-    Assign_Flag(ui_state->flags, Ui_State_Flag_hot_id_assigned, selection.hot_id_assigned || Get_Flag(ui_state->flags, Ui_State_Flag_hot_id_assigned));
+    B32 hot_id_assigned = selection.hot_id_assigned || Get_Flag(ui_state->flags, Ui_State_Flag_hot_id_assigned);
+    Assign_Flag(ui_state->flags, Ui_State_Flag_hot_id_assigned, hot_id_assigned);
     B32 is_active = is_active_process(context, p);
 
     // check if we need to stop dragging wire
@@ -2498,7 +2454,8 @@ function void handle_process_interaction(Context *context) {
           context->active_position = context->ui_state.mouse_position;
         }
       }
-    } else if (handle_keybind_SelectAnotherProcess(context, selection, Keybind_Result_Enter)) {
+    }
+    else if (handle_keybind_SelectAnotherProcess(context, selection, Keybind_Result_Enter)) {
       // handled
     } else if (selection.type == Process_Selection_Process) {
       // process hover
@@ -2564,9 +2521,7 @@ function void handle_process_interaction(Context *context) {
   }
 
   // enter bounding
-  if (handle_keybind_Bound(context, selection, Keybind_Result_Enter)) {
-    // handled
-  }
+  handle_keybind_Bound(context, selection, Keybind_Result_Enter);
 
   // toggle between rounded and triangular shapes
   if (check_keybind(context, keybind_REF(ToggleDisplayMode), selection) == Keybind_Result_Enter) {
@@ -2641,7 +2596,8 @@ function void handle_process_interaction(Context *context) {
           }
         }
       }
-    } else if (check_keybind(context, keybind_REF(DeleteProcess), selection)) {
+    }
+    else if (check_keybind(context, keybind_REF(DeleteProcess), selection)) {
       // delete processes
       for (Process *a = context->active_processes.first; a != 0;) {
         Process *next_active = a->next_active;
@@ -2649,7 +2605,8 @@ function void handle_process_interaction(Context *context) {
         a = next_active;
       }
       clear_active_processes(context);
-    } else if (!Get_Flag(ui_state->flags, Ui_State_Flag_action_occured)) {
+    }
+    else if (!Get_Flag(ui_state->flags, Ui_State_Flag_action_occured)) {
       // process label editing
       handle_label_editing(context, context->active_processes);
     }
