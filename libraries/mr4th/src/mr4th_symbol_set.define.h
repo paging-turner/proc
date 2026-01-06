@@ -1,3 +1,11 @@
+/*
+  DISCLAIMER: This is a non-standard, experimental version of "mr4th_symbol_set.h".
+
+  This version is NOT portable with the standard version from the mr4th codebase.
+
+  If you want to use symbol-sets, then it would be best to get the symbol-set code from mr4th.com.
+*/
+
 MR4TH_SYM_COMPTIME U64 SymbolCount(SYMBOL_SET_DEFINE) = 0;
 MR4TH_SYM_COMPTIME SYMBOL__TYPE(SYMBOL_SET_DEFINE) * SymbolBasePtr(SYMBOL_SET_DEFINE) = 0;
 MR4TH_SYM_COMPTIME SYMBOL__TYPE(SYMBOL_SET_DEFINE) SYMBOL__SYM(SYMBOL_SET_DEFINE,0);

@@ -15,6 +15,10 @@
 #define push_struct(a, s) arena_push((a), sizeof(s))
 
 #include "../libraries/macho_objdump.h"
+
+
+// NOTE: This project currently uses a non-standard, experimental version of "mr4th_symbol_set.h".
+// TODO: Stop using the experimental version
 #include "../libraries/mr4th/src/mr4th_symbol_set.h"
 
 

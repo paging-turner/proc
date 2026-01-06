@@ -49,24 +49,6 @@ enum Keybind_Result {
   Keybind_Result_Exit,
 };
 
-typedef enum {
-  Keybind_Config_Token_Kind__Null,
-  Keybind_Config_Token_Kind_Identifier,
-  Keybind_Config_Token_Kind_Equal,
-  Keybind_Config_Token_Kind_Semicolon,
-} Keybind_Config_Token_Kind;
-
-typedef struct Keybind_Config_Token Keybind_Config_Token;
-struct Keybind_Config_Token {
-  Keybind_Config_Token_Kind kind;
-  String8 name;
-  Keybind_Config_Token *next;
-};
-
-typedef struct {
-  Keybind_Config_Token *first;
-  Keybind_Config_Token *last;
-} Keybind_Config_Tokens;
 
 
 

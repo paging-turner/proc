@@ -1,3 +1,14 @@
+/*
+  DISCLAIMER: This is a non-standard, experimental version of "mr4th_symbol_set.h".
+
+  This version is NOT portable with the standard version from the mr4th codebase.
+
+  If you want to use symbol-sets, then it would be best to get the symbol-set code from mr4th.com.
+*/
+
+
+
+
 #ifndef MR4TH_SYMBOL_SET_H
 #define MR4TH_SYMBOL_SET_H
 
