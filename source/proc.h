@@ -266,11 +266,12 @@ typedef struct {
 
 // TODO: maybe this should be a mode and not flags?
 typedef enum {
-  Context_Flag_Dragging       = 1 << 0,
-  Context_Flag_Bounding       = 1 << 1,
-  Context_Flag_Panning        = 1 << 2,
-  Context_Flag_NewWire        = 1 << 3,
-  Context_Flag_RoundedShapes  = 1 << 4,
+  Context_Flag_Dragging           = 1 << 0,
+  Context_Flag_Bounding           = 1 << 1,
+  Context_Flag_Panning            = 1 << 2,
+  Context_Flag_NewWire            = 1 << 3,
+  Context_Flag_RoundedShapes      = 1 << 4,
+  Context_Flag_DataStructureView  = 1 << 5,
 } Context_Flag;
 
 
@@ -326,6 +327,7 @@ struct Context {
   Process_List processes;
   Process_List free_processes;
   Process_List free_ui_elements;
+  Process_List ds_view_processes; // Used with Context_Flag_DataStructureView
   String_Chunk_List free_strings;
 
   Process *hot_process;

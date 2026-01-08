@@ -104,7 +104,6 @@ enum Keybind_Result {
       keybind->name = str8_lit(Stringify(action_name##keybind_name));\
       keybind->description = str8_lit(d);\
       keybind->handle = handle_keybind_##action_name##bind_value;\
-      printf("setting handle %s %p %p\n", #keybind_name, keybind, handle_keybind_##action_name##bind_value);\
     }\
     else if (behavior_name == Keybind_Behavior_Alternate &&\
              keybind->behavior != Keybind_Behavior_Overwrite) {\

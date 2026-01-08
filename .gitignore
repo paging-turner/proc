@@ -8,5 +8,6 @@ build/
 
 config/*
 !config/custom_keybinds_example.h
+!config/standard_keybinds.h
 
 saves/*

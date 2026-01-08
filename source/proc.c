@@ -88,6 +88,7 @@ Define_Cycle_Detector_Function(
 
 
 #include "../source/keybind.h"
+#include "../config/standard_keybinds.h"
 #ifdef Custom_Keybinds
 # include "../config/custom_keybinds.h"
 #endif
@@ -1718,9 +1719,6 @@ function void delete_process(Context *context, Process *p) {
 
   U32 delete_count = add_process_to_delete_list(context, &to_delete, p);
 
-  // free string-chunks from label
-  remove_string_chunk_list(context, &p->label);
-
   // check for wires connected to the deleted process, and delete those also
   for (Process *wire = context->processes.first; wire != 0;) {
     B32 in_match = wire->in == p;
@@ -2304,6 +2302,17 @@ function void handle_process_interaction(Context *context) {
   Process *moved_wire = 0;
   Process_Connection moved_wire_conn = 0;
 
+  // custom keybinds
+  // TODO: We need a pre/post/per-process options for custom keybinds depending on when they want to occur.
+  U32 symbol_count = SymbolCount(keybind_action);
+  for (U32 i = 0; i < symbol_count; ++i) {
+    Keybind *keybind = SymbolMetadataFromID(keybind_action, i+1);
+
+    if (Is_Keybind_Custom(keybind)) {
+      keybind->handle(context, selection, 0, 0, 0);
+    }
+  }
+
   // exit bounding
   keybind_action_REF(Bound)->handle(context, selection, Keybind_Result_Exit, 0, 0);
 
@@ -2453,16 +2462,6 @@ function void handle_process_interaction(Context *context) {
     else if (!Get_Flag(ui_state->flags, Ui_State_Flag_action_occured)) {
       // process label editing
       handle_label_editing(context, context->active_processes);
-    }
-  }
-
-  // custom keybinds
-  U32 symbol_count = SymbolCount(keybind_action);
-  for (U32 i = 0; i < symbol_count; ++i) {
-    Keybind *keybind = SymbolMetadataFromID(keybind_action, i+1);
-
-    if (Is_Keybind_Custom(keybind)) {
-      keybind->handle(context, selection, 0, 0, 0);
     }
   }
 }
@@ -2976,7 +2975,12 @@ int main(void) {
     check_context(&context);
 
     render_ClearBackground(prc, global_background_color);
-    draw_processes(&context);
+    if (Get_Flag(context.flags, Context_Flag_DataStructureView)) {
+      // TODO: Draw a data-structure with processes.
+    }
+    else {
+      draw_processes(&context);
+    }
 #if 1
     draw_info_panel(&context);
 #endif
