@@ -477,8 +477,10 @@ Steady_Function Steady_Trie(Edit_Result) steady_trie(edit)(
         if (edit_kind == Steady_Trie(Edit_Insert)) {
           node->occupied[slot_value] = 1;
 #if Steady_Trie_Use_Key_Value_Pair
-          Steady_Trie_Value_Type value = values[i];
-          node->values[slot_value] = value;
+          if (values) {
+            Steady_Trie_Value_Type value = values[i];
+            node->values[slot_value] = value;
+          }
 #endif
         }
         else if (edit_kind == Steady_Trie(Edit_Delete)) {

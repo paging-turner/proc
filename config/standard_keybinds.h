@@ -29,8 +29,16 @@ function void proc_ds_view_node_handler(
   Proc_Trie_Node *node
   ) {
   Context *context = (Context *)maybe_context;
-  if (iter->stack->next) {
-    printf("    %p -> %p\n", iter->stack->next->node, node);
+  if (iter->stack->next && iter->stack->next->node) {
+    /* B32 found = 0; */
+    /* for (Process *p = context->ds_view_processes.first; p != 0; p = p->next) { */
+    /*   if (p->in == in && p->out == out) { */
+    /*     found = 1; */
+    /*   } */
+    /* } */
+    /* if (!found) { */
+    /*   Assert(!"TODO: Add a wire-process"); */
+    /* } */
   }
 }
 
@@ -39,7 +47,7 @@ Define_Keybind(
   Keybind_Behavior_Overwrite, 274,
   KEY_D, Modifier_Key_Control|Modifier_Key_Shift,
   Ui_Constraint_ActionNotOccured,
-  "Toggle a 'Data Structure View', which uses processes to display a hot data-structure."
+  "Toggle a 'Data Structure View', which shows the proc-trie using processes."
   ) {
   B32 handled = 0;
 
@@ -50,7 +58,6 @@ Define_Keybind(
     }
     else {
       clear_ds_view_process_list(context);
-      printf("trie %p\n", context->proc_trie);
       proc_trie_crawl_trie(context->per_frame_arena,
                            context->proc_trie,
                            proc_ds_view_root_handler,
