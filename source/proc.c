@@ -2460,10 +2460,8 @@ function void handle_process_interaction(Context *context) {
   U32 symbol_count = SymbolCount(keybind_action);
   for (U32 i = 0; i < symbol_count; ++i) {
     Keybind *keybind = SymbolMetadataFromID(keybind_action, i+1);
-    /* Keybind *keybind = keybind_action_REF(keybind_action); */
 
-    // TODO: There should be a better way to determine custom keybinds than just non-zero bind-value....
-    if (keybind && keybind->bind > 0 && keybind->handle) {
+    if (Is_Keybind_Custom(keybind)) {
       keybind->handle(context, selection, 0, 0, 0);
     }
   }

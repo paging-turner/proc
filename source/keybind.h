@@ -67,25 +67,6 @@ enum Keybind_Result {
 #define keybind_action_REF(N)   SymbolMetadata(keybind_action, N)
 #include "../libraries/mr4th/src/mr4th_symbol_set.define.h"
 
-static keybind_action_DECL(Bound);
-static keybind_action_DECL(Pan);
-static keybind_action_DECL(ZoomIn);
-static keybind_action_DECL(ZoomOut);
-static keybind_action_DECL(SelectSingleProcess);
-static keybind_action_DECL(SelectAnotherProcess);
-static keybind_action_DECL(CancelSelection);
-static keybind_action_DECL(CreateProcess);
-static keybind_action_DECL(DeleteProcess);
-static keybind_action_DECL(CycleProcessDisplay);
-static keybind_action_DECL(ToggleDisplayMode);
-static keybind_action_DECL(CopyProcess);
-static keybind_action_DECL(PasteProcess);
-static keybind_action_DECL(Undo);
-static keybind_action_DECL(Redo);
-
-
-
-
 
 
 
@@ -101,11 +82,16 @@ static keybind_action_DECL(Redo);
 #define keybind_REF(N)   SymbolMetadata(keybind, N)
 #include "../libraries/mr4th/src/mr4th_symbol_set.define.h"
 
-#define Define_Keybind(keybind_name, alt_name, behavior_name, bind_value, k, m, c, d)\
-  static keybind_DECL(keybind_name##alt_name);\
-  function B32 handle_keybind_##keybind_name##bind_value(Context *context, Process_Selection selection, Keybind_Result desired_kb_res, B32 is_active, Process *p);\
-  MR4TH_BEFORE_MAIN(proc_keybind_##keybind_name##_##bind_value){\
-    keybind_Type *keybind = keybind_action_REF(keybind_name);\
+// TODO: There should be a better way to determine custom keybinds than just non-zero bind-value....
+#define Is_Keybind_Custom(keybind)\
+  ((keybind) && (keybind)->bind > 0 && (keybind)->handle)
+
+#define Define_Keybind(action_name, keybind_name, behavior_name, bind_value, k, m, c, d)\
+  static keybind_action_DECL(action_name);\
+  static keybind_DECL(action_name##keybind_name);\
+  function B32 handle_keybind_##action_name##bind_value(Context *context, Process_Selection selection, Keybind_Result desired_kb_res, B32 is_active, Process *p);\
+  MR4TH_BEFORE_MAIN(proc_keybind_##action_name##_##bind_value){\
+    keybind_Type *keybind = keybind_action_REF(action_name);\
     B32 both_zero = (U32)(bind_value) == 0 && keybind->bind == 0;\
     B32 stronger_bind = (U32)(bind_value) >= keybind->bind;\
     if (keybind->handle == 0 ||\
@@ -115,16 +101,16 @@ static keybind_action_DECL(Redo);
       keybind->key_kind = (k);\
       keybind->modifiers = (m);\
       keybind->constraint = (c);\
-      keybind->name = str8_lit(Stringify(keybind_name));\
+      keybind->name = str8_lit(Stringify(action_name##keybind_name));\
       keybind->description = str8_lit(d);\
-      keybind->handle = handle_keybind_##keybind_name##bind_value;\
-      printf("setting handle %s %p %p\n", #keybind_name, keybind, handle_keybind_##keybind_name##bind_value);\
+      keybind->handle = handle_keybind_##action_name##bind_value;\
+      printf("setting handle %s %p %p\n", #keybind_name, keybind, handle_keybind_##action_name##bind_value);\
     }\
     else if (behavior_name == Keybind_Behavior_Alternate &&\
              keybind->behavior != Keybind_Behavior_Overwrite) {\
     }\
   }\
-  function B32 handle_keybind_##keybind_name##bind_value(Context *context, Process_Selection selection, Keybind_Result desired_kb_res, B32 is_active, Process *p)
+  function B32 handle_keybind_##action_name##bind_value(Context *context, Process_Selection selection, Keybind_Result desired_kb_res, B32 is_active, Process *p)
 
 
 

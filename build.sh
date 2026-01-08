@@ -72,7 +72,7 @@ if [ -e ../config/custom_keybinds.h ]; then
     Settings="$Settings -DCustom_Keybinds"
 fi
 
-# Settings="$Settings -fno-pie"
+Settings="$Settings -fno-pie"  # No-pie is used for symbol-sets at the moment
 # Settings="$Settings -E"
 
 
