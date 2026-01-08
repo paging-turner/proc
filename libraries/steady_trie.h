@@ -683,8 +683,9 @@ Steady_Function B32 steady_trie(ensure_key_has_occupation)(
 Steady_Function void steady_trie(crawl_trie)(
   Arena *arena,
   Steady_Trie(Trie) *trie,
-  void (*root_handler)(Steady_Trie(Iterator) *iter, Steady_Trie(Root) *root),
-  void (*node_handler)(Steady_Trie(Iterator) *iter, Steady_Trie(Node) *node)
+  void (*root_handler)(void *caller_data, Steady_Trie(Iterator) *iter, Steady_Trie(Root) *root),
+  void (*node_handler)(void *caller_data, Steady_Trie(Iterator) *iter, Steady_Trie(Node) *node),
+  void *caller_data
   ) {
   for (Steady_Trie(Root) *root = trie->root; root != 0; root = root->next_edit) {
     Steady_Trie(Node) *prev_node = 0;
@@ -697,10 +698,10 @@ Steady_Function void steady_trie(crawl_trie)(
       iter->stack = stack;
       iter->stack->node = root->node;
 
-      root_handler(iter, root);
+      root_handler(caller_data, iter, root);
 
       if (iter && iter->stack && iter->stack->node) {
-        node_handler(iter, iter->stack->node);
+        node_handler(caller_data, iter, iter->stack->node);
       }
 
       for (;;) {
@@ -721,7 +722,7 @@ Steady_Function void steady_trie(crawl_trie)(
               iter->stack->index += 1;
               new_stack_node->node = next_node;
               SLLStackPush(iter->stack, new_stack_node);
-              node_handler(iter, next_node);
+              node_handler(caller_data, iter, next_node);
             }
             else {
               iter->stack->index += 1;

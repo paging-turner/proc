@@ -610,6 +610,13 @@ function void remove_copy_process_list(Context *context, Process_List *list) {
   }
 }
 
+function void clear_ds_view_process_list(Context *context) {
+  // TODO: @Speed can probably do some fancy stuff with just the ends of the list?
+  for (Process *p = context->ds_view_processes.first; p != 0; p = p->next) {
+    remove_process_from_process_list(context, &context->ds_view_processes, p);
+  }
+}
+
 
 function Process *add_process_to_copy_list(Context *context, Process *p, Vector2 *copy_center, F32 *copy_count) {
   Process *copied_p = create_detached_process(context);
@@ -2298,7 +2305,7 @@ function void handle_process_interaction(Context *context) {
   Process_Selection selection = (Process_Selection){0};
 
   Keybind *select_single_process_keybind = keybind_action_REF(SelectSingleProcess);
-  B32 should_stop_dragging = select_single_process_keybind->handle(context, selection, Keybind_Result_Exit, 0, 0);
+  B32 should_stop_dragging = check_keybind(context, keybind_action_REF(SelectSingleProcess), selection) == Keybind_Result_Exit;
   Process *moved_wire = 0;
   Process_Connection moved_wire_conn = 0;
 
@@ -2554,7 +2561,7 @@ function void draw_process_with_triangle_strip(Context *context, Process_Shape s
 }
 
 
-function void draw_processes(Context *context) {
+function void draw_processes(Context *context, Process *processes) {
   Render_Context *rc = &context->process_render_context;
 
   Color bg_color = global_process_bg_color;
@@ -2572,7 +2579,7 @@ function void draw_processes(Context *context) {
   B32 rounded = Get_Flag(context->flags, Context_Flag_RoundedShapes);
 
   // draw processes
-  for (Process *p = context->processes.first; p != 0; p = p->next) {
+  for (Process *p = processes; p != 0; p = p->next) {
     B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
     U8 *label_c_string = c_string_from_string_chunk_list(context->temp_arena, &p->label);
     S32 text_width = MeasureText((char *)label_c_string, font_size);
@@ -2697,7 +2704,7 @@ function void draw_processes(Context *context) {
   }
 
   // draw wires
-  for (Process *p = context->processes.first; p != 0; p = p->next) {
+  for (Process *p = processes; p != 0; p = p->next) {
     B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
 
     if (is_wire) {
@@ -2747,7 +2754,9 @@ function void draw_processes(Context *context) {
   }
 
   // draw new wire
-  if (Get_Flag(context->flags, Context_Flag_NewWire) && context->active_processes.first) {
+  if (Get_Flag(context->flags, Context_Flag_NewWire) &&
+      context->active_processes.first &&
+      processes == context->processes.first) {
     Process_Shape shape = get_process_shape(context, context->active_processes.first);
     Vector2 position = shape.new_wire_position;
 
@@ -2977,9 +2986,10 @@ int main(void) {
     render_ClearBackground(prc, global_background_color);
     if (Get_Flag(context.flags, Context_Flag_DataStructureView)) {
       // TODO: Draw a data-structure with processes.
+      draw_processes(&context, context.ds_view_processes.first);
     }
     else {
-      draw_processes(&context);
+      draw_processes(&context, context.processes.first);
     }
 #if 1
     draw_info_panel(&context);

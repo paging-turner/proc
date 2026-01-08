@@ -4,17 +4,31 @@
   The goal of this file is to show some examples of custom keybinds.
 */
 
+
+
+
+//////////////////////////////////
+// Data-Structure Viewer
+//////////////////////////////////
+
 function void proc_ds_view_root_handler(
+  void *maybe_context,
   Proc_Trie_Iterator *iter,
   Proc_Trie_Root *root
   ) {
-  printf("  root %p\n", root);
+  Context *context = (Context *)maybe_context;
+  Process *p = create_detached_process(context);
+  SLLQueuePush(context->ds_view_processes.first, context->ds_view_processes.last, p);
+
+  p->label = string_chunk_list_from_string8(context, str8_lit("Trie"));
 }
 
 function void proc_ds_view_node_handler(
+  void *maybe_context,
   Proc_Trie_Iterator *iter,
   Proc_Trie_Node *node
   ) {
+  Context *context = (Context *)maybe_context;
   if (iter->stack->next) {
     printf("    %p -> %p\n", iter->stack->next->node, node);
   }
@@ -35,11 +49,13 @@ Define_Keybind(
     if (Get_Flag(context->flags, Context_Flag_DataStructureView)) {
     }
     else {
+      clear_ds_view_process_list(context);
       printf("trie %p\n", context->proc_trie);
       proc_trie_crawl_trie(context->per_frame_arena,
                            context->proc_trie,
                            proc_ds_view_root_handler,
-                           proc_ds_view_node_handler);
+                           proc_ds_view_node_handler,
+                           context);
     }
 
     // TODO: Map the proc-trie to processes with the same topology.

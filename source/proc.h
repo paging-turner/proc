@@ -5,11 +5,13 @@
 typedef struct Process Process;
 typedef struct Process_Shape Process_Shape;
 typedef struct Process_Selection Process_Selection;
+typedef struct Process_List Process_List;
 typedef enum Process_Connection Process_Connection;
 typedef enum Keybind_Result Keybind_Result;
 typedef struct Keybind Keybind;
 typedef struct Context Context;
 function void clear_processes(Context *context);
+function Process *create_detached_process(Context *context);
 function Process *create_process(Context *context);
 function String_Chunk *create_string_chunk(Context *context);
 function String_Chunk_List string_chunk_list_from_string8(Context *context, String8 string8);
@@ -26,6 +28,8 @@ function void copy_active_processes(Context *context);
 function void paste_processes(Context *context);
 function void gather_processes_from_trie(Context *context);
 function void connect_processes(Context *context, Process *out, Process *in);
+function void remove_process_from_process_list(Context *context, Process_List *list, Process *p);
+function void clear_ds_view_process_list(Context *context);
 
 
 
@@ -151,10 +155,10 @@ struct Process_Selection {
   B32 hot_id_assigned;
 };
 
-typedef struct {
+struct Process_List {
   Process *first;
   Process *last;
-} Process_List;
+};
 
 typedef struct {
   Vector2 first_point;
