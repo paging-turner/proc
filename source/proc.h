@@ -27,7 +27,8 @@ function void delete_process(Context *context, Process *p);
 function void copy_active_processes(Context *context);
 function void paste_processes(Context *context);
 function void gather_processes_from_trie(Context *context);
-function void connect_processes(Context *context, Process *out, Process *in);
+function Process *connect_detached_processes(Context *context, Process *out, Process *in);
+function Process *connect_processes(Context *context, Process *out, Process *in);
 function void remove_process_from_process_list(Context *context, Process_List *list, Process *p);
 function void clear_ds_view_process_list(Context *context);
 
@@ -120,6 +121,8 @@ struct Process {
 
   U8 *label_c_string;
   U32 label_cursor;
+
+  void *ref;
 };
 
 // Process Trie
@@ -332,6 +335,7 @@ struct Context {
   Process_List free_processes;
   Process_List free_ui_elements;
   Process_List ds_view_processes; // Used with Context_Flag_DataStructureView
+  Process_List gross_temp_processes;
   String_Chunk_List free_strings;
 
   Process *hot_process;

@@ -1812,8 +1812,30 @@ function void delete_process(Context *context, Process *p) {
   }
 }
 
+function Process *connect_detached_processes(
+  Context *context,
+  Process *out,
+  Process *in
+  ) {
+  Process *new_wire = create_detached_process(context);
 
-function void connect_processes(Context *context, Process *out, Process *in) {
+  if (new_wire && out && in) {
+    Set_Flag(new_wire->flags, Process_Flag_Wire);
+
+    new_wire->out = out;
+    new_wire->in = in;
+
+    new_wire->which_out = out->out_count;
+    new_wire->which_in = in->in_count;
+
+    out->in_count += 1;
+    in->out_count += 1;
+  }
+
+  return new_wire;
+}
+
+function Process *connect_processes(Context *context, Process *out, Process *in) {
   Process *new_wire = create_process(context);
 
   if (new_wire && out && in) {
@@ -1833,6 +1855,8 @@ function void connect_processes(Context *context, Process *out, Process *in) {
   }
 
   gather_processes_from_trie(context);
+
+  return new_wire;
 }
 
 

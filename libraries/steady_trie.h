@@ -179,6 +179,7 @@ struct Steady_Trie(Node) {
 #if Steady_Trie_Use_Key_Value_Pair
   Steady_Trie_Value_Type values[Steady_Trie_Slot_Count];
 #endif
+  Steady_Trie_Value_Type *ref;
 };
 
 struct Steady_Trie(Root) {
@@ -187,6 +188,7 @@ struct Steady_Trie(Root) {
   struct Steady_Trie(Root) *next_branch;
   struct Steady_Trie(Root) *prev_branch;
   Steady_Trie(Node) *node;
+  Steady_Trie_Value_Type *ref;
 };
 
 struct Steady_Trie(Settings) {
@@ -205,6 +207,7 @@ struct Steady_Trie(Trie) {
   Steady_Trie(Settings) settings;
 #if Steady_Trie_Use_Key_Value_Pair
   U64 generation;
+  Steady_Trie_Value_Type *ref;
 #endif
 };
 
