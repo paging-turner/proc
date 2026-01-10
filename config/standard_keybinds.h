@@ -11,20 +11,44 @@
 // Data-Structure Viewer
 //////////////////////////////////
 
+#define Create_Process_Reference(a)\
+  Stmnt(\
+    (a)->ref = create_detached_process(context);\
+    (a)->ref->ref = (a);\
+    )
+
+#define Ensure_Process_Reference_Exists(a)\
+  Stmnt(\
+    if ((a)->ref == 0) {\
+      Create_Process_Reference(a);\
+    })
+
+#define Push_Ds_View_Process(p)\
+  SLLQueuePush(context->ds_view_processes.first, context->ds_view_processes.last, (p))
+
 function void proc_ds_view_root_handler(
   void *maybe_context,
   Proc_Trie_Iterator *iter,
   Proc_Trie_Root *root
   ) {
   Context *context = (Context *)maybe_context;
-  Process *p = create_detached_process(context);
+  Proc_Trie_Trie *trie = context->proc_trie;
 
-  // setup references
-  p->ref = root;
-  root->ref = p;
+  B32 null_trie_ref = trie->ref == 0;
 
-  p->label = string_chunk_list_from_string8(context, str8_lit("Trie"));
-  SLLQueuePush(context->ds_view_processes.first, context->ds_view_processes.last, p);
+  Ensure_Process_Reference_Exists(trie);
+  trie->ref->label = string_chunk_list_from_string8(context, str8_lit("Trie"));
+
+  Ensure_Process_Reference_Exists(root);
+  root->ref->label = string_chunk_list_from_string8(context, str8_lit("Root"));
+
+  Process *wire = connect_detached_processes(context, trie->ref, root->ref);
+
+  if (null_trie_ref) {
+    Push_Ds_View_Process(trie->ref);
+  }
+  Push_Ds_View_Process(root->ref);
+  Push_Ds_View_Process(wire);
 }
 
 
@@ -34,43 +58,6 @@ function void proc_ds_view_node_handler(
   Proc_Trie_Node *node
   ) {
   Context *context = (Context *)maybe_context;
-
-  if (node->ref == 0) {
-    node->ref = create_detached_process(context);
-    node->ref->ref = node;
-  }
-
-#if 1
-  if (iter->stack->next && iter->stack->next->node) {
-    B32 found = 0;
-    Proc_Trie_Node *in = node;
-    Proc_Trie_Node *out = iter->stack->next->node;
-    Assert(in->ref);
-    Assert(out->ref);
-
-    for (Process *p = context->ds_view_processes.first; p != 0; p = p->next) {
-      if (Get_Flag(p->flags, Process_Flag_Wire)) {
-        Assert(p->in->ref && p->out->ref);
-        if ((p->in && p->in->ref == in) &&
-            (p->out && p->out->ref == out)) {
-          found = 1;
-        }
-      }
-    }
-    if (!found) {
-      Process *p = create_detached_process(context);
-      Process *w = connect_detached_processes(context, out->ref, in->ref);
-
-      if (w && w->in && w->out && w->in->ref && w->out->ref) {
-        w->in->ref = in;
-        w->out->ref = out;
-      }
-
-      SLLQueuePush(context->ds_view_processes.first, context->ds_view_processes.last, p);
-      SLLQueuePush(context->ds_view_processes.first, context->ds_view_processes.last, w);
-    }
-  }
-#endif
 }
 
 Define_Keybind(

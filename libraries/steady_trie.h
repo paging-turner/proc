@@ -281,17 +281,13 @@ Steady_Function void steady_trie(iter_next)(Steady_Trie(Iterator) *iter) {
         B32 occupied = iter->stack->node->occupied[iter->stack->index];
         if (occupied && not_visited) {
           // NOTE: key_shift is only used for when the root is the most-significant byte.
-          U32 key_shift = 1;
           U64 key = Steady_Trie_Get_Initial_Iter_Key_Chunk(iter->stack->index);
-          U32 depth = 1;
           // Build up the key value by collecting all the indices on the stack.
           for (Steady_Trie(Stack_Node) *stack_node = iter->stack->next;
                stack_node != 0;
                stack_node = stack_node->next) {
             // NOTE: All of the nodes in the stack, aside from the current one, have had their indices iterated, so we need to subtract one from them. (This is alway why we do not process the current stack-node in the loop.)
             key = Steady_Trie_Get_Next_Iter_Key_Chunk(key, key_shift, stack_node->index);
-            key_shift += 1;
-            depth += 1;
           }
 #if !Steady_Trie_Root_Is_Lowest_Significant_Byte
           // fill in zeros at the end

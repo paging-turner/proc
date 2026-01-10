@@ -1828,8 +1828,8 @@ function Process *connect_detached_processes(
     new_wire->which_out = out->out_count;
     new_wire->which_in = in->in_count;
 
-    out->in_count += 1;
-    in->out_count += 1;
+    out->out_count += 1;
+    in->in_count += 1;
   }
 
   return new_wire;
