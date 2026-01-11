@@ -18,10 +18,14 @@ Define_Keybind(
   B32 handled = 0;
 
   if (check_keybind(context, keybind_action_REF(ProcessConnectionByModClick), selection) == Keybind_Result_Enter) {
+    handled = 1;
+
     Assert(context->active_processes.first);
     Assert(context->hot_process);
-    connect_processes(context, context->active_processes.first, context->hot_process);
-    handled = 1;
+
+    for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
+      connect_processes(context, a, context->hot_process);
+    }
   }
 
   return handled;
