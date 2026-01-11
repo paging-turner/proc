@@ -2220,6 +2220,7 @@ function Ui_State get_ui_state(Context *context) {
   Assign_Flag(ui_state.flags, Ui_State_Flag_control_down, IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL));
   Assign_Flag(ui_state.flags, Ui_State_Flag_shift_down, IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT));
   Assign_Flag(ui_state.flags, Ui_State_Flag_alt_down, IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT));
+  Assign_Flag(ui_state.flags, Ui_State_Flag_super_down, IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER));
   Unset_Flag(ui_state.flags, Ui_State_Flag_action_occured);
 
   return ui_state;

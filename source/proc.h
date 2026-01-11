@@ -291,7 +291,8 @@ typedef enum {
   Ui_State_Flag_control_down    = 1 << 5,
   Ui_State_Flag_shift_down      = 1 << 6,
   Ui_State_Flag_alt_down        = 1 << 7,
-  Ui_State_Flag_action_occured  = 1 << 8,
+  Ui_State_Flag_super_down      = 1 << 8,
+  Ui_State_Flag_action_occured  = 1 << 9,
 } Ui_State_Flag;
 
 typedef struct {

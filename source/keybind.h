@@ -10,9 +10,11 @@ typedef enum {
 typedef enum {
   Ui_Constraint__Null            = 0,
   Ui_Constraint_HoverProcess     = (1 << 1),
-  Ui_Constraint_NoHotProcess     = (1 << 2),
-  Ui_Constraint_ExitOnKeyup      = (1 << 3),
-  Ui_Constraint_ActionNotOccured = (1 << 4),
+  Ui_Constraint_HotProcess       = (1 << 2),
+  Ui_Constraint_NoHotProcess     = (1 << 3),
+  Ui_Constraint_ExitOnKeyup      = (1 << 4),
+  Ui_Constraint_ActionNotOccured = (1 << 5),
+  Ui_Constraint_ActiveProcesses  = (1 << 6),
 } Ui_Constraint;
 
 // NOTE: These enum values start with values higher than raylib's highest KEY_* value, which is in the 300s
@@ -28,6 +30,7 @@ typedef enum {
   Modifier_Key_Control  = (1 << 0),
   Modifier_Key_Shift    = (1 << 2),
   Modifier_Key_Alt      = (1 << 3),
+  Modifier_Key_Super    = (1 << 4),
 } Modifier_Key;
 
 
@@ -143,19 +146,25 @@ function Keybind_Result check_keybind(Context *context, Keybind *keybind, Proces
   } break;
   }
 
-  B32 modifier_control = Get_Flag(keybind->modifiers, Modifier_Key_Control) ? 1 : 0;
-  B32 modifier_shift = Get_Flag(keybind->modifiers, Modifier_Key_Shift) ? 1 : 0;
-  B32 modifier_alt = Get_Flag(keybind->modifiers, Modifier_Key_Alt) ? 1 : 0;
+  B32 modifier_control = Get_Flag_Bool(keybind->modifiers, Modifier_Key_Control);
+  B32 modifier_shift = Get_Flag_Bool(keybind->modifiers, Modifier_Key_Shift);
+  B32 modifier_alt = Get_Flag_Bool(keybind->modifiers, Modifier_Key_Alt);
+  B32 modifier_super = Get_Flag_Bool(keybind->modifiers, Modifier_Key_Super);
 
   B32 modifier_matches = ((!(modifier_control ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_control_down))) &&
                           (!(modifier_shift ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_shift_down))) &&
-                          (!(modifier_alt ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_alt_down))));
+                          (!(modifier_alt ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_alt_down))) &&
+                          (!(modifier_super ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_super_down))));
 
   B32 constraint_hover_process =
     (Get_Flag(keybind->constraint, Ui_Constraint_HoverProcess)
      ? selection.type != 0
      : 1);
-  B32 constraint_no_hover =
+  B32 constraint_hot =
+    (Get_Flag(keybind->constraint, Ui_Constraint_HotProcess)
+     ? (context->hot_process != 0)
+     : 1);
+  B32 constraint_no_hot =
     (Get_Flag(keybind->constraint, Ui_Constraint_NoHotProcess)
      ? (context->hot_process == 0)
      : 1);
@@ -163,10 +172,17 @@ function Keybind_Result check_keybind(Context *context, Keybind *keybind, Proces
     (Get_Flag(keybind->constraint, Ui_Constraint_ActionNotOccured)
      ? (Get_Flag_Bool(ui_state->flags, Ui_State_Flag_action_occured) == 0)
      : 1);
+  B32 constraint_active_processes =
+    (Get_Flag(keybind->constraint, Ui_Constraint_ActiveProcesses)
+     ? (context->active_processes.first != 0)
+     : 1);
+
 
   B32 constraints_met = (constraint_hover_process &&
-                         constraint_no_hover &&
-                         constraint_action_not_occured);
+                         constraint_hot &&
+                         constraint_no_hot &&
+                         constraint_action_not_occured &&
+                         constraint_active_processes);
 
   if (key_is_pressed && modifier_matches && constraints_met) {
     result = Keybind_Result_Enter;
@@ -332,7 +348,7 @@ Define_Keybind(
   SelectSingleProcess, ,
   Keybind_Behavior_Alternate, 0,
   Key_Kind_Mouse0, 0,
-  Ui_Constraint_HoverProcess|Ui_Constraint_ExitOnKeyup,
+  Ui_Constraint_HoverProcess|Ui_Constraint_ExitOnKeyup|Ui_Constraint_ActionNotOccured,
   "Select a single process."
   ) {
   B32 handled = 0;

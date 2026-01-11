@@ -5,6 +5,30 @@
 */
 
 
+////////////////////////////////////////
+// Process-Connection By Clicking
+////////////////////////////////////////
+Define_Keybind(
+  ProcessConnectionByModClick,,
+  Keybind_Behavior_Alternate, 34,
+  Key_Kind_Mouse0, Modifier_Key_Super,
+  Ui_Constraint_ActionNotOccured|Ui_Constraint_HotProcess|Ui_Constraint_ActiveProcesses,
+  "Connect clicked process to all active processes."
+  ) {
+  B32 handled = 0;
+
+  if (check_keybind(context, keybind_action_REF(ProcessConnectionByModClick), selection) == Keybind_Result_Enter) {
+    Assert(context->active_processes.first);
+    Assert(context->hot_process);
+    connect_processes(context, context->active_processes.first, context->hot_process);
+    handled = 1;
+  }
+
+  return handled;
+}
+
+
+
 
 
 //////////////////////////////////
