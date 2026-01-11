@@ -5,6 +5,7 @@
 */
 
 
+
 ////////////////////////////////////////
 // Process-Connection By Clicking
 ////////////////////////////////////////
@@ -12,12 +13,16 @@ Define_Keybind(
   ProcessConnectionByModClick,,
   Keybind_Behavior_Alternate, 34,
   Key_Kind_Mouse0, Modifier_Key_Super,
-  Ui_Constraint_ActionNotOccured|Ui_Constraint_HotProcess|Ui_Constraint_ActiveProcesses,
+  (Ui_Constraint_ActionNotOccured |
+   Ui_Constraint_HotProcess |
+   Ui_Constraint_ActiveProcesses),
   "Connect clicked process to all active processes."
   ) {
   B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
 
-  if (check_keybind(context, keybind_action_REF(ProcessConnectionByModClick), selection) == Keybind_Result_Enter) {
+  if (Test_Keybind(&env, ProcessConnectionByModClick, Enter)) {
     handled = 1;
 
     Assert(context->active_processes.first);
@@ -96,6 +101,9 @@ Define_Keybind(
   "Toggle a 'Data Structure View', which shows the proc-trie using processes."
   ) {
   B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
 
   if (check_keybind(context, keybind_action_REF(ToggleDataStructureView), selection) == Keybind_Result_Enter) {
     handled = 1;

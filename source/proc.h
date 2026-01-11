@@ -297,6 +297,8 @@ typedef enum {
 
 typedef struct {
   U32 flags;
+  U32 kb_action;
+
   Vector2 mouse_position;
   Vector2 mouse_wheel_movement;
 

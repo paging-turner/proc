@@ -1118,6 +1118,7 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
         if (IsMouseButtonPressed(0)) {
           interacted = 1;
           Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
+          /* apsodfphaspidmuh(ui_state, SymbolIDFromMetadata(keybind_action, keybind_action_ID())); */
           if (Get_Flag(element->flags, Process_Flag_CanBeActive)) {
             clear_active_processes(context);
             SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, element, next_active, 0);
@@ -1197,6 +1198,7 @@ function void ui_box_begin(Context *context, Ui_Box *box, B32 sizing) {
       if (Get_Flag(box->flags, Ui_Box_Flag_ScrollY) &&
           ui_state->mouse_wheel_movement.y != 0) {
         Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
+        /* apsodfphaspidmuh(ui_state, SymbolIDFromMetadata(keybind_action, keybind)); */
         F32 max_scroll_offset = box->raw_size.y - size.y;
         box->scroll_offset.y += ui_state->mouse_wheel_movement.y;
         box->scroll_offset.y = Clamp(box->scroll_offset.y, -max_scroll_offset, 0.0f);
@@ -2209,8 +2211,10 @@ get_process_selection(Context *context, Process *p) {
 
 function Ui_State get_ui_state(Context *context) {
   Ui_State ui_state;
+
   ui_state.mouse_position = GetMousePosition(); // TODO: mouse_position should go in ui_state
   ui_state.mouse_wheel_movement = GetMouseWheelMoveV();
+  ui_state.kb_action = 0;
 
   Assign_Flag(ui_state.flags, Ui_State_Flag_mouse0_pressed, IsMouseButtonPressed(0));
   Assign_Flag(ui_state.flags, Ui_State_Flag_mouse1_pressed, IsMouseButtonPressed(1));
@@ -2334,6 +2338,8 @@ function void handle_process_interaction(Context *context) {
   Process *moved_wire = 0;
   Process_Connection moved_wire_conn = 0;
 
+  Keybind_Environment env = create_keybind_environment(context, selection);
+
   // custom keybinds
   // TODO: We need a pre/post/per-process options for custom keybinds depending on when they want to occur.
   U32 symbol_count = SymbolCount(keybind_action);
@@ -2341,27 +2347,28 @@ function void handle_process_interaction(Context *context) {
     Keybind *keybind = SymbolMetadataFromID(keybind_action, i+1);
 
     if (Is_Keybind_Custom(keybind)) {
-      keybind->handle(context, selection, 0, 0, 0);
+      keybind->handle(env, 0, 0, 0);
     }
   }
 
   // exit bounding
-  keybind_action_REF(Bound)->handle(context, selection, Keybind_Result_Exit, 0, 0);
+  keybind_action_REF(Bound)->handle(env, Keybind_Result_Exit, 0, 0);
 
   // undo/redo
-  keybind_action_REF(Undo)->handle(context, selection, 0, 0, 0);
-  keybind_action_REF(Redo)->handle(context, selection, 0, 0, 0);
+  keybind_action_REF(Undo)->handle(env, 0, 0, 0);
+  keybind_action_REF(Redo)->handle(env, 0, 0, 0);
 
   // panning
-  keybind_action_REF(Pan)->handle(context, selection, 0, 0, 0);
+  keybind_action_REF(Pan)->handle(env, 0, 0, 0);
 
   // zooming
-  keybind_action_REF(ZoomIn)->handle(context, selection, 0, 0, 0);
-  keybind_action_REF(ZoomOut)->handle(context, selection, 0, 0, 0);
+  keybind_action_REF(ZoomIn)->handle(env, 0, 0, 0);
+  keybind_action_REF(ZoomOut)->handle(env, 0, 0, 0);
 
   // process interaction
   for (Process *p = context->processes.first; p != 0; p = p->next) {
     selection = get_process_selection(context, p);
+    env = create_keybind_environment(context, selection);
     B32 hot_id_assigned = selection.hot_id_assigned || Get_Flag(ui_state->flags, Ui_State_Flag_hot_id_assigned);
     Assign_Flag(ui_state->flags, Ui_State_Flag_hot_id_assigned, hot_id_assigned);
     B32 is_active = is_active_process(context, p);
@@ -2378,9 +2385,9 @@ function void handle_process_interaction(Context *context) {
       }
     }
 
-    if (keybind_action_REF(SelectSingleProcess)->handle(context, selection, 0, is_active, p)) {
+    if (keybind_action_REF(SelectSingleProcess)->handle(env, 0, is_active, p)) {
     }
-    else if (keybind_action_REF(SelectAnotherProcess)->handle(context, selection, Keybind_Result_Enter, is_active, p)) {
+    else if (keybind_action_REF(SelectAnotherProcess)->handle(env, Keybind_Result_Enter, is_active, p)) {
       // handled
     } else if (selection.type == Process_Selection_Process) {
       // process hover
@@ -2431,20 +2438,20 @@ function void handle_process_interaction(Context *context) {
   }
 
   // create process
-  keybind_action_REF(CreateProcess)->handle(context, selection, 0, 0, 0);
+  keybind_action_REF(CreateProcess)->handle(env, 0, 0, 0);
 
   // cancel selection
-  keybind_action_REF(CancelSelection)->handle(context, selection, 0, 0, 0);
+  keybind_action_REF(CancelSelection)->handle(env, 0, 0, 0);
 
   // enter bounding
-  keybind_action_REF(Bound)->handle(context, selection, Keybind_Result_Enter, 0, 0);
+  keybind_action_REF(Bound)->handle(env, Keybind_Result_Enter, 0, 0);
 
   // toggle between rounded and triangular shapes
-  keybind_action_REF(ToggleDisplayMode)->handle(context, selection, 0, 0, 0);
+  keybind_action_REF(ToggleDisplayMode)->handle(env, 0, 0, 0);
 
   // copy/paste processes
-  keybind_action_REF(CopyProcess)->handle(context, selection, 0, 0, 0);
-  keybind_action_REF(PasteProcess)->handle(context, selection, 0, 0, 0);
+  keybind_action_REF(CopyProcess)->handle(env, 0, 0, 0);
+  keybind_action_REF(PasteProcess)->handle(env, 0, 0, 0);
 
 
   // handle moved wire
@@ -2485,10 +2492,10 @@ function void handle_process_interaction(Context *context) {
       // stop dragging
       Unset_Flag(context->flags, Context_Flag_Dragging);
     }
-    else if (keybind_action_REF(CycleProcessDisplay)->handle(context, selection, 0, 0, 0)) {
+    else if (keybind_action_REF(CycleProcessDisplay)->handle(env, 0, 0, 0)) {
       // handled
     }
-    else if (keybind_action_REF(DeleteProcess)->handle(context, selection, 0, 0, 0)) {
+    else if (keybind_action_REF(DeleteProcess)->handle(env, 0, 0, 0)) {
       // handled
     }
     else if (!Get_Flag(ui_state->flags, Ui_State_Flag_action_occured)) {

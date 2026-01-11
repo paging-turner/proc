@@ -33,6 +33,11 @@ typedef enum {
   Modifier_Key_Super    = (1 << 4),
 } Modifier_Key;
 
+typedef struct Keybind_Environment {
+  Context *context;
+  Process_Selection selection;
+} Keybind_Environment;
+
 
 struct Keybind {
   Keybind_Behavior behavior;
@@ -42,7 +47,7 @@ struct Keybind {
   Ui_Constraint constraint;
   String8 name;
   String8 description;
-  B32 (*handle)(Context *context, Process_Selection selection, Keybind_Result desired_kb_res, B32 is_active, Process *p);
+  B32 (*handle)(Keybind_Environment env, Keybind_Result desired_kb_res, B32 is_active, Process *p);
   Keybind *next;
 };
 
@@ -51,7 +56,6 @@ enum Keybind_Result {
   Keybind_Result_Enter,
   Keybind_Result_Exit,
 };
-
 
 
 
@@ -92,7 +96,7 @@ enum Keybind_Result {
 #define Define_Keybind(action_name, keybind_name, behavior_name, bind_value, k, m, c, d)\
   static keybind_action_DECL(action_name);\
   static keybind_DECL(action_name##keybind_name);\
-  function B32 handle_keybind_##action_name##bind_value(Context *context, Process_Selection selection, Keybind_Result desired_kb_res, B32 is_active, Process *p);\
+  function B32 handle_keybind_##action_name##bind_value(Keybind_Environment env, Keybind_Result desired_kb_res, B32 is_active, Process *p);\
   MR4TH_BEFORE_MAIN(proc_keybind_##action_name##_##bind_value){\
     keybind_Type *keybind = keybind_action_REF(action_name);\
     B32 both_zero = (U32)(bind_value) == 0 && keybind->bind == 0;\
@@ -112,11 +116,28 @@ enum Keybind_Result {
              keybind->behavior != Keybind_Behavior_Overwrite) {\
     }\
   }\
-  function B32 handle_keybind_##action_name##bind_value(Context *context, Process_Selection selection, Keybind_Result desired_kb_res, B32 is_active, Process *p)
+  function B32 handle_keybind_##action_name##bind_value(Keybind_Environment env, Keybind_Result desired_kb_res, B32 is_active, Process *p)
 
 
+function Keybind_Environment create_keybind_environment(
+  Context *context,
+  Process_Selection selection
+  ) {
+  Keybind_Environment env = (Keybind_Environment){0};
 
+  env.context = context;
+  env.selection = selection;
 
+  return env;
+}
+
+#define Check_Keybind(env, name)\
+  (((env) && (env)->context)\
+   ? check_keybind((env)->context, keybind_action_REF(name), (env)->selection)\
+   : 0)
+
+#define Test_Keybind(env, name, kb_res)\
+  (Check_Keybind(env, name) == Keybind_Result_##kb_res)
 
 function Keybind_Result check_keybind(Context *context, Keybind *keybind, Process_Selection selection) {
   Keybind_Result result = 0;
@@ -156,33 +177,45 @@ function Keybind_Result check_keybind(Context *context, Keybind *keybind, Proces
                           (!(modifier_alt ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_alt_down))) &&
                           (!(modifier_super ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_super_down))));
 
-  B32 constraint_hover_process =
-    (Get_Flag(keybind->constraint, Ui_Constraint_HoverProcess)
-     ? selection.type != 0
-     : 1);
-  B32 constraint_hot =
-    (Get_Flag(keybind->constraint, Ui_Constraint_HotProcess)
-     ? (context->hot_process != 0)
-     : 1);
-  B32 constraint_no_hot =
-    (Get_Flag(keybind->constraint, Ui_Constraint_NoHotProcess)
-     ? (context->hot_process == 0)
-     : 1);
-  B32 constraint_action_not_occured =
-    (Get_Flag(keybind->constraint, Ui_Constraint_ActionNotOccured)
-     ? (Get_Flag_Bool(ui_state->flags, Ui_State_Flag_action_occured) == 0)
-     : 1);
-  B32 constraint_active_processes =
-    (Get_Flag(keybind->constraint, Ui_Constraint_ActiveProcesses)
-     ? (context->active_processes.first != 0)
-     : 1);
+  // constraints
+  B32 constraints_met = 0;
+  {
+    B32 constraint_hover_process =
+      (Get_Flag(keybind->constraint, Ui_Constraint_HoverProcess)
+       ? selection.type != 0
+       : 1);
+
+    B32 constraint_hot =
+      (Get_Flag(keybind->constraint, Ui_Constraint_HotProcess)
+       ? (context->hot_process != 0)
+       : 1);
+
+    B32 constraint_no_hot =
+      (Get_Flag(keybind->constraint, Ui_Constraint_NoHotProcess)
+       ? (context->hot_process == 0)
+       : 1);
+
+    U32 kb_action_id = SymbolIDFromMetadata(keybind_action, keybind);
+    B32 action_occured_bool = Get_Flag_Bool(ui_state->flags, Ui_State_Flag_action_occured);
+    B32 constraint_action_not_occured =
+      (Get_Flag(keybind->constraint, Ui_Constraint_ActionNotOccured)
+       ? ((kb_action_id == ui_state->kb_action)
+          ? 1
+          : (action_occured_bool == 0))
+       : 1);
+
+    B32 constraint_active_processes =
+      (Get_Flag(keybind->constraint, Ui_Constraint_ActiveProcesses)
+       ? (context->active_processes.first != 0)
+       : 1);
 
 
-  B32 constraints_met = (constraint_hover_process &&
-                         constraint_hot &&
-                         constraint_no_hot &&
-                         constraint_action_not_occured &&
-                         constraint_active_processes);
+    constraints_met = (constraint_hover_process &&
+                       constraint_hot &&
+                       constraint_no_hot &&
+                       constraint_action_not_occured &&
+                       constraint_active_processes);
+  }
 
   if (key_is_pressed && modifier_matches && constraints_met) {
     result = Keybind_Result_Enter;
@@ -196,6 +229,7 @@ function Keybind_Result check_keybind(Context *context, Keybind *keybind, Proces
 
   if (result == Keybind_Result_Enter) {
     Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
+    ui_state->kb_action = SymbolIDFromMetadata(keybind_action, keybind);
   }
 
   return result;
@@ -212,8 +246,10 @@ Define_Keybind(
   Ui_Constraint_NoHotProcess|Ui_Constraint_ExitOnKeyup,
   "Select multiple processes by drawing a rectangle with your mouse."
   ) {
-  Keybind_Result kb_res = check_keybind(context, keybind_action_REF(Bound), selection);
   B32 handled = 0;
+  Keybind_Result kb_res = Check_Keybind(&env, Bound);
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
 
   if (desired_kb_res == Keybind_Result_Exit) {
     if (Get_Flag(context->flags, Context_Flag_Bounding)) {
@@ -249,7 +285,10 @@ Define_Keybind(
   "Slide your field of view by moving your mouse."
   ) {
   B32 handled = 1;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
   Assert(desired_kb_res == 0);
+
   Keybind_Result kb_res = check_keybind(context, keybind_action_REF(Pan), selection);
 
   if (kb_res == Keybind_Result_Enter) {
@@ -286,6 +325,9 @@ Define_Keybind(
   Key_Kind_MouseWheelUp, 0,
   Ui_Constraint_ActionNotOccured,
   "Zoom your field of view in to make objects appear closer.") {
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
   return keybind_zoom_handler(context, selection);
 }
 
@@ -295,6 +337,9 @@ Define_Keybind(
   Key_Kind_MouseWheelDown, 0,
   Ui_Constraint_ActionNotOccured,
   "Zoom your field of view out to make objects appear further.") {
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
   return keybind_zoom_handler(context, selection);
 }
 
@@ -348,10 +393,16 @@ Define_Keybind(
   SelectSingleProcess, ,
   Keybind_Behavior_Alternate, 0,
   Key_Kind_Mouse0, 0,
-  Ui_Constraint_HoverProcess|Ui_Constraint_ExitOnKeyup|Ui_Constraint_ActionNotOccured,
+  Ui_Constraint_HotProcess|Ui_Constraint_ExitOnKeyup|Ui_Constraint_ActionNotOccured,
   "Select a single process."
   ) {
   B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
+  if (IsMouseButtonPressed(0)) {
+    B32 ugh = 1;
+  }
 
   if (check_keybind(context, keybind_action_REF(SelectSingleProcess), selection) == Keybind_Result_Enter) {
     handled = 1;
@@ -413,6 +464,9 @@ Define_Keybind(
   "Add a process to the selected processes."
   ) {
   B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
   if (desired_kb_res == check_keybind(context, keybind_action_REF(SelectAnotherProcess), selection)) {
     handled = 1;
     if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
@@ -446,6 +500,9 @@ Define_Keybind(
   "Clear out the selected processes."
   ) {
   B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
 
   if (check_keybind(context, keybind_action_REF(CancelSelection), selection)) {
     handled = 1;
@@ -465,6 +522,9 @@ Define_Keybind(
   "Create a new process."
   ) {
   B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
 
   if (check_keybind(context, keybind_action_REF(CreateProcess), selection)) {
     handled = 1;
@@ -489,6 +549,9 @@ Define_Keybind(
   "Delete the selected processes."
   ) {
   B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
 
   if (check_keybind(context, keybind_action_REF(DeleteProcess), selection)) {
     handled = 1;
@@ -513,6 +576,9 @@ Define_Keybind(
   "Cycle through special displays for selected processes."
   ) {
   B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
 
   if (check_keybind(context, keybind_action_REF(CycleProcessDisplay), selection)) {
     handled = 1;
@@ -551,6 +617,9 @@ Define_Keybind(
   "Toggle between 'classic' and 'rounded' display modes."
   ) {
   B32 handler = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
 
   if (check_keybind(context, keybind_action_REF(ToggleDisplayMode), selection) == Keybind_Result_Enter) {
     handler = 1;
@@ -570,6 +639,9 @@ Define_Keybind(
   "Copy selected processes."
   ) {
   B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
 
   if (check_keybind(context, keybind_action_REF(CopyProcess), selection) == Keybind_Result_Enter) {
     handled = 1;
@@ -588,6 +660,9 @@ Define_Keybind(
   "Paste copied processes, centered at the mouse."
   ) {
   B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
 
   if (check_keybind(context, keybind_action_REF(PasteProcess), selection) == Keybind_Result_Enter) {
     handled = 1;
@@ -607,6 +682,9 @@ Define_Keybind(
   "Performs undo on the proc-trie."
   ) {
   B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
 
   if (check_keybind(context, keybind_action_REF(Undo), selection) == Keybind_Result_Enter) {
     handled = 1;
@@ -626,6 +704,9 @@ Define_Keybind(
   "Performs redo on the proc-trie."
   ) {
   B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
 
   if (check_keybind(context, keybind_action_REF(Redo), selection) == Keybind_Result_Enter) {
     handled = 1;
