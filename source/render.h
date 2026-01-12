@@ -1,3 +1,5 @@
+#ifndef PROC_RENDER_INCLUDE_H
+# define PROC_RENDER_INCLUDE_H
 /*
     A wrapper for raylib rendering functions. Also, implements a command buffer, just in case we want to process the render-commands before actually drawing anything.
 */
@@ -373,3 +375,10 @@ function void render_Commands(Render_Context *rc) {
     }
   }
 }
+
+
+
+
+
+
+#endif // PROC_RENDER_INCLUDE_H

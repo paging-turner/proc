@@ -7,7 +7,7 @@ build/
 *.pdb
 
 config/*
-!config/custom_keybinds_example.h
+!config/_include_custom_keybinds.h
 !config/standard_keybinds.h
 
 saves/*

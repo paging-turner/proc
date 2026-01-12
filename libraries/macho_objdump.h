@@ -1,3 +1,6 @@
+#ifndef MACHO_INCLUDE_H
+# define MACHO_INCLUDE_H
+
 /*
   [ ] Copy over data-structures from mach-o h-files  (this should help in creating a document that is meant to help somebody learn about the mach-o format.
 */
@@ -712,3 +715,6 @@ macho_get_section(String8 object_file, String8 segment_name, String8 section_nam
 
   return range;
 }
+
+
+#endif // MACHO_INCLUDE_H

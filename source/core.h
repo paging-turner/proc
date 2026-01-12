@@ -1,3 +1,6 @@
+#ifndef PROC_CORE_INCLUDE_H
+# define PROC_CORE_INCLUDE_H
+//
 // NOTE: Ideally we would just use a single core/base codebase like Mr4th's, but that doesn't support non-Windows OSs at the moment. One of these days we should bite the bullet and implement some stuff for Linux/Mac.
 
 
@@ -25,6 +28,28 @@
 // Freeze_Member is used to ensure a struct is not changed. Used as an alarm for structs sensitive to internal changes, like ones that are serialized.
 #define Freeze_Member(_struct, member, byte_offset)\
   StaticAssert(offsetof(_struct, member) == byte_offset, Freeze_##_struct##_##member)
+
+
+
+
+//////////////////////////////////////
+// Cycle detection
+//////////////////////////////////////
+#define Define_Cycle_Detector_Function(func_name, list_type, next)\
+  static B32 func_name(list_type* head) {\
+    list_type *slow = head;\
+    list_type *fast = head;\
+    while (slow && fast && fast->next) {\
+      slow = slow->next;\
+      fast = fast->next->next;\
+      if (slow == fast) {\
+        return 1;\
+      }\
+    }\
+    return 0;\
+  }
+
+
 
 
 //////////////////////////////////////
@@ -115,7 +140,7 @@ function S32 create_bezier_triangle_fan(Vector2 first_point, Vector2 second_poin
   X(',', '<') X('.', '>') X('/', '?') X(' ', ' ') X(';', ':') X('\'', '"')
 
 
-U8 ascii_char_lookup[256][2] = {
+static U8 ascii_char_lookup[256][2] = {
 #define X(upper, lower)\
   [upper][0] = lower,\
   [upper][1] = upper,
@@ -395,3 +420,7 @@ function S32 create_bezier_triangle_fan(Vector2 first_point, Vector2 second_poin
 
   return point_count;
 }
+
+
+
+#endif // PROC_CORE_INCLUDE_H

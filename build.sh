@@ -2,8 +2,9 @@
 
 
 Compiler="clang"
-GO_FAST=0
 
+GO_FAST=0
+DO_NOT_Compile_With_Custom_Keybinds=0
 
 if [ $GO_FAST -eq 1 ]; then
     Debug=0
@@ -47,11 +48,23 @@ if [ $GO_FAST -eq 1 ]; then
     Settings="$Settings -DGO_FAST"
 fi
 
-Base_File_Name="base"
 Source_File="../source/$Source_File_Name.c"
+
+Base_File_Name="base"
 Base_File="../source/$Base_File_Name.c"
 
+Should_Compile_With_Custom_Keybinds=0
+Custom_File="../config/custom_keybinds.c"
+if [ -f $Custom_File ]; then
+    Should_Compile_With_Custom_Keybinds=1
+fi
+
+if [ $DO_NOT_Compile_With_Custom_Keybinds == 1 ]; then
+    Should_Compile_With_Custom_Keybinds=0
+fi
+
 Base_Object_File="$Base_File_Name.o"
+Custom_Object_File="custom.o"
 Executable_File="$Source_File_Name.out"
 
 Graphics_Frameworks="-framework CoreVideo -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL"
@@ -68,7 +81,7 @@ Settings="$Settings -Wno-char-subscripts"
 Settings="$Settings -Wno-sign-compare"
 Settings="$Settings -fno-inline-functions"
 
-if [ -e ../config/custom_keybinds.h ]; then
+if [ -e $Custom_File ]; then
     Settings="$Settings -DCustom_Keybinds"
 fi
 
@@ -84,12 +97,27 @@ App_Settings="$Settings $Graphics_Frameworks $Graphics_Lib"
 
 
 Base_Args="$Base_File -o $Base_Object_File $Target $Debug $Base_Settings"
-App_Args="$Source_File -o $Executable_File $Base_Object_File $Target $Debug $App_Settings"
+Custom_Args=""
+
+App_Objects_To_Link=""
 
 echo
 echo "Compiling $Base_File_Name"
 echo "    $Base_Args"
 $Compiler $Base_Args
+
+if [ $Should_Compile_With_Custom_Keybinds == 1 ]; then
+    App_Objects_To_Link="$Base_Object_File $Custom_Object_File"
+    Custom_Args="$Custom_File -o $Custom_Object_File $Target $Debug $Base_Settings"
+    echo
+    echo "Compiling $Custom_File"
+    echo "    $Custom_Args"
+    $Compiler $Custom_Args
+else
+    App_Objects_To_Link="$Base_Object_File"
+fi
+
+App_Args="$Source_File -o $Executable_File $App_Objects_To_Link $Target $Debug $App_Settings"
 
 echo
 echo "Compiling $Source_File_Name"

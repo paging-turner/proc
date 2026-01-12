@@ -6,56 +6,14 @@
 
 #include <stdio.h> // printf
 
-#define MR4TH_NO_INCLUDES 1
-#define MR4TH_NO_CLAMP 1
-#if !No_Assert
-# define MR4TH_ASSERTS 1
-#endif
-#include "../libraries/mr4th/src/mr4th_base.h"
-#define push_struct(a, s) arena_push((a), sizeof(s))
-
+#include "../source/_include_mr4th.h"
 #include "../libraries/macho_objdump.h"
-
-
 // NOTE: This project currently uses a non-standard, experimental version of "mr4th_symbol_set.h".
 // TODO: Stop using the experimental version
 #include "../libraries/mr4th/src/mr4th_symbol_set.h"
 
 
-
-#if OS_WINDOWS
-# include "../libraries/raylib-5.5_win32_msvc16/include/raylib.h"
-# include "../libraries/raylib-5.5_win32_msvc16/include/raymath.h"
-#elif OS_MAC
-# include "../libraries/raylib-5.5_macos/include/raylib.h"
-# include "../libraries/raylib-5.5_macos/include/raymath.h"
-#else
-# error We have not included the raylib release for this OS yet.
-#endif
-
-
-
-
-
-
-//////////////////////////////////////
-// Cycle detection
-//////////////////////////////////////
-#define Define_Cycle_Detector_Function(func_name, list_type, next)\
-  static B32 func_name(list_type* head) {\
-    list_type *slow = head;\
-    list_type *fast = head;\
-    while (slow && fast && fast->next) {\
-      slow = slow->next;\
-      fast = fast->next->next;\
-      if (slow == fast) {\
-        return 1;\
-      }\
-    }\
-    return 0;\
-  }
-
-
+#include "../source/_include_raylib.h"
 
 
 
@@ -77,6 +35,7 @@ global_variable String8 Build_Filepath;
 
 
 #include "../source/proc.h"
+#include "../source/keybind_funcs.h"
 
 Define_Cycle_Detector_Function(
   process_list_has_cycles,
@@ -88,10 +47,9 @@ Define_Cycle_Detector_Function(
 
 
 #include "../source/keybind.h"
+#include "../source/keybind.c"
+
 #include "../config/standard_keybinds.h"
-#ifdef Custom_Keybinds
-# include "../config/custom_keybinds.h"
-#endif
 #include "../source/saves.h"
 
 
@@ -131,9 +89,7 @@ global_variable Color global_button_font_color;
 global_variable Color global_container_bg_color;
 global_variable Color global_process_bg_color;
 
-global_variable Process global_null_process;
 global_variable String_Chunk global_null_string_chunk;
-#define The_Null_Process() (global_null_process=(Process){0}, &global_null_process)
 #define The_Null_String_Chunk() (global_null_string_chunk=(String_Chunk){0}, &global_null_string_chunk)
 
 #define Half_Circle_Fudge 1.32f
@@ -360,32 +316,6 @@ function Process *create_ui_element(Context *context) {
 
 
 
-function Process *push_permanent_process(Context *context) {
-  Process *p = push_struct(context->permanent_arena, Process);
-
-  return p;
-}
-
-
-function Process *create_detached_process(Context *context) {
-  Process *p = context->free_processes.first;
-
-  if (p) {
-    SLLQueuePop(context->free_processes.first, context->free_processes.last);
-  } else {
-    p = push_permanent_process(context);
-  }
-
-  if (p) {
-    *p = (Process){0};
-  } else {
-    p = The_Null_Process();
-  }
-
-  return p;
-}
-
-
 
 global_variable U64 global_id_for_printing_tries;
 
@@ -443,40 +373,6 @@ function Process *create_processes(Context *context, U32 process_count) {
 }
 
 
-
-function void clear_active_process_list(Process_List *list) {
-  if (list && list->first) {
-    for (Process *p = list->first; p != 0;) {
-      Process *next = p->next_active;
-      p->next_active = 0;
-      p = next;
-    }
-
-    list->first = 0;
-    list->last = 0;
-  }
-}
-
-function void clear_process_list(Process_List *list) {
-  if (list && list->first) {
-    for (Process *p = list->first; p != 0;) {
-      Process *next = p->next;
-      p->next = 0;
-      p = next;
-    }
-
-    list->first = 0;
-    list->last = 0;
-  }
-}
-
-function void clear_processes(Context *context) {
-  clear_process_list(&context->processes);
-}
-
-function void clear_active_processes(Context *context) {
-  clear_active_process_list(&context->active_processes);
-}
 
 
 function void delete_process_list(Context *context, Process_List *list) {
@@ -1118,7 +1014,6 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
         if (IsMouseButtonPressed(0)) {
           interacted = 1;
           Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
-          /* apsodfphaspidmuh(ui_state, SymbolIDFromMetadata(keybind_action, keybind_action_ID())); */
           if (Get_Flag(element->flags, Process_Flag_CanBeActive)) {
             clear_active_processes(context);
             SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, element, next_active, 0);
@@ -1198,7 +1093,6 @@ function void ui_box_begin(Context *context, Ui_Box *box, B32 sizing) {
       if (Get_Flag(box->flags, Ui_Box_Flag_ScrollY) &&
           ui_state->mouse_wheel_movement.y != 0) {
         Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
-        /* apsodfphaspidmuh(ui_state, SymbolIDFromMetadata(keybind_action, keybind)); */
         F32 max_scroll_offset = box->raw_size.y - size.y;
         box->scroll_offset.y += ui_state->mouse_wheel_movement.y;
         box->scroll_offset.y = Clamp(box->scroll_offset.y, -max_scroll_offset, 0.0f);
@@ -1837,14 +1731,17 @@ function Process *connect_detached_processes(
   return new_wire;
 }
 
+
 function Process *connect_processes(Context *context, Process *out, Process *in) {
   Process *new_wire = create_process(context);
 
   if (new_wire && out && in) {
     Process new_in_lit = *in;
     Process new_out_lit = *out;
+
     new_in_lit.in_count += 1;
     new_out_lit.out_count += 1;
+
     Process *new_in = replace_process_with(context, in, new_in_lit);
     Process *new_out = replace_process_with(context, out, new_out_lit);
 
@@ -2328,7 +2225,6 @@ function void handle_ui(Context *context) {
   do_menu_ui(context, 0);
 }
 
-
 function void handle_process_interaction(Context *context) {
   Ui_State *ui_state = &context->ui_state;
   Process_Selection selection = (Process_Selection){0};
@@ -2347,23 +2243,30 @@ function void handle_process_interaction(Context *context) {
     Keybind *keybind = SymbolMetadataFromID(keybind_action, i+1);
 
     if (Is_Keybind_Custom(keybind)) {
-      keybind->handle(env, 0, 0, 0);
+      keybind->handle(env);
     }
   }
 
   // exit bounding
-  keybind_action_REF(Bound)->handle(env, Keybind_Result_Exit, 0, 0);
+  // TODO: Cleanup
+  Keybind_Result old_kb_res = env.desired_kb_res;
+  env.desired_kb_res = Keybind_Result_Exit;
+  {
+    keybind_action_REF(Bound)->handle(env);
+  }
+  env.desired_kb_res = old_kb_res;
+
 
   // undo/redo
-  keybind_action_REF(Undo)->handle(env, 0, 0, 0);
-  keybind_action_REF(Redo)->handle(env, 0, 0, 0);
+  keybind_action_REF(Undo)->handle(env);
+  keybind_action_REF(Redo)->handle(env);
 
   // panning
-  keybind_action_REF(Pan)->handle(env, 0, 0, 0);
+  keybind_action_REF(Pan)->handle(env);
 
   // zooming
-  keybind_action_REF(ZoomIn)->handle(env, 0, 0, 0);
-  keybind_action_REF(ZoomOut)->handle(env, 0, 0, 0);
+  keybind_action_REF(ZoomIn)->handle(env);
+  keybind_action_REF(ZoomOut)->handle(env);
 
   // process interaction
   for (Process *p = context->processes.first; p != 0; p = p->next) {
@@ -2372,6 +2275,9 @@ function void handle_process_interaction(Context *context) {
     B32 hot_id_assigned = selection.hot_id_assigned || Get_Flag(ui_state->flags, Ui_State_Flag_hot_id_assigned);
     Assign_Flag(ui_state->flags, Ui_State_Flag_hot_id_assigned, hot_id_assigned);
     B32 is_active = is_active_process(context, p);
+
+    env.is_active = is_active;
+    env.p = p;
 
     // check if we need to stop dragging wire
     if (should_stop_dragging) {
@@ -2385,13 +2291,21 @@ function void handle_process_interaction(Context *context) {
       }
     }
 
-    if (keybind_action_REF(SelectSingleProcess)->handle(env, 0, is_active, p)) {
+    if (keybind_action_REF(SelectSingleProcess)->handle(env)) {
     }
-    else if (keybind_action_REF(SelectAnotherProcess)->handle(env, Keybind_Result_Enter, is_active, p)) {
-      // handled
-    } else if (selection.type == Process_Selection_Process) {
-      // process hover
-      context->hot_process = p;
+    else {
+      // TODO: Cleanup
+      old_kb_res = env.desired_kb_res;
+      env.desired_kb_res = Keybind_Result_Enter;
+      {
+        if (keybind_action_REF(SelectAnotherProcess)->handle(env)) {
+          // handled
+        } else if (selection.type == Process_Selection_Process) {
+          // process hover
+          context->hot_process = p;
+        }
+      }
+      env.desired_kb_res = old_kb_res;
     }
 
     // bounding
@@ -2438,20 +2352,26 @@ function void handle_process_interaction(Context *context) {
   }
 
   // create process
-  keybind_action_REF(CreateProcess)->handle(env, 0, 0, 0);
+  keybind_action_REF(CreateProcess)->handle(env);
 
   // cancel selection
-  keybind_action_REF(CancelSelection)->handle(env, 0, 0, 0);
+  keybind_action_REF(CancelSelection)->handle(env);
 
   // enter bounding
-  keybind_action_REF(Bound)->handle(env, Keybind_Result_Enter, 0, 0);
+  // TODO: Cleanup
+  old_kb_res = env.desired_kb_res;
+  env.desired_kb_res = Keybind_Result_Enter;
+  {
+    keybind_action_REF(Bound)->handle(env);
+  }
+  env.desired_kb_res = old_kb_res;
 
   // toggle between rounded and triangular shapes
-  keybind_action_REF(ToggleDisplayMode)->handle(env, 0, 0, 0);
+  keybind_action_REF(ToggleDisplayMode)->handle(env);
 
   // copy/paste processes
-  keybind_action_REF(CopyProcess)->handle(env, 0, 0, 0);
-  keybind_action_REF(PasteProcess)->handle(env, 0, 0, 0);
+  keybind_action_REF(CopyProcess)->handle(env);
+  keybind_action_REF(PasteProcess)->handle(env);
 
 
   // handle moved wire
@@ -2492,10 +2412,10 @@ function void handle_process_interaction(Context *context) {
       // stop dragging
       Unset_Flag(context->flags, Context_Flag_Dragging);
     }
-    else if (keybind_action_REF(CycleProcessDisplay)->handle(env, 0, 0, 0)) {
+    else if (keybind_action_REF(CycleProcessDisplay)->handle(env)) {
       // handled
     }
-    else if (keybind_action_REF(DeleteProcess)->handle(env, 0, 0, 0)) {
+    else if (keybind_action_REF(DeleteProcess)->handle(env)) {
       // handled
     }
     else if (!Get_Flag(ui_state->flags, Ui_State_Flag_action_occured)) {

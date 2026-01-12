@@ -1,3 +1,5 @@
+#ifndef PROC_INCLUDE_H
+# define PROC_INCLUDE_H
 //////////////////////////////////////
 // Forward Declarations
 //////////////////////////////////////
@@ -362,3 +364,14 @@ struct Context {
 
   Camera2D camera;
 };
+
+
+////////////////////////
+// Shared Globals
+////////////////////////
+global_variable Process global_null_process;
+#define The_Null_Process() (global_null_process=(Process){0}, &global_null_process)
+
+
+
+#endif // PROC_INCLUDE_H

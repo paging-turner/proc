@@ -1,0 +1,439 @@
+#include "../source/keybind.h"
+
+
+Define_Keybind(
+  Bound, ,
+  Keybind_Behavior_Alternate, 0,
+  Key_Kind_Mouse0, 0,
+  Ui_Constraint_NoHotProcess|Ui_Constraint_ExitOnKeyup,
+  "Select multiple processes by drawing a rectangle with your mouse."
+  ) {
+  B32 handled = 0;
+  Keybind_Result kb_res = Check_Keybind(&env, Bound);
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
+  if (env.desired_kb_res == Keybind_Result_Exit) {
+    if (Get_Flag(context->flags, Context_Flag_Bounding)) {
+      // exit
+      if (kb_res == Keybind_Result_Exit) {
+        Unset_Flag(context->flags, Context_Flag_Bounding);
+        handled = 1;
+      }
+      else {
+        clear_active_processes(context);
+      }
+    }
+  }
+  else if (env.desired_kb_res == Keybind_Result_Enter) {
+    // enter
+    if (kb_res == Keybind_Result_Enter) {
+      Set_Flag(context->flags, Context_Flag_Bounding);
+      context->active_position = context->ui_state.mouse_position;
+      handled = 1;
+    }
+  }
+
+  return handled;
+}
+
+
+
+Define_Keybind(
+  Pan, ,
+  Keybind_Behavior_Alternate, 0,
+  Key_Kind_Mouse1, 0,
+  Ui_Constraint_ExitOnKeyup,
+  "Slide your field of view by moving your mouse."
+  ) {
+  B32 handled = 1;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+  Assert(env.desired_kb_res == 0);
+
+  Keybind_Result kb_res = Check_Keybind(&env, Pan);
+
+  if (kb_res == Keybind_Result_Enter) {
+    Set_Flag(context->flags, Context_Flag_Panning);
+    context->active_position = context->ui_state.mouse_position;
+    handled = 1;
+  }
+
+  if (Get_Flag(context->flags, Context_Flag_Panning)) {
+    if (kb_res == Keybind_Result_Exit) {
+      Unset_Flag(context->flags, Context_Flag_Panning);
+      handled = 1;
+    }
+    else {
+      // Update camera position
+      Vector2 delta = GetMouseDelta();
+      delta = Vector2Scale(delta, -1.0f/context->camera.zoom);
+      context->camera.target = Vector2Add(context->camera.target, delta);
+      handled = 1;
+    }
+  }
+
+  return handled;
+}
+
+
+
+
+
+Define_Keybind(
+  ZoomIn, ,
+  Keybind_Behavior_Alternate, 0,
+  Key_Kind_MouseWheelUp, 0,
+  Ui_Constraint_ActionNotOccured,
+  "Zoom your field of view in to make objects appear closer.") {
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
+  return keybind_zoom_handler(&env);
+}
+
+Define_Keybind(
+  ZoomOut, ,
+  Keybind_Behavior_Alternate, 0,
+  Key_Kind_MouseWheelDown, 0,
+  Ui_Constraint_ActionNotOccured,
+  "Zoom your field of view out to make objects appear further.") {
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
+  return keybind_zoom_handler(&env);
+}
+
+
+
+
+
+
+
+Define_Keybind(
+  SelectSingleProcess, ,
+  Keybind_Behavior_Alternate, 0,
+  Key_Kind_Mouse0, 0,
+  Ui_Constraint_HotProcess|Ui_Constraint_ExitOnKeyup|Ui_Constraint_ActionNotOccured,
+  "Select a single process."
+  ) {
+  B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
+  if (IsMouseButtonPressed(0)) {
+    B32 ugh = 1;
+  }
+
+  if (check_keybind(context, keybind_action_REF(SelectSingleProcess), selection) == Keybind_Result_Enter) {
+    handled = 1;
+    B32 in_selection = selection.type == Process_Selection_In;
+    B32 out_selection = selection.type == Process_Selection_Out;
+    if (in_selection || out_selection) {
+      // select wire
+      Process *wire = get_process_wire_by_selection(context, selection);
+      B32 is_active_wire = is_active_process(context, wire);
+
+      if (wire) {
+        U32 drag_flag = in_selection ? Process_Flag_Drag_In : Process_Flag_Drag_Out;
+        Unset_Flag(context->flags, Context_Flag_NewWire);
+        Set_Flag(wire->flags, drag_flag);
+        context->active_position = context->ui_state.mouse_position;
+        if (!is_active_wire) {
+          clear_active_processes(context);
+          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, wire, next_active, 0);
+        }
+      }
+    } else if ((env.is_active || context->hot_process == env.p) &&
+               selection.type == Process_Selection_NewWire) {
+      // begin new-wire
+      Set_Flag(context->flags, Context_Flag_NewWire);
+      if (!env.is_active) {
+        clear_active_processes(context);
+        SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, env.p, next_active, 0);
+      }
+    } else if (selection.type == Process_Selection_Process) {
+      if (Get_Flag(context->flags, Context_Flag_NewWire)) {
+        // connect processes
+        connect_processes(context, context->active_processes.first, env.p);
+        exit_add_wire_mode(context);
+      } else {
+        // select process
+        context->hot_process = env.p;
+        if (!env.is_active) {
+          clear_active_processes(context);
+          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, env.p, next_active, 0);
+        }
+        Unset_Flag(context->flags, Context_Flag_NewWire);
+        Set_Flag(context->flags, Context_Flag_Dragging);
+        context->active_position = context->ui_state.mouse_position;
+      }
+    }
+  }
+
+  return handled;
+}
+
+
+
+
+Define_Keybind(
+  SelectAnotherProcess, ,
+  Keybind_Behavior_Alternate, 0,
+  Key_Kind_Mouse0, Modifier_Key_Control,
+  Ui_Constraint_HoverProcess,
+  "Add a process to the selected processes."
+  ) {
+  B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
+  if (env.desired_kb_res == check_keybind(context, keybind_action_REF(SelectAnotherProcess), selection)) {
+    handled = 1;
+    if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
+      Process *wire = get_process_wire_by_selection(context, selection);
+      if (wire) {
+        if (is_active_process(context, wire)) {
+          remove_process_from_active_processes(context, wire);
+        } else {
+          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, wire, next_active, 0);
+        }
+      }
+    } else if (selection.type == Process_Selection_Process) {
+      if (is_active_process(context, selection.process)) {
+        remove_process_from_active_processes(context, selection.process);
+      } else {
+        SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, selection.process, next_active, 0);
+      }
+    }
+  }
+
+  return handled;
+}
+
+
+
+Define_Keybind(
+  CancelSelection, ,
+  Keybind_Behavior_Alternate, 0,
+  Key_Kind_Mouse0, 0,
+  Ui_Constraint_NoHotProcess,
+  "Clear out the selected processes."
+  ) {
+  B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
+
+  if (check_keybind(context, keybind_action_REF(CancelSelection), selection)) {
+    handled = 1;
+    exit_add_wire_mode(context);
+  }
+
+  return handled;
+}
+
+
+
+Define_Keybind(
+  CreateProcess, ,
+  Keybind_Behavior_Alternate, 0,
+  Key_Kind_Mouse0, Modifier_Key_Control,
+  Ui_Constraint_NoHotProcess,
+  "Create a new process."
+  ) {
+  B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
+
+  if (check_keybind(context, keybind_action_REF(CreateProcess), selection)) {
+    handled = 1;
+    Process *new_p = create_process(context);
+    if (new_p) {
+      Set_Flag(new_p->flags, Process_Flag_TextEdit);
+      new_p->position = GetScreenToWorld2D(context->ui_state.mouse_position, context->camera);
+      clear_active_processes(context);
+      SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, new_p, next_active, 0);
+    }
+  }
+
+  return handled;
+}
+
+
+
+Define_Keybind(
+  DeleteProcess, ,
+  Keybind_Behavior_Alternate, 0,
+  KEY_D, Modifier_Key_Control, 0,
+  "Delete the selected processes."
+  ) {
+  B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
+
+  if (check_keybind(context, keybind_action_REF(DeleteProcess), selection)) {
+    handled = 1;
+    // delete processes
+    for (Process *a = context->active_processes.first; a != 0;) {
+      Process *next_active = a->next_active;
+      delete_process(context, a);
+      a = next_active;
+    }
+    clear_active_processes(context);
+  }
+
+  return handled;
+}
+
+
+
+Define_Keybind(
+  CycleProcessDisplay, ,
+  Keybind_Behavior_Alternate, 0,
+  KEY_TAB, 0, 0,
+  "Cycle through special displays for selected processes."
+  ) {
+  B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
+
+  if (check_keybind(context, keybind_action_REF(CycleProcessDisplay), selection)) {
+    handled = 1;
+    // cycle through special process types (cups/caps/empty)
+    for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
+      if (!Get_Flag(a->flags, Process_Flag_Wire)) {
+        U32 toggle_flags = (Process_Flag_Empty | Process_Flag_Cup | Process_Flag_Cap | Process_Flag_Identity);
+        if (Get_Flag(a->flags, toggle_flags)) {
+          // toggle off process-display flags first, before trying to toggle them on
+          Unset_Flag(a->flags, toggle_flags);
+        } else if ((a->in_count == 0 && a->out_count == 0) ||
+                   (a->in_count == 1 && a->out_count == 0) ||
+                   (a->in_count == 0 && a->out_count == 1)) {
+          // toggle single in/out or unconnected process
+          Toggle_Flag(a->flags, Process_Flag_Empty);
+        } else if (a->in_count == 0 && a->out_count == 2) {
+          Toggle_Flag(a->flags, Process_Flag_Cup);
+        } else if (a->in_count == 2 && a->out_count == 0) {
+          Toggle_Flag(a->flags, Process_Flag_Cap);
+        } else if (a->in_count == 1 && a->out_count == 1) {
+          Toggle_Flag(a->flags, Process_Flag_Identity);
+        }
+      }
+    }
+  }
+
+  return handled;
+}
+
+
+
+Define_Keybind(
+  ToggleDisplayMode, ,
+  Keybind_Behavior_Alternate, 0,
+  KEY_M, Modifier_Key_Control, 0,
+  "Toggle between 'classic' and 'rounded' display modes."
+  ) {
+  B32 handler = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
+
+  if (check_keybind(context, keybind_action_REF(ToggleDisplayMode), selection) == Keybind_Result_Enter) {
+    handler = 1;
+    Toggle_Flag(context->flags, Context_Flag_RoundedShapes);
+  }
+
+  return handler;
+}
+
+
+
+
+Define_Keybind(
+  CopyProcess, ,
+  Keybind_Behavior_Alternate, 0,
+  KEY_C, Modifier_Key_Control, 0,
+  "Copy selected processes."
+  ) {
+  B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
+
+  if (check_keybind(context, keybind_action_REF(CopyProcess), selection) == Keybind_Result_Enter) {
+    handled = 1;
+    copy_active_processes(context);
+  }
+
+  return handled;
+}
+
+
+
+Define_Keybind(
+  PasteProcess, ,
+  Keybind_Behavior_Alternate, 0,
+  KEY_V, Modifier_Key_Control, 0,
+  "Paste copied processes, centered at the mouse."
+  ) {
+  B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
+
+  if (check_keybind(context, keybind_action_REF(PasteProcess), selection) == Keybind_Result_Enter) {
+    handled = 1;
+    paste_processes(context);
+  }
+
+  return handled;
+}
+
+
+
+
+Define_Keybind(
+  Undo, ,
+  Keybind_Behavior_Alternate, 0,
+  KEY_Z, Modifier_Key_Control, 0,
+  "Performs undo on the proc-trie."
+  ) {
+  B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
+
+  if (check_keybind(context, keybind_action_REF(Undo), selection) == Keybind_Result_Enter) {
+    handled = 1;
+    proc_trie_undo(context->proc_trie);
+    gather_processes_from_trie(context);
+  }
+
+  return handled;
+}
+
+
+
+Define_Keybind(
+  Redo, ,
+  Keybind_Behavior_Alternate, 0,
+  KEY_Z, Modifier_Key_Control|Modifier_Key_Shift, 0,
+  "Performs redo on the proc-trie."
+  ) {
+  B32 handled = 0;
+  Context *context = env.context;
+  Process_Selection selection = env.selection;
+
+
+  if (check_keybind(context, keybind_action_REF(Redo), selection) == Keybind_Result_Enter) {
+    handled = 1;
+    proc_trie_redo(context->proc_trie);
+    gather_processes_from_trie(context);
+  }
+
+  return handled;
+}
