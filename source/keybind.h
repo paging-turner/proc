@@ -93,6 +93,8 @@ enum Keybind_Result {
 #define Is_Keybind_Custom(keybind)\
   ((keybind) && (keybind)->bind > 0 && (keybind)->handle)
 
+// TODO: Put ... Keybind_Result desired_kb_res, B32 is_active, Process *p
+//       into Keybind_Environment
 #define Define_Keybind(action_name, keybind_name, behavior_name, bind_value, k, m, c, d)\
   static keybind_action_DECL(action_name);\
   static keybind_DECL(action_name##keybind_name);\
@@ -131,13 +133,22 @@ function Keybind_Environment create_keybind_environment(
   return env;
 }
 
-#define Check_Keybind(env, name)\
+#define Check_Keybind(env, _name)\
   (((env) && (env)->context)\
-   ? check_keybind((env)->context, keybind_action_REF(name), (env)->selection)\
+   ? check_keybind((env)->context, keybind_action_REF(_name), (env)->selection)\
    : 0)
 
-#define Test_Keybind(env, name, kb_res)\
-  (Check_Keybind(env, name) == Keybind_Result_##kb_res)
+#define Test_Keybind(env, _name, _kb_res)\
+  (Check_Keybind((env), _name) == Keybind_Result_##_kb_res)
+
+#define Keybind_Modifier_Matches(kb, _mod_name, _ui_flag_name)\
+  !(Get_Flag_Bool((kb)->modifiers, Modifier_Key_##_mod_name) ^\
+    Get_Flag_Bool(ui_state->flags, Ui_State_Flag_##_ui_flag_name))
+
+#define Keybind_Constraint_Holds(kb, _con_name, con_expr)\
+  (Get_Flag((kb)->constraint, Ui_Constraint_##_con_name)\
+   ? (con_expr)\
+   : 1)
 
 function Keybind_Result check_keybind(Context *context, Keybind *keybind, Process_Selection selection) {
   Keybind_Result result = 0;
@@ -167,54 +178,50 @@ function Keybind_Result check_keybind(Context *context, Keybind *keybind, Proces
   } break;
   }
 
-  B32 modifier_control = Get_Flag_Bool(keybind->modifiers, Modifier_Key_Control);
-  B32 modifier_shift = Get_Flag_Bool(keybind->modifiers, Modifier_Key_Shift);
-  B32 modifier_alt = Get_Flag_Bool(keybind->modifiers, Modifier_Key_Alt);
-  B32 modifier_super = Get_Flag_Bool(keybind->modifiers, Modifier_Key_Super);
-
-  B32 modifier_matches = ((!(modifier_control ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_control_down))) &&
-                          (!(modifier_shift ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_shift_down))) &&
-                          (!(modifier_alt ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_alt_down))) &&
-                          (!(modifier_super ^ Get_Flag_Bool(ui_state->flags, Ui_State_Flag_super_down))));
+  B32 modifier_matches =
+    (Keybind_Modifier_Matches(keybind, Control, control_down) &&
+     Keybind_Modifier_Matches(keybind,   Shift,   shift_down) &&
+     Keybind_Modifier_Matches(keybind,     Alt,     alt_down) &&
+     Keybind_Modifier_Matches(keybind,   Super,   super_down));
 
   // constraints
   B32 constraints_met = 0;
   {
-    B32 constraint_hover_process =
-      (Get_Flag(keybind->constraint, Ui_Constraint_HoverProcess)
-       ? selection.type != 0
-       : 1);
+    B32 con_hover_process = Keybind_Constraint_Holds(
+      keybind,
+      HoverProcess,
+      (selection.type != 0));
 
-    B32 constraint_hot =
-      (Get_Flag(keybind->constraint, Ui_Constraint_HotProcess)
-       ? (context->hot_process != 0)
-       : 1);
+    B32 con_hot = Keybind_Constraint_Holds(
+      keybind,
+      HotProcess,
+      (context->hot_process != 0));
 
-    B32 constraint_no_hot =
-      (Get_Flag(keybind->constraint, Ui_Constraint_NoHotProcess)
-       ? (context->hot_process == 0)
-       : 1);
+    B32 con_no_hot = Keybind_Constraint_Holds(
+      keybind,
+      NoHotProcess,
+      (context->hot_process == 0));
 
     U32 kb_action_id = SymbolIDFromMetadata(keybind_action, keybind);
     B32 action_occured_bool = Get_Flag_Bool(ui_state->flags, Ui_State_Flag_action_occured);
-    B32 constraint_action_not_occured =
-      (Get_Flag(keybind->constraint, Ui_Constraint_ActionNotOccured)
-       ? ((kb_action_id == ui_state->kb_action)
-          ? 1
-          : (action_occured_bool == 0))
-       : 1);
+    B32 con_action_not_occured = Keybind_Constraint_Holds(
+      keybind,
+      ActionNotOccured,
+      ((kb_action_id == ui_state->kb_action)
+       ? 1
+       : (action_occured_bool == 0)));
 
-    B32 constraint_active_processes =
-      (Get_Flag(keybind->constraint, Ui_Constraint_ActiveProcesses)
-       ? (context->active_processes.first != 0)
-       : 1);
+    B32 con_active_processes = Keybind_Constraint_Holds(
+      keybind,
+      ActiveProcesses,
+      (context->active_processes.first != 0));
 
 
-    constraints_met = (constraint_hover_process &&
-                       constraint_hot &&
-                       constraint_no_hot &&
-                       constraint_action_not_occured &&
-                       constraint_active_processes);
+    constraints_met = (con_hover_process &&
+                       con_hot &&
+                       con_no_hot &&
+                       con_action_not_occured &&
+                       con_active_processes);
   }
 
   if (key_is_pressed && modifier_matches && constraints_met) {
@@ -289,7 +296,7 @@ Define_Keybind(
   Process_Selection selection = env.selection;
   Assert(desired_kb_res == 0);
 
-  Keybind_Result kb_res = check_keybind(context, keybind_action_REF(Pan), selection);
+  Keybind_Result kb_res = Check_Keybind(&env, Pan);
 
   if (kb_res == Keybind_Result_Enter) {
     Set_Flag(context->flags, Context_Flag_Panning);
@@ -317,7 +324,7 @@ Define_Keybind(
 
 
 
-function B32 keybind_zoom_handler(Context *context, Process_Selection selection);
+function B32 keybind_zoom_handler(Keybind_Environment *env);
 
 Define_Keybind(
   ZoomIn, ,
@@ -328,7 +335,7 @@ Define_Keybind(
   Context *context = env.context;
   Process_Selection selection = env.selection;
 
-  return keybind_zoom_handler(context, selection);
+  return keybind_zoom_handler(&env);
 }
 
 Define_Keybind(
@@ -340,7 +347,7 @@ Define_Keybind(
   Context *context = env.context;
   Process_Selection selection = env.selection;
 
-  return keybind_zoom_handler(context, selection);
+  return keybind_zoom_handler(&env);
 }
 
 #define Keybind_Has_Mouse_Wheel_Movement(keybind_name)\
@@ -348,15 +355,16 @@ Define_Keybind(
    keybind_action_REF(keybind_name)->key_kind == Key_Kind_MouseWheelDown)
 
 
-function B32 keybind_zoom_handler(
-  Context *context,
-  Process_Selection selection
-  ) {
+function B32 keybind_zoom_handler(Keybind_Environment *env) {
   B32 handled = 0;
-  B32 zoom_in = check_keybind(context, keybind_action_REF(ZoomIn), selection) == Keybind_Result_Enter;
-  B32 zoom_out = check_keybind(context, keybind_action_REF(ZoomOut), selection) == Keybind_Result_Enter;
+  Context *context = env->context;
 
-  Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position, context->camera);
+  B32 zoom_in = Test_Keybind(env, ZoomIn, Enter);
+  B32 zoom_out = Test_Keybind(env, ZoomOut, Enter);
+
+  Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position,
+                                                    context->camera);
+
   context->camera.offset = context->ui_state.mouse_position;
   context->camera.target = mouse_world_position;
 
