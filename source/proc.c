@@ -2840,31 +2840,8 @@ function void draw_info_panel(Context *context) {
   F32 y = 5.0f;
   F32 padding = 2.0f;
 
-#if 0
-  if (context->active_processes.first) {
-    for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
-      char *format = a == context->active_processes.first ? "active-id = %p" : "            %p";
-      const char *text = TextFormat(format, a);
-      render_DrawText(rc, text, 5.0f, y, global_panel_font_size, text_color, 1);
-      y += global_panel_font_size + padding;
-    }
-  }
-#elif 0
-  render_DrawText(rc, TextFormat("process count %d\n", debug_process_list_count(context->processes)),
-                  x, y, global_panel_font_size, text_color, 1);
-  y += global_panel_font_size + padding;
-  render_DrawText(rc, TextFormat("active count %d\n", debug_process_active_list_count(context->active_processes)),
-                  x, y, global_panel_font_size, text_color, 1);
-  y += global_panel_font_size + padding;
-  /* render_DrawText(rc, TextFormat("free count %d\n", debug_process_list_count(context->free_processes)), */
-  /*                 x, y, global_panel_font_size, text_color, 1); */
-  y += global_panel_font_size + padding;
-  render_DrawText(rc, TextFormat("copy count %d\n", debug_process_list_count(context->copy_processes)),
-                  x, y, global_panel_font_size, text_color, 1);
-  y += global_panel_font_size + padding;
-#elif 1
   {
-# define Debug_Draw_Arena_Info(arena)\
+#define Debug_Draw_Arena_Info(arena)\
     render_DrawText(rc, TextFormat("%s (%3.1f%%) %llu/%llu\n",\
                                    #arena,\
                                    (F32)context->arena->chunk_pos/(F32)context->arena->chunk_cap,\
@@ -2880,9 +2857,8 @@ function void draw_info_panel(Context *context) {
     Debug_Draw_Arena_Info(ui_arena);
     Debug_Draw_Arena_Info(temp_arena);
     Debug_Draw_Arena_Info(per_frame_arena);
-# undef Debug_Draw_Arena_Info
+#undef Debug_Draw_Arena_Info
   }
-#endif
 }
 
 
@@ -2989,6 +2965,17 @@ function void set_global_window_render_size(void) {
 }
 
 
+function void per_frame_cleanup(Context *context) {
+  arena_pop_to(context->render_arena, 0);
+  arena_pop_to(context->temp_arena, 0);
+  arena_pop_to(context->per_frame_arena, 0);
+  context->ui_render_context.command_list.first = 0;
+  context->ui_render_context.command_list.last = 0;
+  context->process_render_context.command_list.first = 0;
+  context->process_render_context.command_list.last = 0;
+}
+
+
 int main(void) {
   InitWindow(800, 500, "proc");
   SetExitKey(0);
@@ -3017,12 +3004,12 @@ int main(void) {
 
     render_ClearBackground(prc, global_background_color);
     if (Get_Flag(context.flags, Context_Flag_DataStructureView)) {
-      // TODO: Draw a data-structure with processes.
       draw_processes(&context, context.ds_view_processes.first);
     }
     else {
       draw_processes(&context, context.processes.first);
     }
+
 #if 1
     draw_info_panel(&context);
 #endif
@@ -3032,15 +3019,7 @@ int main(void) {
     render_Commands(&context.ui_render_context);
 
     // clear out per-frame stuff
-    arena_pop_to(context.render_arena, 0);
-    arena_pop_to(context.temp_arena, 0);
-    arena_pop_to(context.per_frame_arena, 0);
-    context.ui_render_context.command_list.first = 0;
-    context.ui_render_context.command_list.last = 0;
-    context.process_render_context.command_list.first = 0;
-    context.process_render_context.command_list.last = 0;
-    /* context.per_frame_ui_elements.first = 0; */
-    /* context.per_frame_ui_elements.last = 0; */
+    per_frame_cleanup(&context);
 
     EndDrawing();
   }
