@@ -59,6 +59,32 @@ Define_Keybind(
 #define Push_Ds_View_Process(p)\
   SLLQueuePush(context->ds_view_processes.first, context->ds_view_processes.last, (p))
 
+function void proc_ds_view_root_clear_handler(
+  void *maybe_context,
+  Proc_Trie_Iterator *iter,
+  Proc_Trie_Root *root
+  ) {
+  Context *context = (Context *)maybe_context;
+  Proc_Trie_Trie *trie = context->proc_trie;
+
+  if (root) {
+    root->ref = 0;
+  }
+}
+
+function void proc_ds_view_node_clear_handler(
+  void *maybe_context,
+  Proc_Trie_Iterator *iter,
+  Proc_Trie_Node *node
+  ) {
+  Context *context = (Context *)maybe_context;
+  Proc_Trie_Trie *trie = context->proc_trie;
+
+  if (node) {
+    node->ref = 0;
+  }
+}
+
 function void proc_ds_view_root_handler(
   void *maybe_context,
   Proc_Trie_Iterator *iter,
@@ -109,7 +135,20 @@ Define_Keybind(
     handled = 1;
 
     if (Get_Flag(context->flags, Context_Flag_DataStructureView)) {
+      for (Process *p = context->processes.first; p != 0; p = p->next) {
+        remove_string_chunk_list(context, &p->label);
+      }
       clear_processes(context);
+
+      proc_trie_crawl_trie(context->per_frame_arena,
+                           context->proc_trie,
+                           proc_ds_view_root_clear_handler,
+                           proc_ds_view_node_clear_handler,
+                           context);
+
+      clear_ds_view_process_list(context);
+
+      context->proc_trie->ref = 0;
 
       // restore processes
       context->processes = context->gross_temp_processes;
@@ -117,8 +156,10 @@ Define_Keybind(
     else {
       // save processes for when we toggle back
       context->gross_temp_processes = context->processes;
+      clear_processes(context);
 
       clear_ds_view_process_list(context);
+
       proc_trie_crawl_trie(context->per_frame_arena,
                            context->proc_trie,
                            proc_ds_view_root_handler,

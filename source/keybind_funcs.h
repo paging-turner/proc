@@ -2,6 +2,22 @@
   Eventually, this file will contain all of the functions available to the custom-keybind environment.
 */
 
+
+function void remove_string_chunk_list(Context *context, String_Chunk_List *scl) {
+  if (scl->first && scl->last) {
+    if (context->free_strings.first && context->free_strings.last) {
+      context->free_strings.last->next = scl->first;
+      context->free_strings.last = scl->last;
+    } else {
+      context->free_strings.first = scl->first;
+      context->free_strings.last = scl->last;
+    }
+
+    scl->first = 0;
+    scl->last = 0;
+  }
+}
+
 function void clear_process_list(Process_List *list) {
   if (list && list->first) {
     for (Process *p = list->first; p != 0;) {

@@ -419,24 +419,6 @@ function void remove_process_from_process_list(Context *context, Process_List *l
       }
     }
   }
-
-  SLLQueuePush(context->free_processes.first, context->free_processes.last, p);
-}
-
-
-function void remove_string_chunk_list(Context *context, String_Chunk_List *scl) {
-  if (scl->first && scl->last) {
-    if (context->free_strings.first && context->free_strings.last) {
-      context->free_strings.last->next = scl->first;
-      context->free_strings.last = scl->last;
-    } else {
-      context->free_strings.first = scl->first;
-      context->free_strings.last = scl->last;
-    }
-
-    scl->first = 0;
-    scl->last = 0;
-  }
 }
 
 
@@ -509,6 +491,7 @@ function void remove_copy_process_list(Context *context, Process_List *list) {
 function void clear_ds_view_process_list(Context *context) {
   // TODO: @Speed can probably do some fancy stuff with just the ends of the list?
   for (Process *p = context->ds_view_processes.first; p != 0; p = p->next) {
+    remove_string_chunk_list(context, &p->label);
     remove_process_from_process_list(context, &context->ds_view_processes, p);
   }
 }
