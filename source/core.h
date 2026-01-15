@@ -402,7 +402,15 @@ function Vector2 get_bezier_point(Vector2 first_point, Vector2 second_point, Vec
 /*
   This assumes that the bezier is convex, otherwise the triangles might get wonky.
 */
-function S32 create_bezier_triangle_fan(Vector2 first_point, Vector2 second_point, Vector2 first_control, Vector2 second_control, Vector2 *points, S32 max_points, S32 triangle_count) {
+function S32 create_bezier_triangle_fan(
+  Vector2 first_point,
+  Vector2 second_point,
+  Vector2 first_control,
+  Vector2 second_control,
+  Vector2 *points,
+  S32 max_points,
+  S32 triangle_count
+  ) {
   S32 point_count = 0;
   S32 needed_point_count = triangle_count + 2;
 

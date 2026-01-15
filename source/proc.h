@@ -33,6 +33,9 @@ function Process *connect_detached_processes(Context *context, Process *out, Pro
 function Process *connect_processes(Context *context, Process *out, Process *in);
 function void remove_process_from_process_list(Context *context, Process_List *list, Process *p);
 function void clear_ds_view_process_list(Context *context);
+function Process_Shape get_process_shape(Context *context, Process *p);
+function Vector2 get_process_size(Context *context, Process *p, Process_Shape shape);
+
 
 
 

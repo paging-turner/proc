@@ -1818,6 +1818,41 @@ fill_out_half_circle_shape(Context *context, Process_Shape *shape, Process *p, V
 }
 
 
+function Vector2 get_process_size(
+  Context *context,
+  Process *p,
+  Process_Shape shape
+  ) {
+  Vector2 size = (Vector2){0};
+
+  F32 min_x = inf_F32;
+  F32 min_y = inf_F32;
+  F32 max_x = neg_inf_F32;
+  F32 max_y = neg_inf_F32;
+
+  if (shape.kind == Process_Shape_Circle) {
+    min_x = shape.center.x - shape.radius;
+    min_y = shape.center.y - shape.radius;
+    max_x = shape.center.x + shape.radius;
+    max_y = shape.center.y + shape.radius;
+  }
+  else {
+    for (S32 i = 0; i < shape.point_count; ++i) {
+      Vector2 *point = shape.points +i;
+      min_x = Min(min_x, point->x);
+      min_y = Min(min_y, point->y);
+      max_x = Max(max_x, point->x);
+      max_y = Max(max_y, point->y);
+    }
+  }
+
+  size.x = max_x - min_x;
+  size.y = max_y - min_y;
+
+  return size;
+}
+
+
 function Process_Shape
 get_process_shape(Context *context, Process *p) {
   Process_Shape shape = {0};

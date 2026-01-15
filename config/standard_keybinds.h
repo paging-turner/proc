@@ -95,11 +95,32 @@ function void proc_ds_view_root_handler(
 
   B32 null_trie_ref = trie->ref == 0;
 
+  // ensure trie exists
   Ensure_Process_Reference_Exists(trie);
   trie->ref->label = string_chunk_list_from_string8(context, str8_lit("Trie"));
 
+  // ensure root exists
   Ensure_Process_Reference_Exists(root);
   root->ref->label = string_chunk_list_from_string8(context, str8_lit("Root"));
+
+  // positioning
+  {
+    // @Speed
+    F32 padding = 20.0f;
+    if (root->prev_edit && root->prev_edit->ref) {
+      Process *prev_edit_p = root->prev_edit->ref;
+      Process_Shape shape = get_process_shape(context, prev_edit_p);
+      Vector2 p_size = get_process_size(context, prev_edit_p, shape);
+      root->ref->position = (Vector2){prev_edit_p->position.x + (p_size.x + padding),
+                                      prev_edit_p->position.y};
+    }
+    else {
+      Process_Shape shape = get_process_shape(context, trie->ref);
+      Vector2 p_size = get_process_size(context, trie->ref, shape);
+      root->ref->position = (Vector2){ trie->ref->position.x,
+                                       trie->ref->position.y - (p_size.y + padding)};
+    }
+  }
 
   Process *wire = connect_detached_processes(context, trie->ref, root->ref);
 

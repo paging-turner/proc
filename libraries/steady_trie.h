@@ -12,7 +12,7 @@
      [x] Simple Redo
      [ ] Redo alternate branches
      [ ] Do a pass of docs after fixing bugs for undo/redo.
-   [ ] Allow for identifier renaming (for constructing multiple types of trie)
+   [x] Allow for identifier renaming (for constructing multiple types of trie)
    [x] Allow configuration to store keys least-to-most significant byte or most-to-least.
    [x] Right now the keys are the values, but we probably want the option of having key/value pairs.
    [ ] BUG: Steady_Trie_Slot_Bits == 2  and  Steady_Trie_Root_Is_Lowest_Significant_Byte == 0 causes errors.
@@ -53,17 +53,6 @@
 // Api
 ////////////////////////////
 // TODO: Fill out function/macro defs
-#define Steady_Trie_Typedef(ds_type, type_name)\
-  typedef ds_type type_name type_name;
-Steady_Trie_Typedef(struct, Steady_Trie(            Node));
-Steady_Trie_Typedef(struct, Steady_Trie(            Root));
-Steady_Trie_Typedef(struct, Steady_Trie(        Settings));
-Steady_Trie_Typedef(struct, Steady_Trie(            Trie));
-Steady_Trie_Typedef(struct, Steady_Trie(      Stack_Node));
-Steady_Trie_Typedef(struct, Steady_Trie(        Iterator));
-Steady_Trie_Typedef(  enum, Steady_Trie(       Edit_Kind));
-Steady_Trie_Typedef(  enum, Steady_Trie(Edit_Result_Kind));
-Steady_Trie_Typedef(struct, Steady_Trie(     Edit_Result));
 
 
 
@@ -173,77 +162,70 @@ static B32 steady_trie(values_equal)(Steady_Trie_Value_Type v1, Steady_Trie_Valu
 
 
 
-struct Steady_Trie(Node) {
+typedef struct Steady_Trie(Node) {
   U8 occupied[Steady_Trie_Slot_Count]; // TODO: Bit-flags?
   struct Steady_Trie(Node) *slots[Steady_Trie_Slot_Count];
 #if Steady_Trie_Use_Key_Value_Pair
   Steady_Trie_Value_Type values[Steady_Trie_Slot_Count];
 #endif
-  Steady_Trie_Value_Type *ref;
-};
 
-struct Steady_Trie(Root) {
+  Steady_Trie_Value_Type *ref;
+} Steady_Trie(Node);
+
+typedef struct Steady_Trie(Root) {
   struct Steady_Trie(Root) *next_edit;
   struct Steady_Trie(Root) *prev_edit;
   struct Steady_Trie(Root) *next_branch;
   struct Steady_Trie(Root) *prev_branch;
   Steady_Trie(Node) *node;
-  Steady_Trie_Value_Type *ref;
-};
 
-struct Steady_Trie(Settings) {
+  Steady_Trie_Value_Type *ref;
+} Steady_Trie(Root);
+
+typedef struct Steady_Trie(Settings) {
   U32 key_bits;
   U32 slot_bits;
   B32 root_is_lowest_significant_byte;
   B32 use_key_value_pair;
   U32 slot_count;
   U32 max_depth;
-};
+} Steady_Trie(Settings);
 
-struct Steady_Trie(Trie) {
+typedef struct Steady_Trie(Trie) {
   Steady_Trie(Root) *root;
   Steady_Trie(Root) *current_root;
   Steady_Trie(Root) *edit_root;
   Steady_Trie(Settings) settings;
-#if Steady_Trie_Use_Key_Value_Pair
-  U64 generation;
+
   Steady_Trie_Value_Type *ref;
-#endif
-};
+} Steady_Trie(Trie);
 
 
-struct Steady_Trie(Stack_Node) {
+typedef struct Steady_Trie(Stack_Node) {
   struct Steady_Trie(Stack_Node) *next;
   Steady_Trie(Node) *node;
   U32 index;
   U32 visited_plus_one;
-};
+} Steady_Trie(Stack_Node);
 
-struct Steady_Trie(Iterator) {
+typedef struct Steady_Trie(Iterator) {
   Arena *arena;
   Steady_Trie(Stack_Node) *stack;
   Steady_Trie(Stack_Node) *free_stack; // TODO: Use free stack-nodes!
-  Steady_Trie(Key) key;
-};
 
-enum Steady_Trie(Edit_Kind) {
+  Steady_Trie(Key) key;
+} Steady_Trie(Iterator);
+
+typedef enum Steady_Trie(Edit_Kind) {
   Steady_Trie(Edit_Insert),
   Steady_Trie(Edit_Delete),
   Steady_Trie(Edit_Search),
-};
+} Steady_Trie(Edit_Kind);
 
-enum Steady_Trie(Edit_Result_Kind) {
-  Steady_Trie(Edit_Result_Key),
-  Steady_Trie(Edit_Result_Value),
-};
-
-struct Steady_Trie(Edit_Result) {
-  Steady_Trie(Edit_Result_Kind) kind;
-  union {
-    B32 found;
-    Steady_Trie_Value_Type *value;
-  };
-};
+typedef struct Steady_Trie(Edit_Result) {
+  B32 found;
+  Steady_Trie_Value_Type *value;
+} Steady_Trie(Edit_Result);
 
 
 
@@ -345,15 +327,6 @@ Steady_Function Steady_Trie(Iterator) *steady_trie(iter_init)(
 Steady_Function B32 steady_trie(iter_test)(Steady_Trie(Iterator) *iter) {
   return iter && iter->stack;
 }
-
-
-/* // TODO: Allow for setting the function names for init, test, and next. */
-/* #define Steady_Trie_Iterate(iter_name, arena, trie)\ */
-/*   for (Steady_Trie(Iterator) *iter_name = steady_trie(iter_init)(arena, trie);\ */
-/*        steady_trie(iter_test)(iter_name);\ */
-/*        steady_trie(iter_next)(iter_name)) */
-
-
 
 
 
