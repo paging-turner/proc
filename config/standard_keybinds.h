@@ -19,10 +19,10 @@ Define_Keybind(
   "Connect clicked process to all active processes."
   ) {
   B32 handled = 0;
-  Context *context = env.context;
-  Process_Selection selection = env.selection;
+  Context *context = env->context;
+  Process_Selection selection = env->selection;
 
-  if (Test_Keybind(&env, ProcessConnectionByModClick, Enter)) {
+  if (Test_Keybind(env, ProcessConnectionByModClick, Enter)) {
     handled = 1;
 
     Assert(context->active_processes.first);
@@ -148,8 +148,8 @@ Define_Keybind(
   "Toggle a 'Data Structure View', which shows the proc-trie using processes."
   ) {
   B32 handled = 0;
-  Context *context = env.context;
-  Process_Selection selection = env.selection;
+  Context *context = env->context;
+  Process_Selection selection = env->selection;
 
 
   if (check_keybind(context, keybind_action_REF(ToggleDataStructureView), selection) == Keybind_Result_Enter) {

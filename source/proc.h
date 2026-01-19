@@ -9,6 +9,7 @@ typedef struct Process_Shape Process_Shape;
 typedef struct Process_Selection Process_Selection;
 typedef struct Process_List Process_List;
 typedef enum Process_Connection Process_Connection;
+typedef enum Process_Connection_Flag Process_Connection_Flag;
 typedef enum Keybind_Result Keybind_Result;
 typedef struct Keybind Keybind;
 typedef struct Context Context;
@@ -35,7 +36,13 @@ function void remove_process_from_process_list(Context *context, Process_List *l
 function void clear_ds_view_process_list(Context *context);
 function Process_Shape get_process_shape(Context *context, Process *p);
 function Vector2 get_process_size(Context *context, Process *p, Process_Shape shape);
-
+function Rectangle get_selection_rectangle(Context *context);
+function B32 rectangle_contains_point(Rectangle r, Vector2 p);
+function void remove_wire_connection(Context *context, Process *wire, Process_Connection_Flag conn_flags);
+function void add_wire_connection(Context *context, Process *wire, Process *process, Process_Connection conn, U32 which_conn);
+function Vector2 get_process_position(Context *context, Process *process);
+function void handle_label_editing(Context *context, Process_List ps);
+function Process_Selection get_process_selection(Context *context, Process *p);
 
 
 
@@ -70,12 +77,12 @@ enum Process_Connection {
   Process_Connection__Count,
 };
 
-typedef enum {
+enum Process_Connection_Flag {
 #define X(conn, i)\
   Process_Connection_Flag_##conn = (1 << i),
   Process_Connection_Xlist
 #undef X
-} Process_Connection_Flag;
+};
 
 
 struct Process {

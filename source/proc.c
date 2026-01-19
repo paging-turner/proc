@@ -2243,192 +2243,45 @@ function void handle_ui(Context *context) {
   do_menu_ui(context, 0);
 }
 
-function void handle_process_interaction(Context *context) {
-  Ui_State *ui_state = &context->ui_state;
 
-  // environment
-  Process_Selection selection = (Process_Selection){0};
-  Keybind_Environment env = create_keybind_environment(context, selection);
-  env.should_stop_dragging = check_keybind(context, keybind_action_REF(SelectSingleProcess), selection) == Keybind_Result_Exit;
-  env.moved_wire = 0;
-  env.moved_wire_conn = 0;
+Define_Keybind(
+  ProcessInteraction, ,
+  Keybind_Behavior_Alternate, 0, 0, 0, 0,
+  ""
+  ) {
+  if (env->context) {
+    Ui_State *ui_state = &env->context->ui_state;
 
+    // custom keybinds at-the-start
+    U32 symbol_count = SymbolCount(keybind_action);
+    for (U32 i = 0; i < symbol_count; ++i) {
+      Keybind *keybind = SymbolMetadataFromID(keybind_action, i+1);
 
-  // custom keybinds at-the-start
-  U32 symbol_count = SymbolCount(keybind_action);
-  for (U32 i = 0; i < symbol_count; ++i) {
-    Keybind *keybind = SymbolMetadataFromID(keybind_action, i+1);
-
-    if (Is_Keybind_Custom(keybind)) {
-      keybind->handle(env);
-    }
-  }
-
-  // exit bounding
-  Keybind_Result old_kb_res = env.desired_kb_res;
-  env.desired_kb_res = Keybind_Result_Exit;
-  {
-    keybind_action_REF(Bound)->handle(env);
-  }
-  env.desired_kb_res = old_kb_res;
-
-
-  // undo/redo
-  keybind_action_REF(Undo)->handle(env);
-  keybind_action_REF(Redo)->handle(env);
-
-  // panning
-  keybind_action_REF(Pan)->handle(env);
-
-  // zooming
-  keybind_action_REF(ZoomIn)->handle(env);
-  keybind_action_REF(ZoomOut)->handle(env);
-
-  Keybind_Environment old_env = env;
-
-  // process interaction
-  for (Process *p = context->processes.first; p != 0; p = p->next) {
-    // per-process environment
-    selection = get_process_selection(context, p);
-    Keybind_Environment env = create_keybind_environment(context, selection);
-    env.should_stop_dragging = old_env.should_stop_dragging;
-    B32 hot_id_assigned = selection.hot_id_assigned || Get_Flag(ui_state->flags, Ui_State_Flag_hot_id_assigned);
-    Assign_Flag(ui_state->flags, Ui_State_Flag_hot_id_assigned, hot_id_assigned);
-    env.is_active = is_active_process(context, p);
-    env.p = p;
-
-    // check if we need to stop dragging wire
-    keybind_action_REF(CheckIfWeNeedToStopDraggingTheWire)->handle(env);
-
-    if (keybind_action_REF(SelectSingleProcess)->handle(env)) {
-    }
-    else {
-      old_kb_res = env.desired_kb_res;
-      env.desired_kb_res = Keybind_Result_Enter;
-      {
-        keybind_action_REF(MaybeSetHotProcess)->handle(env);
-      }
-      env.desired_kb_res = old_kb_res;
-    }
-
-    // bounding
-    if (Get_Flag(context->flags, Context_Flag_Bounding)) {
-      Rectangle selection_rectangle = get_selection_rectangle(context);
-
-      if (Get_Flag(p->flags, Process_Flag_Wire)) {
-        Process_Shape out_shape = get_process_shape(context, p->out);
-        Process_Shape in_shape = get_process_shape(context, p->in);
-        Vector2 out_position = get_process_wire_position(context, p->out, out_shape, Process_Connection_Out, p->which_out);
-        Vector2 in_position = get_process_wire_position(context, p->in, in_shape, Process_Connection_In, p->which_in);
-
-        if (rectangle_contains_point(selection_rectangle, out_position) ||
-            rectangle_contains_point(selection_rectangle, in_position)) {
-          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, p, next_active, 0);
-        }
-      } else {
-        Process_Shape shape = get_process_shape(context, p);
-
-        if (rectangle_contains_point(selection_rectangle, shape.center)) {
-          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, p, next_active, 0);
-        }
+      if (Is_Keybind_Custom(keybind)) {
+        keybind->handle(env);
       }
     }
-  }
-  // end process interaction
 
-  // restore old env
-  env = old_env;
-
-  // zero out selection
-  selection = (Process_Selection){0};
-  // zero the old hot-id
-  if (!Get_Flag(ui_state->flags, Ui_State_Flag_hot_id_assigned)) {
-    context->hot_process = 0;
-  }
-
-  // more rectangle selection handling
-  if (Get_Flag(context->flags, Context_Flag_Bounding)) {
-    // add hot process to active processes
-    if (context->hot_process) {
-      B32 hot_is_active = is_active_process(context, context->hot_process);
-      if (!hot_is_active) {
-        SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, context->hot_process, next_active, 0);
-      }
-    }
+    Keybind_Handle(env, BoundDesiredKbResStack_Exit);
+    Keybind_Handle(env, Undo);
+    Keybind_Handle(env, Redo);
+    Keybind_Handle(env, Pan);
+    Keybind_Handle(env, ZoomIn);
+    Keybind_Handle(env, ZoomOut);
+    Keybind_Handle(env, ForAllProcessInteractions);
+    Keybind_Handle(env, ZeroOutSelection);
+    Keybind_Handle(env, MoreRectangleSelectionHandling);
+    Keybind_Handle(env, CreateProcess);
+    Keybind_Handle(env, CancelSelection);
+    Keybind_Handle(env, BoundDesiredKbResStack_Enter);
+    Keybind_Handle(env, ToggleDisplayMode);
+    Keybind_Handle(env, CopyProcess);
+    Keybind_Handle(env, PasteProcess);
+    Keybind_Handle(env, HandleMovedWire);
+    Keybind_Handle(env, HandleActiveProcess);
   }
 
-  // create process
-  keybind_action_REF(CreateProcess)->handle(env);
-
-  // cancel selection
-  keybind_action_REF(CancelSelection)->handle(env);
-
-  // enter bounding
-  // TODO: Cleanup
-  old_kb_res = env.desired_kb_res;
-  env.desired_kb_res = Keybind_Result_Enter;
-  {
-    keybind_action_REF(Bound)->handle(env);
-  }
-  env.desired_kb_res = old_kb_res;
-
-  // toggle between rounded and triangular shapes
-  keybind_action_REF(ToggleDisplayMode)->handle(env);
-
-  // copy/paste processes
-  keybind_action_REF(CopyProcess)->handle(env);
-  keybind_action_REF(PasteProcess)->handle(env);
-
-
-  // handle moved wire
-  if (env.moved_wire && context->hot_process) {
-    if (Get_Flag(context->hot_process->flags, Process_Flag_Wire)) {
-      Process *connected_process = context->hot_process->conn[env.moved_wire_conn];
-      if (connected_process) {
-        // move wire to hovered wire
-        U32 which_conn = context->hot_process->which_conn[env.moved_wire_conn];
-        if (env.moved_wire != context->hot_process) {
-          remove_wire_connection(context, env.moved_wire, (1<<env.moved_wire_conn));
-          add_wire_connection(context, env.moved_wire, connected_process, env.moved_wire_conn, which_conn);
-        }
-      }
-    } else {
-      Process *connected_process = context->hot_process;
-      // move wire to last wire of process
-      U32 which_conn;
-      if (env.moved_wire->conn[env.moved_wire_conn] == connected_process) {
-        which_conn = connected_process->conn_count[env.moved_wire_conn] - 1;
-      } else {
-        which_conn = connected_process->conn_count[env.moved_wire_conn];
-      }
-      remove_wire_connection(context, env.moved_wire, (1<<env.moved_wire_conn));
-      add_wire_connection(context, env.moved_wire, connected_process, env.moved_wire_conn, which_conn);
-    }
-  }
-
-  // handle active-process
-  if (context->active_processes.first) {
-    B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging);
-    if (is_dragging && env.should_stop_dragging) {
-      // update positions of active processes
-      for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
-        Vector2 new_position = get_process_position(context, a);
-        a->position = new_position;
-      }
-      // stop dragging
-      Unset_Flag(context->flags, Context_Flag_Dragging);
-    }
-    else if (keybind_action_REF(CycleProcessDisplay)->handle(env)) {
-      // handled
-    }
-    else if (keybind_action_REF(DeleteProcess)->handle(env)) {
-      // handled
-    }
-    else if (!Get_Flag(ui_state->flags, Ui_State_Flag_action_occured)) {
-      // process label editing
-      handle_label_editing(context, context->active_processes);
-    }
-  }
+  return 0;
 }
 
 
@@ -2448,7 +2301,15 @@ function void handle_user_input(Context *context) {
   handle_ui(context);
 
   if (!Get_Flag(context->ui_state.flags, Ui_State_Flag_action_occured)) {
-    handle_process_interaction(context);
+    // environment
+    Process_Selection selection = (Process_Selection){0};
+    Keybind_Environment env_raw = create_keybind_environment(context, selection);
+    Keybind_Environment *env = &env_raw;
+    env->should_stop_dragging = check_keybind(context, keybind_action_REF(SelectSingleProcess), selection) == Keybind_Result_Exit;
+    env->moved_wire = 0;
+    env->moved_wire_conn = 0;
+
+    Keybind_Handle(env, ProcessInteraction);
   }
 }
 

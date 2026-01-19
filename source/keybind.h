@@ -47,6 +47,7 @@ typedef struct Keybind_Environment {
 
   // temp members
   Keybind_Result desired_kb_res;
+  Keybind_Result old_kb_res;
   B32 is_active;
   Process *p;
   B32 should_stop_dragging;
@@ -63,7 +64,7 @@ struct Keybind {
   Ui_Constraint constraint;
   String8 name;
   String8 description;
-  B32 (*handle)(Keybind_Environment env);
+  B32 (*handle)(Keybind_Environment *env);
   Keybind *next;
 };
 
@@ -110,7 +111,7 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
 #define Define_Keybind(action_name, keybind_name, behavior_name, bind_value, k, m, c, d)\
   static keybind_action_DECL(action_name);\
   static keybind_DECL(action_name##keybind_name);\
-  function B32 handle_keybind_##action_name##bind_value(Keybind_Environment env);\
+  function B32 handle_keybind_##action_name##bind_value(Keybind_Environment *env);\
   MR4TH_BEFORE_MAIN(proc_keybind_##action_name##_##bind_value){\
     keybind_Type *keybind = keybind_action_REF(action_name);\
     B32 both_zero = (U32)(bind_value) == 0 && keybind->bind == 0;\
@@ -130,7 +131,11 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
              keybind->behavior != Keybind_Behavior_Overwrite) {\
     }\
   }\
-  function B32 handle_keybind_##action_name##bind_value(Keybind_Environment env)
+  function B32 handle_keybind_##action_name##bind_value(Keybind_Environment *env)
+
+
+#define Keybind_Handle(e, n)\
+  keybind_action_REF(n)->handle(env)
 
 
 #define Keybind_Has_Mouse_Wheel_Movement(keybind_name)\
