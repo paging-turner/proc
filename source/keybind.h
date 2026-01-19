@@ -49,6 +49,9 @@ typedef struct Keybind_Environment {
   Keybind_Result desired_kb_res;
   B32 is_active;
   Process *p;
+  B32 should_stop_dragging;
+  Process *moved_wire;
+  Process_Connection moved_wire_conn;
 } Keybind_Environment;
 
 

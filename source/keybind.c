@@ -108,6 +108,27 @@ Define_Keybind(
 
 
 
+Define_Keybind(
+  CheckIfWeNeedToStopDraggingTheWire, ,
+  Keybind_Behavior_Alternate, 0,
+  0, 0, 0,
+  "Select a single process."
+  ) {
+  B32 handled = 0;
+
+  if (env.should_stop_dragging) {
+    // unset drag flag
+    B32 wire_drag_flag = Process_Flag_Drag_In | Process_Flag_Drag_Out;
+    if (Get_Flag(env.p->flags, wire_drag_flag)) {
+      B32 is_in = Get_Flag(env.p->flags, Process_Flag_Drag_In);
+      Unset_Flag(env.p->flags, wire_drag_flag);
+      env.moved_wire = env.p;
+      env.moved_wire_conn = is_in ? Process_Connection_In : Process_Connection_Out;
+    }
+  }
+
+  return handled;
+}
 
 
 Define_Keybind(
@@ -173,6 +194,29 @@ Define_Keybind(
 
   return handled;
 }
+
+
+
+
+static keybind_action_DECL(SelectAnotherProcess);
+
+Define_Keybind(
+  MaybeSetHotProcess, ,
+  Keybind_Behavior_Alternate, 0, 0, 0, 0,
+  "Maybe select another process, or maybe set the context's hot-process to the keybind-environment's process."
+  ) {
+  if (keybind_action_REF(SelectAnotherProcess)->handle(env)) {
+    // handled
+  } else if (env.selection.type == Process_Selection_Process) {
+    // process hover
+    if (env.context) {
+      env.context->hot_process = env.p;
+    }
+  }
+
+  return 0;
+}
+
 
 
 
