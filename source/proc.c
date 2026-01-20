@@ -317,7 +317,6 @@ function Process *create_ui_element(Context *context) {
 
 
 
-global_variable U64 global_id_for_printing_tries;
 
 function void gather_processes_from_trie(Context *context) {
   Arena *arena = context->per_frame_arena;
@@ -326,12 +325,10 @@ function void gather_processes_from_trie(Context *context) {
   proc_trie_commit(trie);
 
   clear_processes(context);
-  /* proc_trie_print_trie(arena, trie, global_id_for_printing_tries); */
-  global_id_for_printing_tries += 1;;
+
   for (Proc_Trie_Iterator *iter = proc_trie_iter_init(arena, trie->current_root->node);
        proc_trie_iter_test(iter);
        proc_trie_iter_next(iter)) {
-  /* Proc_Trie_Iterate(iter, arena, trie) { */
     Process *p = (Process *)iter->key;
     SLLQueuePush(context->processes.first, context->processes.last, p);
   }
@@ -497,7 +494,12 @@ function void clear_ds_view_process_list(Context *context) {
 }
 
 
-function Process *add_process_to_copy_list(Context *context, Process *p, Vector2 *copy_center, F32 *copy_count) {
+function Process *add_process_to_copy_list(
+  Context *context,
+  Process *p,
+  Vector2 *copy_center,
+  F32 *copy_count
+  ) {
   Process *copied_p = create_detached_process(context);
   *copied_p = *p;
   p->to_copied = copied_p;
@@ -1270,8 +1272,13 @@ function Vector2 get_process_position(Context *context, Process *process) {
 }
 
 
-function Vector2
-get_process_wire_position(Context *context, Process *p, Process_Shape shape, Process_Connection conn, U32 wire_index) {
+function Vector2 get_process_wire_position(
+  Context *context,
+  Process *p,
+  Process_Shape shape,
+  Process_Connection conn,
+  U32 wire_index
+  ) {
   F32 padding = context->camera.zoom * global_process_wire_padding;
   Vector2 p0;
   Vector2 p1;
@@ -1744,8 +1751,14 @@ function Process *connect_processes(Context *context, Process *out, Process *in)
 
 
 
-function Half_Circle_Points
-get_half_circle_points(Context *context, Process_Shape shape, Process *p, Vector2 position, S32 text_width, B32 downward) {
+function Half_Circle_Points get_half_circle_points(
+  Context *context,
+  Process_Shape shape,
+  Process *p,
+  Vector2 position,
+  S32 text_width,
+  B32 downward
+  ) {
   Half_Circle_Points half_circle_points;
   F32 padding = context->camera.zoom * global_process_wire_padding;
   F32 spacing = context->camera.zoom * global_process_wire_spacing;
@@ -1786,8 +1799,14 @@ get_half_circle_points(Context *context, Process_Shape shape, Process *p, Vector
 }
 
 
-function void
-fill_out_half_circle_shape(Context *context, Process_Shape *shape, Process *p, Vector2 position, S32 text_width, B32 downward) {
+function void fill_out_half_circle_shape(
+  Context *context,
+  Process_Shape *shape,
+  Process *p,
+  Vector2 position,
+  S32 text_width,
+  B32 downward
+  ) {
   Half_Circle_Points half_circle_points = get_half_circle_points(context, *shape, p, position, text_width, downward);
 
   shape->kind = Process_Shape_HalfCircle;
@@ -1853,8 +1872,10 @@ function Vector2 get_process_size(
 }
 
 
-function Process_Shape
-get_process_shape(Context *context, Process *p) {
+function Process_Shape get_process_shape(
+  Context *context,
+  Process *p
+  ) {
   Process_Shape shape = {0};
   U64 arena_pop_pos = arena_current_pos(context->temp_arena);
 
@@ -1983,8 +2004,11 @@ get_process_shape(Context *context, Process *p) {
 }
 
 
-function B32
-triangle_fan_contains_point(Vector2 *points, S32 triangle_count, Vector2 point) {
+function B32 triangle_fan_contains_point(
+  Vector2 *points,
+  S32 triangle_count,
+  Vector2 point
+  ) {
   B32 contains = 0;
 
   for (S32 i = 1; i <= triangle_count; ++i) {
@@ -2002,8 +2026,11 @@ triangle_fan_contains_point(Vector2 *points, S32 triangle_count, Vector2 point) 
 }
 
 
-function B32
-triangle_strip_contains_point(Vector2 *points, S32 triangle_count, Vector2 point) {
+function B32 triangle_strip_contains_point(
+  Vector2 *points,
+  S32 triangle_count,
+  Vector2 point
+  ) {
   B32 contains = 0;
 
   for (S32 i = 0; i < triangle_count; ++i) {
@@ -2028,8 +2055,11 @@ triangle_strip_contains_point(Vector2 *points, S32 triangle_count, Vector2 point
 }
 
 
-function B32
-process_shape_contains_point(Context *context, Process_Shape shape, Vector2 point) {
+function B32 process_shape_contains_point(
+  Context *context,
+  Process_Shape shape,
+  Vector2 point
+  ) {
   B32 contains = 0;
 
   switch(shape.kind) {
