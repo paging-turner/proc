@@ -10,6 +10,13 @@ typedef enum {
 } Keybind_Behavior;
 
 typedef enum {
+  Keybind_Timing__Null             = 0,
+  Keybind_Timing_AtTheStart        = 1<<0,
+  Keybind_Timing_ForAllProcesses   = 1<<1,
+  Keybind_Timing_AtTheEnd          = 1<<2,
+} Keybind_Timing;
+
+typedef enum {
   Ui_Constraint__Null            = 0,
   Ui_Constraint_HoverProcess     = (1 << 1),
   Ui_Constraint_HotProcess       = (1 << 2),
@@ -58,6 +65,7 @@ typedef struct Keybind_Environment {
 
 struct Keybind {
   Keybind_Behavior behavior;
+  Keybind_Timing timing;
   U32 bind;
   U32 key_kind; // Uses raylib's KEY_* enum and some special ones for mouse-keys
   U32 modifiers;
@@ -108,7 +116,10 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
   ((keybind) && (keybind)->bind > 0 && (keybind)->handle)
 
 
-#define Define_Keybind(action_name, keybind_name, behavior_name, bind_value, k, m, c, d)\
+#define Define_Keybind(\
+  action_name, keybind_name,\
+  behavior_name, bind_value, timing_name,\
+  k, m, c, d)\
   static keybind_action_DECL(action_name);\
   static keybind_DECL(action_name##keybind_name);\
   function B32 handle_keybind_##action_name##bind_value(Keybind_Environment *env);\
@@ -120,6 +131,7 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
         (behavior_name == Keybind_Behavior_Overwrite && stronger_bind)) {\
       keybind->behavior = (behavior_name);\
       keybind->bind = (bind_value);\
+      Set_Flag(keybind->timing, Keybind_Timing_##timing_name);\
       keybind->key_kind = (k);\
       keybind->modifiers = (m);\
       keybind->constraint = (c);\

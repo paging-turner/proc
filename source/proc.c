@@ -2246,18 +2246,18 @@ function void handle_ui(Context *context) {
 
 Define_Keybind(
   ProcessInteraction, ,
-  Keybind_Behavior_Alternate, 0, 0, 0, 0,
+  Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0,
   ""
   ) {
   if (env->context) {
     Ui_State *ui_state = &env->context->ui_state;
 
     // custom keybinds at-the-start
-    U32 symbol_count = SymbolCount(keybind_action);
-    for (U32 i = 0; i < symbol_count; ++i) {
+    for (U32 i = 0; i < SymbolCount(keybind_action); ++i) {
       Keybind *keybind = SymbolMetadataFromID(keybind_action, i+1);
 
-      if (Is_Keybind_Custom(keybind)) {
+      if (Is_Keybind_Custom(keybind) &&
+          keybind->timing == Keybind_Timing_AtTheStart) {
         keybind->handle(env);
       }
     }
@@ -2279,6 +2279,16 @@ Define_Keybind(
     Keybind_Handle(env, PasteProcess);
     Keybind_Handle(env, HandleMovedWire);
     Keybind_Handle(env, HandleActiveProcess);
+
+    // custom keybinds at-the-end
+    for (U32 i = 0; i < SymbolCount(keybind_action); ++i) {
+      Keybind *keybind = SymbolMetadataFromID(keybind_action, i+1);
+
+      if (Is_Keybind_Custom(keybind) &&
+          keybind->timing == Keybind_Timing_AtTheEnd) {
+        keybind->handle(env);
+      }
+    }
   }
 
   return 0;

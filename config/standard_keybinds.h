@@ -10,8 +10,8 @@
 // Process-Connection By Clicking
 ////////////////////////////////////////
 Define_Keybind(
-  ProcessConnectionByModClick,,
-  Keybind_Behavior_Alternate, 34,
+  ProcessConnectionByModClick, ,
+  Keybind_Behavior_Alternate, 34, AtTheStart,
   Key_Kind_Mouse0, Modifier_Key_Super,
   (Ui_Constraint_ActionNotOccured |
    Ui_Constraint_HotProcess |
@@ -142,7 +142,7 @@ function void proc_ds_view_node_handler(
 
 Define_Keybind(
   ToggleDataStructureView,,
-  Keybind_Behavior_Overwrite, 274,
+  Keybind_Behavior_Overwrite, 274, AtTheStart,
   KEY_D, Modifier_Key_Control|Modifier_Key_Shift,
   Ui_Constraint_ActionNotOccured,
   "Toggle a 'Data Structure View', which shows the proc-trie using processes."
