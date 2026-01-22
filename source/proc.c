@@ -371,7 +371,6 @@ function Process *create_processes(Context *context, U32 process_count) {
 
 
 
-
 function void delete_process_list(Context *context, Process_List *list) {
   Arena *arena = context->permanent_arena;
   Proc_Trie_Trie *trie = context->proc_trie;

@@ -30,7 +30,8 @@
 === Keybind Config ===
   [X] Allow for multiple keybind definitions.
   [ ] Add ability to define bindings for mouse buttons and mouse-wheels
-  [ ] Create symbol-set to replace Proc_Keybind_Def_Kind enum
+  [x] Create symbol-set to replace Proc_Keybind_Def_Kind enum
+  [ ] Make a way to create keybind aliases, so you can define a new keybind for an existing handler-function.
 
 === Testing ===
   [ ] Enumerate some test cases, to at least be able to manually check that things are working.

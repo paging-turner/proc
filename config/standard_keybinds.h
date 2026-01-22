@@ -50,10 +50,11 @@ Define_Keybind(
     (a)->ref->ref = (a);\
     )
 
-#define Ensure_Process_Reference_Exists(a)\
+#define Ensure_Process_Reference_Exists(a, l)\
   Stmnt(\
     if ((a)->ref == 0) {\
       Create_Process_Reference(a);\
+      (a)->ref->label = string_chunk_list_from_string8(context, str8_lit(l));\
     })
 
 #define Push_Ds_View_Process(p)\
@@ -96,12 +97,16 @@ function void proc_ds_view_root_handler(
   B32 null_trie_ref = trie->ref == 0;
 
   // ensure trie exists
-  Ensure_Process_Reference_Exists(trie);
-  trie->ref->label = string_chunk_list_from_string8(context, str8_lit("Trie"));
+  Ensure_Process_Reference_Exists(trie, "Trie");
 
   // ensure root exists
-  Ensure_Process_Reference_Exists(root);
-  root->ref->label = string_chunk_list_from_string8(context, str8_lit("Root"));
+  Ensure_Process_Reference_Exists(root, "Root");
+
+  // ensure first node exists
+  Assert(root->node);
+  if (root->node) {
+    Ensure_Process_Reference_Exists(root->node, "Node");
+  }
 
   // positioning
   {
@@ -122,13 +127,16 @@ function void proc_ds_view_root_handler(
     }
   }
 
-  Process *wire = connect_detached_processes(context, trie->ref, root->ref);
+  Process *trie_to_root_wire = connect_detached_processes(context, trie->ref, root->ref);
+  Process *root_to_first_node_wire = connect_detached_processes(context, root->ref, root->node->ref);
 
   if (null_trie_ref) {
     Push_Ds_View_Process(trie->ref);
   }
   Push_Ds_View_Process(root->ref);
-  Push_Ds_View_Process(wire);
+  Push_Ds_View_Process(root->node->ref);
+  Push_Ds_View_Process(trie_to_root_wire);
+  Push_Ds_View_Process(root_to_first_node_wire);
 }
 
 
@@ -138,6 +146,34 @@ function void proc_ds_view_node_handler(
   Proc_Trie_Node *node
   ) {
   Context *context = (Context *)maybe_context;
+
+  Ensure_Process_Reference_Exists(node, "Node");
+
+  if (iter->stack->next) {
+    B32 contains_node = 0;
+    B32 contains_connection = 0;
+
+    Process *in = node->ref;
+    Assert(iter->stack->next->node->ref);
+    Process *out = iter->stack->next->node->ref;
+
+    for (Process *p = context->ds_view_processes.first; p != 0; p = p->next) {
+      if (p == node->ref) {
+        contains_node = 1;
+      }
+      if (Get_Flag(p->flags, Process_Flag_Wire) && p->in == in && p->out == out) {
+        contains_connection = 1;
+      }
+    }
+
+    if (!contains_node) {
+      Push_Ds_View_Process(node->ref);
+    }
+    if (!contains_connection) {
+      Process *node_to_node_wire = connect_detached_processes(context, out, in);
+      Push_Ds_View_Process(node_to_node_wire);
+    }
+  }
 }
 
 Define_Keybind(
