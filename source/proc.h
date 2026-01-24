@@ -43,6 +43,7 @@ function void add_wire_connection(Context *context, Process *wire, Process *proc
 function Vector2 get_process_position(Context *context, Process *process);
 function void handle_label_editing(Context *context, Process_List ps);
 function Process_Selection get_process_selection(Context *context, Process *p);
+function Process *find_process_connection(Context *context, Process *p, Process_Connection conn, U32 which_conn);
 
 
 

@@ -233,3 +233,51 @@ Define_Keybind(
 
   return handled;
 }
+
+
+#define Modifier_Key_4(a1, a2, a3, a4, ...)   Modifier_Key_##a1|Modifier_Key_##a2|Modifier_Key_##a3|Modifier_Key_##a4
+#define Modifier_Key_3(a1, a2, a3, ...)       Modifier_Key_##a1|Modifier_Key_##a2|Modifier_Key_##a3
+#define Modifier_Key_2(a1, a2, ...)           Modifier_Key_##a1|Modifier_Key_##a2
+#define Modifier_Key_1(a1, ...)               Modifier_Key_##a1
+#define SEMI_LIST(a1, a2, a3, a4, a5, ...)   Modifier_Key ## a5 (a1, a2, a3, a4)
+#define Modifier_Keys(...)   SEMI_LIST(__VA_ARGS__, _4, _3, _2, _1)
+
+
+
+Define_Keybind(
+  AutoAlignOneInOneOut,,
+  Keybind_Behavior_Overwrite, 1, AtTheStart,
+  KEY_A, Modifier_Keys(Super, Alt),
+  Ui_Constraint_HotProcess|Ui_Constraint_ActionNotOccured,
+  "Align any following processes after a given node, but only if the following processes have a single in and a single out."
+  ) {
+  B32 handled = 0;
+
+  if (env->context && Test_Keybind(env, AutoAlignOneInOneOut, Enter)) {
+    Context *context = env->context;
+    Process *hot_process = context->hot_process;
+    Assert(context->hot_process);
+
+
+    printf("auto aligning\n");
+    Process *current_process = context->hot_process;
+    for (;;) {
+      if (current_process == 0) {
+        break;
+      }
+
+      printf("  %p\n", current_process);
+      Assert(!"finish implementing this...");
+
+      Process *wire = find_process_connection(context, current_process, Process_Connection_Out, 0);
+      if (wire) {
+        current_process = wire->in;
+      }
+      else {
+        break;
+      }
+    }
+  }
+
+  return handled;
+}

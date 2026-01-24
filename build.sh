@@ -86,7 +86,7 @@ if [ -e $Custom_File ]; then
 fi
 
 Settings="$Settings -fno-pie"  # No-pie is used for symbol-sets at the moment
-# Settings="$Settings -E"
+# Settings="$Settings -E"   # Just output the pre-processor.
 
 
 

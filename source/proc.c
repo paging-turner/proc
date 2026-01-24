@@ -676,6 +676,25 @@ function B32 is_active_process(Context *context, Process *p) {
   return is_active;
 }
 
+function Process *find_process_connection(
+  Context *context,
+  Process *p,
+  Process_Connection conn,
+  U32 which_conn
+  ) {
+  Process *target_wire = 0;
+
+  for (Process *w = context->processes.first; w != 0; w = w->next) {
+    if (Get_Flag(w->flags, Process_Flag_Wire)) {
+      if ((p == w->conn[conn]) && (w->which_conn[conn] == which_conn)) {
+        target_wire = w;
+        break;
+      }
+    }
+  }
+
+  return target_wire;
+}
 
 
 

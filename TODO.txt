@@ -1,3 +1,7 @@
+=== Autolayout ===
+  [ ] Write some code to help auto-layout the trie ds-view.
+  [ ] Consider writing generic helpers that allow you to autolayout sets of processes.
+
 === Undo/redo ===
   [ ]
 
