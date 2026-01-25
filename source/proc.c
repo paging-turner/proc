@@ -461,6 +461,27 @@ function Process *replace_process_with(
   Process *p = push_permanent_process(context);
   Proc_Trie_Trie *trie = context->proc_trie;
 
+  // check if we need to replace any wires connected to the process to replace
+  for (Process *wire = context->processes.first; wire != 0; wire = wire->next) {
+    if (Get_Flag(wire->flags, Process_Flag_Wire)) {
+      B32 replace_out = wire->out == to_replace;
+      B32 replace_in = wire->in == to_replace;
+      if (replace_out || replace_in) {
+        Process *new_wire = push_permanent_process(context);
+        *new_wire = *wire;
+        new_wire->out = replace_out ? p : new_wire->out;
+        new_wire->in = replace_in ? p : new_wire->in;
+
+        proc_trie_delete(context->permanent_arena, trie, IntFromPtr(wire));
+#if Proc_Trie_Use_Key_Value
+        proc_trie_set(context->permanent_arena, context->proc_trie, (U64)new_wire, new_wire);
+#else
+        proc_trie_insert(context->permanent_arena, trie, IntFromPtr(new_wire));
+#endif
+      }
+    }
+  }
+
   if (p) {
     *p = p_lit;
     proc_trie_delete(context->permanent_arena, trie, IntFromPtr(to_replace));
