@@ -37,10 +37,17 @@ typedef enum {
 typedef enum {
   Modifier_Key__Null    = 0,
   Modifier_Key_Control  = (1 << 0),
-  Modifier_Key_Shift    = (1 << 2),
-  Modifier_Key_Alt      = (1 << 3),
-  Modifier_Key_Super    = (1 << 4),
+  Modifier_Key_Shift    = (1 << 1),
+  Modifier_Key_Alt      = (1 << 2),
+  Modifier_Key_Super    = (1 << 3),
 } Modifier_Key;
+
+#define Modifier_Key_4(a1, a2, a3, a4, ...)   Modifier_Key_##a1|Modifier_Key_##a2|Modifier_Key_##a3|Modifier_Key_##a4
+#define Modifier_Key_3(a1, a2, a3, ...)       Modifier_Key_##a1|Modifier_Key_##a2|Modifier_Key_##a3
+#define Modifier_Key_2(a1, a2, ...)           Modifier_Key_##a1|Modifier_Key_##a2
+#define Modifier_Key_1(a1, ...)               Modifier_Key_##a1
+#define SEMI_LIST(a1, a2, a3, a4, a5, ...)   Modifier_Key ## a5 (a1, a2, a3, a4)
+#define Modifier_Keys(...)   SEMI_LIST(__VA_ARGS__, _4, _3, _2, _1)
 
 enum Keybind_Result {
   Keybind_Result__Null,

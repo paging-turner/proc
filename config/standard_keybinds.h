@@ -28,8 +28,10 @@ Define_Keybind(
     Assert(context->active_processes.first);
     Assert(context->hot_process);
 
+    Connection_Result conn_res = (Connection_Result){0};
+    conn_res.in = context->hot_process;
     for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
-      connect_processes(context, a, context->hot_process);
+      conn_res = connect_processes(context, a, conn_res.in);
     }
   }
 
@@ -234,13 +236,6 @@ Define_Keybind(
   return handled;
 }
 
-
-#define Modifier_Key_4(a1, a2, a3, a4, ...)   Modifier_Key_##a1|Modifier_Key_##a2|Modifier_Key_##a3|Modifier_Key_##a4
-#define Modifier_Key_3(a1, a2, a3, ...)       Modifier_Key_##a1|Modifier_Key_##a2|Modifier_Key_##a3
-#define Modifier_Key_2(a1, a2, ...)           Modifier_Key_##a1|Modifier_Key_##a2
-#define Modifier_Key_1(a1, ...)               Modifier_Key_##a1
-#define SEMI_LIST(a1, a2, a3, a4, a5, ...)   Modifier_Key ## a5 (a1, a2, a3, a4)
-#define Modifier_Keys(...)   SEMI_LIST(__VA_ARGS__, _4, _3, _2, _1)
 
 
 

@@ -10,6 +10,7 @@ typedef struct Process_Selection Process_Selection;
 typedef struct Process_List Process_List;
 typedef enum Process_Connection Process_Connection;
 typedef enum Process_Connection_Flag Process_Connection_Flag;
+typedef struct Connection_Result Connection_Result;
 typedef enum Keybind_Result Keybind_Result;
 typedef struct Keybind Keybind;
 typedef struct Context Context;
@@ -31,7 +32,7 @@ function void copy_active_processes(Context *context);
 function void paste_processes(Context *context);
 function void gather_processes_from_trie(Context *context);
 function Process *connect_detached_processes(Context *context, Process *out, Process *in);
-function Process *connect_processes(Context *context, Process *out, Process *in);
+function Connection_Result connect_processes(Context *context, Process *out, Process *in);
 function void remove_process_from_process_list(Context *context, Process_List *list, Process *p);
 function void clear_ds_view_process_list(Context *context);
 function Process_Shape get_process_shape(Context *context, Process *p);
@@ -84,6 +85,14 @@ enum Process_Connection_Flag {
   Process_Connection_Xlist
 #undef X
 };
+
+struct Connection_Result {
+  Process *out;
+  Process *in;
+  Process *new_wire;
+};
+
+
 
 
 struct Process {

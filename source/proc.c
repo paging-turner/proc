@@ -1457,9 +1457,7 @@ function void add_wire_connection(
   if (wire && process) {
     Process new_process_lit = *process;
     Process new_wire_lit = *wire;
-    /* Process *new_in = replace_process_with(context, in, new_in_lit); */
 
-    /* process->conn_count[conn] += 1; */
     new_process_lit.conn_count[conn] += 1;
     Process *new_process = replace_process_with(context, process, new_process_lit);
 
@@ -1467,8 +1465,6 @@ function void add_wire_connection(
     new_wire_lit.conn[conn] = new_process;
     new_wire_lit.which_conn[conn] = which_conn;
     replace_process_with(context, wire, new_wire_lit);
-    /* wire->conn[conn] = process; */
-    /* wire->which_conn[conn] = which_conn; */
 
     for (Process *test_wire = context->processes.first;
          test_wire != 0;
@@ -1761,30 +1757,36 @@ function Process *connect_detached_processes(
 }
 
 
-function Process *connect_processes(Context *context, Process *out, Process *in) {
-  Process *new_wire = create_process(context);
 
-  if (new_wire && out && in) {
+function Connection_Result connect_processes(
+  Context *context,
+  Process *out,
+  Process *in
+  ) {
+  Connection_Result result;
+  result.new_wire = create_process(context);
+
+  if (result.new_wire && out && in) {
     Process new_in_lit = *in;
     Process new_out_lit = *out;
 
     new_in_lit.in_count += 1;
     new_out_lit.out_count += 1;
 
-    Process *new_in = replace_process_with(context, in, new_in_lit);
-    Process *new_out = replace_process_with(context, out, new_out_lit);
+    result.out = replace_process_with(context, out, new_out_lit);
+    result.in = replace_process_with(context, in, new_in_lit);
 
-    Set_Flag(new_wire->flags, Process_Flag_Wire);
-    new_wire->out = new_out;
-    new_wire->in = new_in;
+    Set_Flag(result.new_wire->flags, Process_Flag_Wire);
+    result.new_wire->out = result.out;
+    result.new_wire->in = result.in;
 
-    new_wire->which_out = out->out_count;
-    new_wire->which_in = in->in_count;
+    result.new_wire->which_out = out->out_count;
+    result.new_wire->which_in = in->in_count;
   }
 
   gather_processes_from_trie(context);
 
-  return new_wire;
+  return result;
 }
 
 
