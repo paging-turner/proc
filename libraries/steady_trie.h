@@ -47,6 +47,10 @@
 # define Steady_Trie_Use_Key_Value_Pair 0
 #endif
 
+#ifndef Steady_Trie_Use_Debug_Log
+# define Steady_Trie_Use_Debug_Log 0
+#endif
+
 
 
 ////////////////////////////
@@ -124,6 +128,13 @@ typedef U8 Steady_Trie(Slot_Type);
 #define Steady_Function static
 
 
+#if Steady_Trie_Use_Debug_Log
+# define Steady_Trie_Debug_Print(...)  printf(__VA_ARGS__)
+#else
+# define Steady_Trie_Debug_Print(...)
+#endif
+
+
 ////////////////////////////
 // Static Invariants
 ////////////////////////////
@@ -182,6 +193,11 @@ typedef struct Steady_Trie(Root) {
   Steady_Trie_Value_Type *ref;
 } Steady_Trie(Root);
 
+typedef struct Steady_Trie(Root_Stack) {
+  Steady_Trie(Root) *root;
+  struct Steady_Trie(Root_Stack) *next;
+} Steady_Trie(Root_Stack);
+
 typedef struct Steady_Trie(Settings) {
   U32 key_bits;
   U32 slot_bits;
@@ -226,6 +242,25 @@ typedef struct Steady_Trie(Edit_Result) {
   B32 found;
   Steady_Trie_Value_Type *value;
 } Steady_Trie(Edit_Result);
+
+
+
+
+Steady_Function char *steady_trie(get_edit_kind_name)(
+  Steady_Trie(Edit_Kind) edit_kind
+  ) {
+  char *name = "";
+
+  switch (edit_kind) {
+  case Steady_Trie(Edit_Insert): name = "Insert"; break;
+  case Steady_Trie(Edit_Delete): name = "Delete"; break;
+  case Steady_Trie(Edit_Search): name = "Search"; break;
+  default: Assert(0);
+  }
+
+  return name;
+}
+
 
 
 
@@ -330,6 +365,25 @@ Steady_Function B32 steady_trie(iter_test)(Steady_Trie(Iterator) *iter) {
 
 
 
+Steady_Function void steady_trie(crawl_roots)(
+  Steady_Trie(Trie) *trie,
+  void (*handle_root)(Steady_Trie(Root) *root)
+  ) {
+  Steady_Trie(Root) *root = trie->root;
+
+  for (;;) {
+    if (root) {
+      Assert(!"TODO: We need to crawl the root's branches as well.");
+      handle_root(root);
+      root = root->next_edit;
+    }
+    else {
+      break;
+    }
+  }
+}
+
+
 
 
 // TODO: Do we need to rename new_root_with_keys?
@@ -339,6 +393,7 @@ Steady_Function void steady_trie(new_root_with_keys)(
   Steady_Trie(Key) *keys,
   U32 key_count
   ) {
+  Steady_Trie_Debug_Print("new_root_with_keys\n");
   Steady_Trie(Root) *new_root = trie->edit_root;
   B32 began_with_no_edit_root = trie->edit_root == 0;
 
@@ -419,6 +474,7 @@ Steady_Function void steady_trie(new_root)(
   Steady_Trie(Trie) *trie,
   Steady_Trie(Key) key
   ) {
+  Steady_Trie_Debug_Print("new_root\n");
   Steady_Trie(Key) keys[] = {key};
   steady_trie(new_root_with_keys)(arena, trie, keys, 1);
 }
@@ -432,6 +488,7 @@ Steady_Function Steady_Trie(Edit_Result) steady_trie(edit)(
   U32 count,
   Steady_Trie(Edit_Kind) edit_kind
   ) {
+  Steady_Trie_Debug_Print("edit %s\n", steady_trie(get_edit_kind_name)(edit_kind));
   Steady_Trie(Edit_Result) result = (Steady_Trie(Edit_Result)){0};
   if (edit_kind != Steady_Trie(Edit_Search) && trie->edit_root == 0) {
     steady_trie(new_root_with_keys)(arena, trie, keys, count);
@@ -493,6 +550,7 @@ Steady_Function Steady_Trie(Edit_Result) steady_trie(set)(
   Steady_Trie(Key) key,
   Steady_Trie_Value_Type *value
   ) {
+  Steady_Trie_Debug_Print("set\n");
   return steady_trie(edit)(arena, trie, &key, value, 1, Steady_Trie(Edit_Insert));
 }
 #else
@@ -501,6 +559,7 @@ Steady_Function Steady_Trie(Edit_Result) steady_trie(insert)(
   Steady_Trie(Trie) *trie,
   Steady_Trie(Key) key
   ) {
+  Steady_Trie_Debug_Print("insert\n");
   Steady_Trie_Value_Type value = steady_trie(get_default_value)();
   return steady_trie(edit)(arena, trie, &key, value, 1, Steady_Trie(Edit_Insert));
 }
@@ -511,6 +570,7 @@ Steady_Function Steady_Trie(Edit_Result) steady_trie(delete)(
   Steady_Trie(Trie) *trie,
   Steady_Trie(Key) key
   ) {
+  Steady_Trie_Debug_Print("delete\n");
   Steady_Trie_Value_Type value = steady_trie(get_default_value)();
   return steady_trie(edit)(arena, trie, &key, &value, 1, Steady_Trie(Edit_Delete));
 }
@@ -520,12 +580,14 @@ Steady_Function Steady_Trie(Edit_Result) steady_trie(search)(
   Steady_Trie(Trie) *trie,
   Steady_Trie(Key) key
   ) {
+  Steady_Trie_Debug_Print("search\n");
   Steady_Trie_Value_Type value = steady_trie(get_default_value)();
   return steady_trie(edit)(arena, trie, &key, &value, 1, Steady_Trie(Edit_Search));
 }
 
 
 Steady_Function Steady_Trie(Trie) *steady_trie(create_trie)(Arena *arena) {
+  Steady_Trie_Debug_Print("create_trie\n");
   Steady_Trie(Trie) *trie = arena_push(arena, sizeof(Steady_Trie(Trie)));
   Steady_Trie(Node) *node = arena_push(arena, sizeof(Steady_Trie(Node)));
   Steady_Trie(Root) *root = arena_push(arena, sizeof(Steady_Trie(Root)));
@@ -553,6 +615,7 @@ Steady_Function Steady_Trie(Trie) *steady_trie(create_trie)(Arena *arena) {
 
 
 Steady_Function void steady_trie(undo)(Steady_Trie(Trie) *trie) {
+  Steady_Trie_Debug_Print("undo\n");
   if (trie->current_root->prev_edit != 0) {
     trie->current_root = trie->current_root->prev_edit;
   }
@@ -569,6 +632,7 @@ Steady_Function void steady_trie(undo)(Steady_Trie(Trie) *trie) {
 
 
 Steady_Function void steady_trie(redo)(Steady_Trie(Trie) *trie) {
+  Steady_Trie_Debug_Print("redo\n");
   // TODO: Allow for redoing other branches.
   if (trie->current_root->next_branch != 0) {
     // @Speed
@@ -585,8 +649,16 @@ Steady_Function void steady_trie(redo)(Steady_Trie(Trie) *trie) {
 
 
 
+Steady_Function void steady_trie(handle_root_crawl)(Steady_Trie(Root) *root) {
+  Steady_Trie_Debug_Print("  root = %p\n", root);
+}
 
 Steady_Function void steady_trie(commit)(Steady_Trie(Trie) *trie) {
+  Steady_Trie_Debug_Print("commit\n");
+  U32 root_count = 0;
+  steady_trie(crawl_roots)(trie, steady_trie(handle_root_crawl));
+  Steady_Trie_Debug_Print("\n");
+
   if (trie->edit_root) {
     trie->current_root = trie->edit_root;
     trie->edit_root = 0;
@@ -614,20 +686,20 @@ Steady_Function B32 steady_trie(ensure_key_has_occupation)(
     Steady_Trie_Value_Type *value = search_result.value;
 
     if (occupation && !value) {
-      printf("[ Error ] Null value at key %llu\n", (U64)key);
+      Steady_Trie_Debug_Print("[ Error ] Null value at key %llu\n", (U64)key);
       errors = 1;
     }
 #if 0
 # if Steady_Trie_Use_Key_Value_Pair
     // TODO: Check that values are equal.
     else if (occupation && !steady_trie(values_equal)(*value, steady_trie(get_default_value)())) {
-      printf("[ Error ] Mismatched value at key %llu.\n", (U64)key);
+      Steady_Trie_Debug_Print("[ Error ] Mismatched value at key %llu.\n", (U64)key);
       errors = 1;
     }
 # endif
 #endif
     else if (!occupation && value) {
-      printf("[ Error ] Found a value at key %llu, but was not expecting a value.\n",
+      Steady_Trie_Debug_Print("[ Error ] Found a value at key %llu, but was not expecting a value.\n",
              (U64)key);
       errors = 1;
     }
@@ -636,7 +708,7 @@ Steady_Function B32 steady_trie(ensure_key_has_occupation)(
     Steady_Trie(Edit_Result) search_result = steady_trie(search)(arena, trie, key);
 
     if (search_result.found != occupation) {
-      printf("[ Error ] Expected key %llu to have occupation %d but it has occupation %d\n",
+      Steady_Trie_Debug_Print("[ Error ] Expected key %llu to have occupation %d but it has occupation %d\n",
              (U64)key, occupation, search_result.found);
       errors = 1;
     }
@@ -979,6 +1051,9 @@ Steady_Function U32 steady_trie(run_tests)(Arena *arena) {
 #undef Steady_Trie_Slot_Bits
 #undef Steady_Trie_Root_Is_Lowest_Significant_Byte
 #undef Steady_Trie_Use_Key_Value_Pair
+#undef Steady_Trie_Use_Debug_Log
+
+#undef Steady_Trie_Debug_Print
 
 #undef Steady_Trie_Slot_Mask
 #undef Steady_Trie_Get_Slot_Shift

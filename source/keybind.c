@@ -502,6 +502,7 @@ Define_Keybind(
       clear_active_processes(context);
       SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, new_p, next_active, 0);
     }
+    gather_processes_from_trie(context);
   }
 
   return handled;

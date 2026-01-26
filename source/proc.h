@@ -157,6 +157,7 @@ struct Process {
 #define Steady_Trie_Use_Key_Value_Pair   Proc_Trie_Use_Key_Value
 #define Steady_Trie_Value_Type           Process
 #define Steady_Trie_Default_Value        (Process){0}
+#define Steady_Trie_Use_Debug_Log        1
 #include "../libraries/steady_trie.h"
 #define Proc_Trie_Iterate(iter_name, arena, trie)\
   for (Proc_Trie_Iterator *iter_name = proc_trie_iter_init(arena, trie->current_root->node);\

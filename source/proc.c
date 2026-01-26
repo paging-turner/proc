@@ -344,7 +344,6 @@ function Process *create_process(Context *context) {
 #else
     proc_trie_insert(context->permanent_arena, context->proc_trie, (U64)p);
 #endif
-    gather_processes_from_trie(context);
   }
 
   return p;
