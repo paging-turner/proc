@@ -496,6 +496,8 @@ function Process *replace_process_with(
 }
 
 
+
+
 function void remove_copy_process_list(Context *context, Process_List *list) {
   // TODO: @Speed can probably do some fancy stuff with just the ends of the list?
   for (Process *p = list->first; p != 0;) {
@@ -1767,11 +1769,11 @@ function Connection_Result connect_processes(
   result.new_wire = create_process(context);
 
   if (result.new_wire && out && in) {
-    Process new_in_lit = *in;
     Process new_out_lit = *out;
+    Process new_in_lit = *in;
 
-    new_in_lit.in_count += 1;
     new_out_lit.out_count += 1;
+    new_in_lit.in_count += 1;
 
     result.out = replace_process_with(context, out, new_out_lit);
     result.in = replace_process_with(context, in, new_in_lit);

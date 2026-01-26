@@ -6,6 +6,22 @@
 
 
 
+
+
+function S32 process_compare_pos_x(void *a, void *b, void *udata) {
+  S32 result = 0;
+
+  if (a && b) {
+    Process *a_proc = *(Process **)a;
+    Process *b_proc = *(Process **)b;
+    result = a_proc->position.x - b_proc->position.x;
+  }
+
+  return result;
+}
+
+
+
 ////////////////////////////////////////
 // Process-Connection By Clicking
 ////////////////////////////////////////
@@ -28,10 +44,28 @@ Define_Keybind(
     Assert(context->active_processes.first);
     Assert(context->hot_process);
 
-    Connection_Result conn_res = (Connection_Result){0};
-    conn_res.in = context->hot_process;
-    for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
-      conn_res = connect_processes(context, a, conn_res.in);
+    // @Speed
+    U32 active_count = 0;
+    Process **sorted_processes = 0;
+    {
+      for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
+        active_count += 1;
+      }
+      sorted_processes = arena_push(context->temp_arena, active_count*sizeof(Process *));
+      U32 i = 0;
+      for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
+        sorted_processes[i] = a;
+        i += 1;
+      }
+      sort_merge(sorted_processes, sizeof(Process *), active_count, process_compare_pos_x, 0);
+    }
+
+    if (sorted_processes) {
+      Connection_Result conn_res = (Connection_Result){0};
+      conn_res.in = context->hot_process;
+      for (U32 i = 0; i < active_count; ++i) {
+        conn_res = connect_processes(context, sorted_processes[i], conn_res.in);
+      }
     }
   }
 
