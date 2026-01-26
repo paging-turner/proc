@@ -49,13 +49,17 @@ Define_Keybind(
     Process **sorted_processes = 0;
     {
       for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
-        active_count += 1;
+        if (!Get_Flag(a->flags, Process_Flag_Wire)) {
+          active_count += 1;
+        }
       }
       sorted_processes = arena_push(context->temp_arena, active_count*sizeof(Process *));
       U32 i = 0;
       for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
-        sorted_processes[i] = a;
-        i += 1;
+        if (!Get_Flag(a->flags, Process_Flag_Wire)) {
+          sorted_processes[i] = a;
+          i += 1;
+        }
       }
       sort_merge(sorted_processes, sizeof(Process *), active_count, process_compare_pos_x, 0);
     }
