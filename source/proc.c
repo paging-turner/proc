@@ -2846,6 +2846,12 @@ function void per_frame_cleanup(Context *context) {
 }
 
 
+
+function void handle_root_crawl(Proc_Trie_Root *root) {
+  printf("root %p\n", root);
+}
+
+
 int main(void) {
   InitWindow(800, 500, "proc");
   SetExitKey(0);
@@ -2871,6 +2877,11 @@ int main(void) {
     handle_user_input(&context);
 
     check_context(&context);
+    if (Get_Flag(context.ui_state.flags, Ui_State_Flag_action_occured)) {
+      printf("\n\ncrawling...\n");
+      proc_trie_crawl_roots(context.temp_arena, context.proc_trie, handle_root_crawl);
+      /* printf("action occured %f\n", GetTime()); */
+    }
 
     render_ClearBackground(prc, global_background_color);
     if (Get_Flag(context.flags, Context_Flag_DataStructureView)) {

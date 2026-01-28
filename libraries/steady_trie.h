@@ -195,6 +195,7 @@ typedef struct Steady_Trie(Root) {
 
 typedef struct Steady_Trie(Root_Stack) {
   Steady_Trie(Root) *root;
+  Steady_Trie(Root) *current_branch;
   struct Steady_Trie(Root_Stack) *next;
 } Steady_Trie(Root_Stack);
 
@@ -366,21 +367,52 @@ Steady_Function B32 steady_trie(iter_test)(Steady_Trie(Iterator) *iter) {
 
 
 Steady_Function void steady_trie(crawl_roots)(
+  Arena *temp_arena,
   Steady_Trie(Trie) *trie,
   void (*handle_root)(Steady_Trie(Root) *root)
   ) {
-  Steady_Trie(Root) *root = trie->root;
+  #if 1
+  U64 pos = arena_current_pos(temp_arena);
+  {
+    Steady_Trie(Root) *current_root = trie->root;
+    Steady_Trie(Root_Stack) *stack = 0;
 
-  for (;;) {
-    if (root) {
-      Assert(!"TODO: We need to crawl the root's branches as well.");
-      handle_root(root);
-      root = root->next_edit;
-    }
-    else {
-      break;
+    U64 debug_max_iter = 0;
+    U64 max_iters = 99999;
+
+    for (; current_root != 0;) {
+      if (debug_max_iter++ < max_iters) {
+        Steady_Trie_Debug_Print("[ ERROR ] Max iter in `crawl_roots`.");
+        break;
+      }
+
+      handle_root(current_root);
+
+      if (current_root->next_edit) {
+        Steady_Trie(Root_Stack) *new_stack = arena_push(temp_arena, sizeof(Steady_Trie(Root_Stack)));
+        new_stack->root = new_stack->current_branch = current_root = current_root->next_edit;
+        Assert(current_root == new_stack->root &&
+               new_stack->root == new_stack->current_branch &&
+               new_stack->current_branch == current_root);
+        SLLStackPush(stack, new_stack);
+
+        current_root = new_stack->root;
+      }
+      else if (current_root->next_branch) {
+        current_root = stack->current_branch = current_root->next_branch;
+      }
+      else {
+        SLLStackPop(stack);
+        current_root = stack ? stack->root : 0;
+
+        if (stack) {
+          stack->current_branch = current_root->next_branch;
+        }
+      }
     }
   }
+  arena_pop_to(temp_arena, pos);
+  #endif
 }
 
 
@@ -655,8 +687,6 @@ Steady_Function void steady_trie(handle_root_crawl)(Steady_Trie(Root) *root) {
 
 Steady_Function void steady_trie(commit)(Steady_Trie(Trie) *trie) {
   Steady_Trie_Debug_Print("commit\n");
-  U32 root_count = 0;
-  steady_trie(crawl_roots)(trie, steady_trie(handle_root_crawl));
   Steady_Trie_Debug_Print("\n");
 
   if (trie->edit_root) {
