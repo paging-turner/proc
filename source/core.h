@@ -430,5 +430,18 @@ function S32 create_bezier_triangle_fan(
 }
 
 
+function B32 arena_has_space_for(Arena *arena, U64 size) {
+  Arena *current = arena->current;
+  B32 has_space = 0;
+
+  U64 result_pos = AlignUpPow2(current->chunk_pos, arena->alignment);
+  U64 next_chunk_pos = result_pos + size;
+  if (next_chunk_pos <= current->chunk_cap){
+    has_space = 1;
+  }
+
+  return has_space;
+}
+
 
 #endif // PROC_CORE_INCLUDE_H
