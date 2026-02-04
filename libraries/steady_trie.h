@@ -375,54 +375,38 @@ Steady_Function void steady_trie(crawl_roots)(
   #if 1
   U64 pos = arena_current_pos(temp_arena);
   {
-    Steady_Trie(Root) *current_root = trie->root;
-    Steady_Trie(Root_Stack) *stack = 0;
+    Steady_Trie(Root_Stack) *stack = arena_push(temp_arena, sizeof(Steady_Trie(Root_Stack)));
+    if (stack) {
+      stack->root = trie->root;
+    }
 
-#define Crawl_Roots_Max_Iter 0
-#if Crawl_Roots_Max_Iter
-    U64 debug_max_iter = 0;
-    U64 max_iters = 99999;
-#endif
+    for (; stack != 0 && stack->root;) {
+      handle_root(stack->root);
 
-    for (; current_root != 0;) {
-#if Crawl_Roots_Max_Iter
-      if (debug_max_iter++ > max_iters) {
-        Steady_Trie_Debug_Print("[ ERROR ] Max iter in `crawl_roots`.");
-        break;
-      }
-#endif
-
-      handle_root(current_root);
-
-      if (current_root->next_edit) {
+      if (stack->root->next_edit) {
         if (arena_has_space_for(temp_arena, sizeof(Steady_Trie(Root_Stack)))) {
-          printf("next_edit   ");
           Steady_Trie(Root_Stack) *new_stack = arena_push(temp_arena, sizeof(Steady_Trie(Root_Stack)));
-          current_root = new_stack->current_branch = new_stack->root = current_root->next_edit;
-          Assert(current_root == new_stack->root &&
+          stack->root = new_stack->current_branch = new_stack->root = stack->root->next_edit;
+          Assert(stack->root == new_stack->root &&
                  new_stack->root == new_stack->current_branch &&
-                 new_stack->current_branch == current_root);
+                 new_stack->current_branch == stack->root);
           SLLStackPush(stack, new_stack);
 
-          current_root = new_stack->root;
+          stack->root = new_stack->root;
         }
         else {
           Steady_Trie_Debug_Print("[ ERROR ] Pushing Steady_Trie(Root_Stack) in steady_trie(crawl_roots)\n");
           break;
         }
       }
-      else if (current_root->next_branch) {
-        printf("next_branch  ");
-        current_root = stack->current_branch = current_root->next_branch;
+      else if (stack->root->next_branch) {
+        stack->root = stack->current_branch = stack->root->next_branch;
       }
       else {
-        printf("pop ");
         SLLStackPop(stack);
-        current_root = stack ? stack->root : 0;
 
         if (stack) {
-          printf("next_branch  ");
-          current_root = stack->current_branch = current_root->next_branch;
+          stack->root = stack->current_branch = stack->root->next_branch;
         }
       }
     }

@@ -2880,7 +2880,6 @@ int main(void) {
     if (Get_Flag(context.ui_state.flags, Ui_State_Flag_action_occured)) {
       printf("\n\ncrawling...\n");
       proc_trie_crawl_roots(context.temp_arena, context.proc_trie, handle_root_crawl);
-      /* printf("action occured %f\n", GetTime()); */
     }
 
     render_ClearBackground(prc, global_background_color);
