@@ -269,6 +269,8 @@ Steady_Function Steady_Trie_Value_Type steady_trie(get_default_value)(void) {
 }
 
 
+
+
 Steady_Function Steady_Trie(Stack_Node) *steady_trie(create_stack_node)(
   Arena *arena,
   Steady_Trie(Stack_Node) *free_stack
@@ -366,10 +368,11 @@ Steady_Function B32 steady_trie(iter_test)(Steady_Trie(Iterator) *iter) {
 
 
 
+
 Steady_Function void steady_trie(crawl_roots)(
   Arena *temp_arena,
   Steady_Trie(Trie) *trie,
-  void (*handle_root)(Steady_Trie(Root) *root)
+  void (*handle_root)(void *user_data, Steady_Trie(Root) *root)
   ) {
   U64 pos = arena_current_pos(temp_arena);
   Steady_Trie(Root_Stack) *stack = arena_push(temp_arena, sizeof(Steady_Trie(Root_Stack)));
@@ -378,14 +381,13 @@ Steady_Function void steady_trie(crawl_roots)(
   }
 
   for (; stack != 0 && stack->root;) {
-    handle_root(stack->root);
+    handle_root(trie, stack->root);
 
     if (stack->root->next_edit) {
       if (arena_has_space_for(temp_arena, sizeof(Steady_Trie(Root_Stack)))) {
         Steady_Trie(Root_Stack) *new_stack = arena_push(temp_arena, sizeof(Steady_Trie(Root_Stack)));
-        stack->root = new_stack->root = stack->root->next_edit;
+        new_stack->root = stack->root->next_edit;
         SLLStackPush(stack, new_stack);
-        stack->root = new_stack->root;
       }
       else {
         Steady_Trie_Debug_Print("[ ERROR ] Pushing Steady_Trie(Root_Stack) in steady_trie(crawl_roots)\n");
@@ -407,6 +409,23 @@ Steady_Function void steady_trie(crawl_roots)(
   arena_pop_to(temp_arena, pos);
 }
 
+
+
+Steady_Function void steady_trie(clear_ref_handler)(
+  void *user_data,
+  Steady_Trie(Root) *root
+  ) {
+  root->ref = 0;
+}
+
+
+Steady_Function void steady_trie(clear_refs)(
+  Arena *arena,
+  Steady_Trie(Trie) *trie
+  ) {
+  trie->ref = 0;
+  proc_trie_crawl_roots(arena, trie, steady_trie(clear_ref_handler));
+}
 
 
 

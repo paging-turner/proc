@@ -274,7 +274,22 @@ Define_Keybind(
   return handled;
 }
 
+Define_Keybind(
+  HandleDataStructureView,,
+  Keybind_Behavior_Overwrite, 100, AtTheStart,
+  0, 0, 0,
+  "Handle 'Data Structure View'."
+  ) {
+  if (env->context) {
+    Context *context = env->context;
 
+    if (Get_Flag(context->flags, Context_Flag_DataStructureView)) {
+      // TODO: Crawl roots and nodes for "linear" procs that can be stacked up.
+    }
+  }
+
+  return 0;
+}
 
 
 Define_Keybind(
@@ -290,7 +305,6 @@ Define_Keybind(
     Context *context = env->context;
     Process *hot_process = context->hot_process;
     Assert(context->hot_process);
-
 
     printf("auto aligning\n");
     Process *current_process = context->hot_process;

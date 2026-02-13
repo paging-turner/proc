@@ -1,0 +1,16 @@
+For now, we will have to manually test a bunch of features. This file exists to list out the features and manual steps to take in order to test each feature.
+
+------------------------------------------
+001 Connect and Undo
+    1. Create process
+    2. Create another process
+    3. Connect processes
+    4. Undo
+    EXPECT: Only the wire should disappear.
+    5. Redo
+    EXPECT: The wire is back.
+
+
+
+------------------------------------------
+002 ???
