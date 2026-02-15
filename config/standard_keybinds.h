@@ -295,33 +295,22 @@ Define_Keybind(
 Define_Keybind(
   AutoAlignOneInOneOut,,
   Keybind_Behavior_Overwrite, 1, AtTheStart,
-  KEY_A, Modifier_Keys(Super, Alt),
-  Ui_Constraint_HotProcess|Ui_Constraint_ActionNotOccured,
+  KEY_A, Modifier_Keys(Control, Super),
+  Ui_Constraint_ActionNotOccured,
   "Align any following processes after a given node, but only if the following processes have a single in and a single out."
   ) {
   B32 handled = 0;
 
   if (env->context && Test_Keybind(env, AutoAlignOneInOneOut, Enter)) {
     Context *context = env->context;
-    Process *hot_process = context->hot_process;
-    Assert(context->hot_process);
 
-    printf("auto aligning\n");
-    Process *current_process = context->hot_process;
-    for (;;) {
-      if (current_process == 0) {
-        break;
-      }
-
-      printf("  %p\n", current_process);
-      Assert(!"finish implementing this...");
-
-      Process *wire = find_process_connection(context, current_process, Process_Connection_Out, 0);
-      if (wire) {
-        current_process = wire->in;
-      }
-      else {
-        break;
+    for (Process *w = context->processes.first; w != 0; w = w->next) {
+      if (Get_Flag(w->flags, Process_Flag_Wire)) {
+        Assert(w->in && w->out);
+        if (w->in && w->in->in_count == 1 &&
+            w->out && w->out->out_count == 1) {
+          w->in->position = w->out->position;
+        }
       }
     }
   }

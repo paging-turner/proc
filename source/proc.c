@@ -317,7 +317,6 @@ function Process *create_ui_element(Context *context) {
 
 
 
-#if 1
 function void gather_processes_from_trie(Context *context) {
   Arena *arena = context->per_frame_arena;
   Proc_Trie_Trie *trie = context->proc_trie;
@@ -333,40 +332,6 @@ function void gather_processes_from_trie(Context *context) {
     SLLQueuePush(context->processes.first, context->processes.last, p);
   }
 }
-#else
-function void handle_gather_root(void *user_data, Proc_Trie_Root *root) {
-  Assert(user_data && root && root->ref == 0);
-  Context *context = (Context *)user_data;
-  root->ref = create_detached_process(context);
-  Assert(root->ref);
-
-  SLLQueuePush(context->processes.first, context->processes.last, root->ref);
-  Process *to_connect = 0;
-
-  if (root->prev_edit) {
-    Assert(root->prev_edit->ref);
-    Process *w = connect_detached_processes(context, root->prev_edit->ref, root->ref);
-    SLLQueuePush(context->ds_view_processes.first, context->ds_view_processes.first, w);
-  }
-
-  if (root->prev_branch) {
-    Assert(root->prev_branch->ref);
-    Process *w = connect_detached_processes(context, root->prev_branch->ref, root->ref);
-    SLLQueuePush(context->ds_view_processes.first, context->ds_view_processes.first, w);
-  }
-
-  if (!(root->prev_edit || root->prev_branch)) {
-    Assert(context->proc_trie->ref);
-    Process *w = connect_detached_processes(context, context->proc_trie->ref, root->ref);
-    SLLQueuePush(context->ds_view_processes.first, context->ds_view_processes.first, w);
-  }
-}
-
-function void gather_processes_from_trie(Context *context) {
-  proc_trie_clear_refs(context->temp_arena, context->proc_trie);
-  proc_trie_crawl_roots(context->temp_arena, context->proc_trie, handle_gather_root);
-}
-#endif
 
 
 function Process *create_process(Context *context) {
@@ -2881,9 +2846,6 @@ function void per_frame_cleanup(Context *context) {
 
 
 
-function void handle_root_crawl(Proc_Trie_Root *root) {
-  printf("root %p\n", root);
-}
 
 
 int main(void) {
