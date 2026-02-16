@@ -2,12 +2,8 @@ build/
 
 .vs/
 
-# TODO: fix the build.bat script from putting proc.obj in the project root.
 *.obj
 *.pdb
 
 config/*
-!config/_include_custom_keybinds.h
-!config/standard_keybinds.h
-
 saves/*

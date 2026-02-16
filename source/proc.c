@@ -49,7 +49,7 @@ Define_Cycle_Detector_Function(
 #include "../source/keybind.h"
 #include "../source/keybind.c"
 
-#include "../config/standard_keybinds.h"
+#include "../source/standard_keybinds.h"
 #include "../source/saves.h"
 
 
