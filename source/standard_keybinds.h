@@ -97,6 +97,12 @@ Define_Keybind(
       (a)->ref->label = string_chunk_list_from_string8(context, str8_lit(l));\
     })
 
+#define Ensure_Process_Reference_Exists_No_Label(a)\
+  Stmnt(\
+    if ((a)->ref == 0) {\
+      Create_Process_Reference(a);\
+    })
+
 #define Push_Ds_View_Process(p)\
   SLLQueuePush(context->ds_view_processes.first, context->ds_view_processes.last, (p))
 
@@ -137,15 +143,15 @@ function void proc_ds_view_root_handler(
   B32 null_trie_ref = trie->ref == 0;
 
   // ensure trie exists
-  Ensure_Process_Reference_Exists(trie, "Trie");
+  Ensure_Process_Reference_Exists_No_Label(trie);
 
   // ensure root exists
-  Ensure_Process_Reference_Exists(root, "Root");
+  Ensure_Process_Reference_Exists_No_Label(root);
 
   // ensure first node exists
   Assert(root->node);
   if (root->node) {
-    Ensure_Process_Reference_Exists(root->node, "Node");
+    Ensure_Process_Reference_Exists_No_Label(root->node);
   }
 
   // positioning
@@ -187,7 +193,7 @@ function void proc_ds_view_node_handler(
   ) {
   Context *context = (Context *)maybe_context;
 
-  Ensure_Process_Reference_Exists(node, "Node");
+  Ensure_Process_Reference_Exists_No_Label(node);
 
   if (iter->stack->next) {
     B32 contains_node = 0;
