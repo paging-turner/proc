@@ -655,26 +655,33 @@ function void copy_active_processes(Context *context) {
 
 
 function void paste_processes(Context *context) {
-  Vector2 mouse_world_pos = GetScreenToWorld2D(context->ui_state.mouse_position, context->camera);
-  Vector2 center_delta = Vector2Subtract(mouse_world_pos, context->copy_center);
+  for (S32 v = 0; v < View_Count; ++v) {
+    View *view = context->views + v;
+    // TODO: bounds check the view
+    if (Get_Flag(view->flags, View_Flag_Active) &&
+        Get_Flag(view->flags, View_Flag_Editable)) {
+      Vector2 mouse_world_pos = GetScreenToWorld2D(context->ui_state.mouse_position, view->camera);
+      Vector2 center_delta = Vector2Subtract(mouse_world_pos, context->copy_center);
 
-  U32 process_count = 0;
-  for (Process *p = context->copy_processes.first; p != 0; p = p->next) {
-    process_count += 1;
-  }
-
-  if (process_count) {
-    Process *ps = create_processes(context, process_count);
-    U32 i = 0;
-
-    for (Process *p = context->copy_processes.first; p != 0; p = p->next) {
-      if (i >= process_count) {
-        break;
+      U32 process_count = 0;
+      for (Process *p = context->copy_processes.first; p != 0; p = p->next) {
+        process_count += 1;
       }
-      Process *new_p = ps + i;
-      i += 1;
-      *new_p = *p;
-      new_p->position = Vector2Add(p->position, center_delta);
+
+      if (process_count) {
+        Process *ps = create_processes(context, process_count);
+        U32 i = 0;
+
+        for (Process *p = context->copy_processes.first; p != 0; p = p->next) {
+          if (i >= process_count) {
+            break;
+          }
+          Process *new_p = ps + i;
+          i += 1;
+          *new_p = *p;
+          new_p->position = Vector2Add(p->position, center_delta);
+        }
+      }
     }
   }
 
@@ -1296,7 +1303,7 @@ function Vector2 get_percentage_between_points(Vector2 p0, Vector2 p1, F32 perce
 
 
 
-function Vector2 get_process_position(Context *context, Process *process) {
+function Vector2 get_process_position(Context *context, View *view, Process *process) {
   Vector2 position = process->position;
   B32 is_active = is_active_process(context, process);
   B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging);
@@ -2195,31 +2202,8 @@ get_process_selection(Context *context, Process *p) {
 
 
 
-function Ui_State get_ui_state(Context *context) {
-  Ui_State ui_state;
-
-  ui_state.mouse_position = GetMousePosition(); // TODO: mouse_position should go in ui_state
-  ui_state.mouse_wheel_movement = GetMouseWheelMoveV();
-  ui_state.kb_action = 0;
-
-  Assign_Flag(ui_state.flags, Ui_State_Flag_mouse0_pressed, IsMouseButtonPressed(0));
-  Assign_Flag(ui_state.flags, Ui_State_Flag_mouse1_pressed, IsMouseButtonPressed(1));
-  Assign_Flag(ui_state.flags, Ui_State_Flag_mouse0_down, IsMouseButtonDown(0));
-  Assign_Flag(ui_state.flags, Ui_State_Flag_mouse1_down, IsMouseButtonDown(1));
-  Unset_Flag(ui_state.flags, Ui_State_Flag_hot_id_assigned);
-  Assign_Flag(ui_state.flags, Ui_State_Flag_control_down, IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL));
-  Assign_Flag(ui_state.flags, Ui_State_Flag_shift_down, IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT));
-  Assign_Flag(ui_state.flags, Ui_State_Flag_alt_down, IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT));
-  Assign_Flag(ui_state.flags, Ui_State_Flag_super_down, IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER));
-  Unset_Flag(ui_state.flags, Ui_State_Flag_action_occured);
-
-  return ui_state;
-}
 
 
-function void reset_ui_box(Context *context, Ui_Box *box) {
-  box->raw_size = Zero_Struct(Vector2);
-}
 
 
 function Process create_lit_button(Context *context, String8 label, F32 x_pos, F32 y_pos) {
@@ -2294,25 +2278,6 @@ function void do_menu_ui(Context *context, B32 sizing) {
 }
 
 
-function void handle_ui(Context *context) {
-  reset_ui_box(context, &sub_menu_box);
-
-  switch(context->menu_state) {
-  case Menu_State_OpenFile: {
-    do_open_file(context, 1);
-    do_open_file(context, 0);
-  } break;
-  case Menu_State_SaveFileAs: {
-    do_save_file_as(context, 1);
-    do_save_file_as(context, 0);
-  } break;
-  }
-
-  // TODO: Having the switch above, and then calling do_menu_ui... just feels off. Like maybe it should all be unified.
-  // NOTE: @Speed We have to call UI code twice... onces for sizing and once for rendering/interaction.
-  do_menu_ui(context, 1);
-  do_menu_ui(context, 0);
-}
 
 
 Define_Keybind(
@@ -2514,7 +2479,6 @@ int main(void) {
       prc = &context.process_render_context;
 
       context.camera.zoom = 1.0f;
-
       context.proc_trie = proc_trie_create_trie(context.permanent_arena);
     }
 
@@ -2554,7 +2518,6 @@ int main(void) {
       global_button_font_color = (Color){220, 220, 160, 255};
       global_container_bg_color = (Color){170, 170, 170, 255};
       global_process_bg_color = (Color){190, 190, 199, 255};
-
 
 
       // init ui elements
@@ -2613,7 +2576,24 @@ int main(void) {
     // Handle User Input
     //////////////////////////////////////////
     {
-      context.ui_state = get_ui_state(&context);
+      // get ui state
+      Ui_State ui_state = (Ui_State){0};
+      {
+        ui_state.mouse_position = GetMousePosition(); // TODO: mouse_position should go in ui_state
+        ui_state.mouse_wheel_movement = GetMouseWheelMoveV();
+        ui_state.kb_action = 0;
+
+        Assign_Flag(ui_state.flags, Ui_State_Flag_mouse0_pressed, IsMouseButtonPressed(0));
+        Assign_Flag(ui_state.flags, Ui_State_Flag_mouse1_pressed, IsMouseButtonPressed(1));
+        Assign_Flag(ui_state.flags, Ui_State_Flag_mouse0_down, IsMouseButtonDown(0));
+        Assign_Flag(ui_state.flags, Ui_State_Flag_mouse1_down, IsMouseButtonDown(1));
+        Unset_Flag(ui_state.flags, Ui_State_Flag_hot_id_assigned);
+        Assign_Flag(ui_state.flags, Ui_State_Flag_control_down, IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL));
+        Assign_Flag(ui_state.flags, Ui_State_Flag_shift_down, IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT));
+        Assign_Flag(ui_state.flags, Ui_State_Flag_alt_down, IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT));
+        Assign_Flag(ui_state.flags, Ui_State_Flag_super_down, IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER));
+        Unset_Flag(ui_state.flags, Ui_State_Flag_action_occured);
+      }
 
       // get key presses
       for (U32 k = 0; k < Max_Key_Presses_Per_Frame; ++k) {
@@ -2625,7 +2605,26 @@ int main(void) {
         }
       }
 
-      handle_ui(&context);
+      // handle ui
+      {
+        sub_menu_box.raw_size = Zero_Struct(Vector2);
+
+        switch(context.menu_state) {
+        case Menu_State_OpenFile: {
+          do_open_file(&context, 1);
+          do_open_file(&context, 0);
+        } break;
+        case Menu_State_SaveFileAs: {
+          do_save_file_as(&context, 1);
+          do_save_file_as(&context, 0);
+        } break;
+        }
+
+        // TODO: Having the switch above, and then calling do_menu_ui... just feels off. Like maybe it should all be unified.
+        // NOTE: @Speed We have to call UI code twice... onces for sizing and once for rendering/interaction.
+        do_menu_ui(&context, 1);
+        do_menu_ui(&context, 0);
+      }
 
       if (!Get_Flag(context.ui_state.flags, Ui_State_Flag_action_occured)) {
         // environment
@@ -2653,11 +2652,11 @@ int main(void) {
       //////////////////////////////////////////
       // Draw Processes
       //////////////////////////////////////////
-      Process *processes_to_draw = Get_Flag(context.flags, Context_Flag_DataStructureView)
-        ? context.ds_view_processes.first
-        : context.processes.first;
       {
         Render_Context *rc = &context.process_render_context;
+        Process *processes_to_draw = Get_Flag(context.flags, Context_Flag_DataStructureView)
+          ? context.ds_view_processes.first
+          : context.processes.first;
 
         Color bg_color = global_process_bg_color;
         Color invisible_bg_color = (Color){0, 0, 0, 0};
@@ -2666,9 +2665,7 @@ int main(void) {
         Color text_color = (Color){0, 0, 0, 255};
         Color box_color = (Color){10, 190, 40, 255};
         Color box_hover_color = (Color){5, 250, 20, 255};
-
         F32 font_size = context.camera.zoom * global_process_font_size;
-
         F32 padding = global_process_wire_padding;
         F32 spacing = global_process_wire_spacing;
         B32 rounded = Get_Flag(context.flags, Context_Flag_RoundedShapes);

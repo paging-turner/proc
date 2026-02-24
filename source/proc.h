@@ -14,7 +14,8 @@ typedef struct Connection_Result Connection_Result;
 typedef enum Keybind_Result Keybind_Result;
 typedef struct Keybind Keybind;
 typedef struct Context Context;
-function void clear_processes(Context *context);
+typedef struct View View;
+function void clear_processes(View *view);
 function Process *create_detached_process(Context *context);
 function Process *create_process(Context *context);
 function String_Chunk *create_string_chunk(Context *context);
@@ -298,7 +299,7 @@ typedef struct {
 typedef enum {
   Context_Flag_Dragging           = 1 << 0,
   Context_Flag_Bounding           = 1 << 1,
-  Context_Flag_Panning            = 1 << 2,
+  /* Context_Flag_Panning            = 1 << 2, */
   Context_Flag_NewWire            = 1 << 3,
   Context_Flag_RoundedShapes      = 1 << 4,
   Context_Flag_DataStructureView  = 1 << 5,
@@ -347,6 +348,21 @@ typedef enum {
   ((context)->menu_state >= Menu_State_FileMenu &&\
    (context)->menu_state <= Menu_State_EditMenu)
 
+#define View_Count  5
+
+typedef enum View_Flag {
+  View_Flag_Active   = 1 << 0,
+  View_Flag_Panning  = 1 << 1,
+  View_Flag_Editable = 1 << 2,
+} View_Flag;
+
+struct View {
+  U32 flags;
+  Rectangle screen_region;
+  Camera2D camera;
+  Process_List processes;
+};
+
 struct Context {
   Arena *render_arena;
   Arena *permanent_arena;
@@ -357,16 +373,16 @@ struct Context {
   U32 flags;
 
   Proc_Trie_Trie *proc_trie;
-  Process_List processes;
+  /* Process_List processes; */
   Process_List free_processes;
   Process_List free_ui_elements;
-  Process_List ds_view_processes; // Used with Context_Flag_DataStructureView
-  Process_List gross_temp_processes;
+  /* Process_List ds_view_processes; // Used with Context_Flag_DataStructureView */
+  /* Process_List gross_temp_processes; */
   String_Chunk_List free_strings;
 
   Process *hot_process;
+  // TODO: do active/copy_processes need to be per-view? What about hot_process?
   Process_List active_processes;
-
   Process_List copy_processes;
 
   Process_List save_file_list;
@@ -383,7 +399,7 @@ struct Context {
 
   String_Chunk_List save_file_name;
 
-  Camera2D camera;
+  View views[View_Count];
 };
 
 

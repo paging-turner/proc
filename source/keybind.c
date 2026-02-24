@@ -221,23 +221,30 @@ Define_Keybind(
 
   Keybind_Result kb_res = Check_Keybind(env, Pan);
 
-  if (kb_res == Keybind_Result_Enter) {
-    Set_Flag(context->flags, Context_Flag_Panning);
-    context->active_position = context->ui_state.mouse_position;
-    handled = 1;
-  }
+  for (S32 v = 0; v < View_Count; ++v) {
+    View *view = context->views + v;
+    B32 mouse_is_within_view = 1;
 
-  if (Get_Flag(context->flags, Context_Flag_Panning)) {
-    if (kb_res == Keybind_Result_Exit) {
-      Unset_Flag(context->flags, Context_Flag_Panning);
-      handled = 1;
-    }
-    else {
-      // Update camera position
-      Vector2 delta = GetMouseDelta();
-      delta = Vector2Scale(delta, -1.0f/context->camera.zoom);
-      context->camera.target = Vector2Add(context->camera.target, delta);
-      handled = 1;
+    if (Get_Flag(view->flags, View_Flag_Active) && mouse_is_within_view) {
+      if (kb_res == Keybind_Result_Enter) {
+        Set_Flag(view->flags, View_Flag_Panning);
+        context->active_position = context->ui_state.mouse_position;
+        handled = 1;
+      }
+
+      if (Get_Flag(view->flags, View_Flag_Panning)) {
+        if (kb_res == Keybind_Result_Exit) {
+          Unset_Flag(view->flags, View_Flag_Panning);
+          handled = 1;
+        }
+        else {
+          // Update camera position
+          Vector2 delta = GetMouseDelta();
+          delta = Vector2Scale(delta, -1.0f/view->camera.zoom);
+          view->camera.target = Vector2Add(view->camera.target, delta);
+          handled = 1;
+        }
+      }
     }
   }
 
@@ -283,25 +290,30 @@ Define_Keybind(
   "Loop through all processes and handle per-process interactions."
   ) {
   if (env->context) {
-    for (Process *p = env->context->processes.first; p != 0; p = p->next) {
-      // per-process environment
-      Keybind_Environment *p_env = env;//create_keybind_environment(env->context, env->selection);
-      p_env->selection = get_process_selection(p_env->context, p);
-      p_env->should_stop_dragging = env->should_stop_dragging;
-      p_env->is_active = is_active_process(p_env->context, p);
-      p_env->p = p;
+    for (S32 v = 0; v < View_Count; ++v) {
+      View *view = env->context->views + v;
+      if (Get_Flag(view->flags, View_Flag_Active)) {
+        for (Process *p = view->processes.first; p != 0; p = p->next) {
+          // per-process environment
+          Keybind_Environment *p_env = env;//create_keybind_environment(env->context, env->selection);
+          p_env->selection = get_process_selection(p_env->context, p);
+          p_env->should_stop_dragging = env->should_stop_dragging;
+          p_env->is_active = is_active_process(p_env->context, p);
+          p_env->p = p;
 
-      // hot id assignment
-      B32 ui_state_hot_id_assigned = Get_Flag(p_env->context->ui_state.flags, Ui_State_Flag_hot_id_assigned);
-      B32 hot_id_assigned = p_env->selection.hot_id_assigned || ui_state_hot_id_assigned;
-      Assign_Flag(p_env->context->ui_state.flags, Ui_State_Flag_hot_id_assigned, hot_id_assigned);
+          // hot id assignment
+          B32 ui_state_hot_id_assigned = Get_Flag(p_env->context->ui_state.flags, Ui_State_Flag_hot_id_assigned);
+          B32 hot_id_assigned = p_env->selection.hot_id_assigned || ui_state_hot_id_assigned;
+          Assign_Flag(p_env->context->ui_state.flags, Ui_State_Flag_hot_id_assigned, hot_id_assigned);
 
-      // per-process keybinds
-      for (U32 i = 0; i < SymbolCount(keybind_action); ++i) {
-        Keybind *keybind = SymbolMetadataFromID(keybind_action, i+1);
+          // per-process keybinds
+          for (U32 i = 0; i < SymbolCount(keybind_action); ++i) {
+            Keybind *keybind = SymbolMetadataFromID(keybind_action, i+1);
 
-        if (Get_Flag(keybind->timing, Keybind_Timing_ForAllProcesses)) {
-          keybind->handle(env);
+            if (Get_Flag(keybind->timing, Keybind_Timing_ForAllProcesses)) {
+              keybind->handle(env);
+            }
+          }
         }
       }
     }
@@ -492,16 +504,23 @@ Define_Keybind(
   Context *context = env->context;
   Process_Selection selection = env->selection;
 
-
   if (check_keybind(context, keybind_action_REF(CreateProcess), selection)) {
     handled = 1;
-    Process *new_p = create_process(context);
-    if (new_p) {
-      Set_Flag(new_p->flags, Process_Flag_TextEdit);
-      new_p->position = GetScreenToWorld2D(context->ui_state.mouse_position, context->camera);
-      clear_active_processes(context);
-      SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, new_p, next_active, 0);
+    for (S32 v = 0; v < View_Count; ++v) {
+      View *view = context->views + v;
+      // TODO: do bounds check to see if we should add process
+      if (Get_Flag(view->flags, View_Flag_Active) &&
+          Get_Flag(view->flags, View_Flag_Editable)) {
+        Process *new_p = create_process(context);
+        if (new_p) {
+          Set_Flag(new_p->flags, Process_Flag_TextEdit);
+          new_p->position = GetScreenToWorld2D(context->ui_state.mouse_position, view->camera);
+          clear_active_processes(context);
+          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, new_p, next_active, 0);
+        }
+      }
     }
+
     gather_processes_from_trie(context);
   }
 

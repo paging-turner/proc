@@ -50,8 +50,8 @@ function void clear_active_processes(Context *context) {
   clear_active_process_list(&context->active_processes);
 }
 
-function void clear_processes(Context *context) {
-  clear_process_list(&context->processes);
+function void clear_processes(View *view) {
+  clear_process_list(&view->processes);
 }
 
 function Process *push_permanent_process(Context *context) {

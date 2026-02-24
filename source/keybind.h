@@ -297,32 +297,36 @@ function B32 keybind_zoom_handler(Keybind_Environment *env) {
   B32 zoom_in = Test_Keybind(env, ZoomIn, Enter);
   B32 zoom_out = Test_Keybind(env, ZoomOut, Enter);
 
-  Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position,
-                                                    context->camera);
+  for (S32 v = 0; v < View_Count; ++v) {
+    View *view = context->views + v;
+    Camera2D *camera = &view->camera;
+    Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position,
+                                                      *camera);
 
-  context->camera.offset = context->ui_state.mouse_position;
-  context->camera.target = mouse_world_position;
+    camera->offset = context->ui_state.mouse_position;
+    camera->target = mouse_world_position;
 
-  if (zoom_in) {
-    handled = 1;
-    if (Keybind_Has_Mouse_Wheel_Movement(ZoomIn)) {
-      context->camera.zoom += -0.1f*context->ui_state.mouse_wheel_movement.y;
+    if (zoom_in) {
+      handled = 1;
+      if (Keybind_Has_Mouse_Wheel_Movement(ZoomIn)) {
+        camera->zoom += -0.1f*context->ui_state.mouse_wheel_movement.y;
+      }
+      else {
+        camera->zoom *= 1.4f;
+      }
     }
-    else {
-      context->camera.zoom *= 1.4f;
+    else if (zoom_out) {
+      handled = 1;
+      if (Keybind_Has_Mouse_Wheel_Movement(ZoomOut)) {
+        camera->zoom += -0.1f*context->ui_state.mouse_wheel_movement.y;
+      }
+      else {
+        camera->zoom *= (1.0f/1.4f);
+      }
     }
+
+    camera->zoom = Max(0.1f, camera->zoom);
   }
-  else if (zoom_out) {
-    handled = 1;
-    if (Keybind_Has_Mouse_Wheel_Movement(ZoomOut)) {
-      context->camera.zoom += -0.1f*context->ui_state.mouse_wheel_movement.y;
-    }
-    else {
-      context->camera.zoom *= (1.0f/1.4f);
-    }
-  }
-
-  context->camera.zoom = Max(0.1f, context->camera.zoom);
 
   return handled;
 }
