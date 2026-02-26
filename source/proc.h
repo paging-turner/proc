@@ -21,7 +21,7 @@ function Process *create_process(Context *context);
 function String_Chunk *create_string_chunk(Context *context);
 function String_Chunk_List string_chunk_list_from_string8(Context *context, String8 string8);
 function S32 collect_save_files(Context *context);
-function Vector2 get_process_wire_position(Context *context, Process *p, Process_Shape shape, Process_Connection conn, U32 wire_index);
+function Vector2 get_process_wire_position(Context *context, View *view, Process *p, Process_Shape shape, Process_Connection conn, U32 wire_index);
 function Process *get_process_wire_by_selection(Context *context, Process_Selection selection);
 function B32 is_active_process(Context *context, Process *p);
 function void remove_process_from_active_processes(Context *context, Process *p);
@@ -36,15 +36,15 @@ function Process *connect_detached_processes(Context *context, Process *out, Pro
 function Connection_Result connect_processes(Context *context, Process *out, Process *in);
 function void remove_process_from_process_list(Context *context, Process_List *list, Process *p);
 function void clear_ds_view_process_list(Context *context);
-function Process_Shape get_process_shape(Context *context, Process *p);
+function Process_Shape get_process_shape(Context *context, View *view, Process *p);
 function Vector2 get_process_size(Context *context, Process *p, Process_Shape shape);
 function Rectangle get_selection_rectangle(Context *context);
 function B32 rectangle_contains_point(Rectangle r, Vector2 p);
 function void remove_wire_connection(Context *context, Process *wire, Process_Connection_Flag conn_flags);
 function void add_wire_connection(Context *context, Process *wire, Process *process, Process_Connection conn, U32 which_conn);
-function Vector2 get_process_position(Context *context, Process *process);
+function Vector2 get_process_position(Context *context, View *view, Process *process);
 function void handle_label_editing(Context *context, Process_List ps);
-function Process_Selection get_process_selection(Context *context, Process *p);
+function Process_Selection get_process_selection(Context *context, View *view, Process *p);
 function Process *find_process_connection(Context *context, Process *p, Process_Connection conn, U32 which_conn);
 
 
@@ -349,6 +349,12 @@ typedef enum {
    (context)->menu_state <= Menu_State_EditMenu)
 
 #define View_Count  5
+
+typedef enum View_Kind {
+  View_Kind_Procs,
+  View_Kind_Trie,
+  View_Kind__Count,
+} View_Kind;
 
 typedef enum View_Flag {
   View_Flag_Active   = 1 << 0,

@@ -57,6 +57,7 @@ enum Keybind_Result {
 
 typedef struct Keybind_Environment {
   Context *context;
+  View *view;
   Process_Selection selection;
 
   // temp members

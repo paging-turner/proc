@@ -75,7 +75,7 @@ function void write_save_file_v1(Context *context, Arena *arena, String_Chunk_Li
   U64 process_cold_index = 0;
   U64 string_cold_size = 0;
   U64 string_cold_offset = 0;
-  for (Process *p = context->processes.first; p != 0; p = p->next) {
+  for (Process *p = context->views[View_Kind_Procs].processes.first; p != 0; p = p->next) {
     p->cold_index = process_cold_index+1;
     process_cold_index += 1;
     for (String_Chunk *s = p->label.first; s != 0; s = s->next) {
@@ -98,7 +98,7 @@ function void write_save_file_v1(Context *context, Arena *arena, String_Chunk_Li
     U8 *start_of_cold_string = Save_File_Start_Of_Strings_V1(save_file_data.str, process_cold_index);
 
     process_cold_index = 0;
-    for (Process *p = context->processes.first; p != 0; p = p->next) {
+    for (Process *p = context->views[View_Kind_Procs].processes.first; p != 0; p = p->next) {
       Cold_Process *cold_process = first_cold_process + process_cold_index;
 
       cold_process->flags = p->flags;

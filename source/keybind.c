@@ -18,7 +18,7 @@ Define_Keybind(
       if (is_dragging && env->should_stop_dragging) {
         // update positions of active processes
         for (Process *a = env->context->active_processes.first; a != 0; a = a->next_active) {
-          Vector2 new_position = get_process_position(env->context, a);
+          Vector2 new_position = get_process_position(env->context, &env->context->views[View_Kind_Procs], a);
           a->position = new_position;
         }
         // stop dragging
@@ -100,17 +100,17 @@ Define_Keybind(
       Rectangle selection_rectangle = get_selection_rectangle(env->context);
 
       if (Get_Flag(env->p->flags, Process_Flag_Wire)) {
-        Process_Shape out_shape = get_process_shape(env->context, env->p->out);
-        Process_Shape in_shape = get_process_shape(env->context, env->p->in);
-        Vector2 out_position = get_process_wire_position(env->context, env->p->out, out_shape, Process_Connection_Out, env->p->which_out);
-        Vector2 in_position = get_process_wire_position(env->context, env->p->in, in_shape, Process_Connection_In, env->p->which_in);
+        Process_Shape out_shape = get_process_shape(env->context, env->view, env->p->out);
+        Process_Shape in_shape = get_process_shape(env->context, env->view, env->p->in);
+        Vector2 out_position = get_process_wire_position(env->context, env->view, env->p->out, out_shape, Process_Connection_Out, env->p->which_out);
+        Vector2 in_position = get_process_wire_position(env->context, env->view, env->p->in, in_shape, Process_Connection_In, env->p->which_in);
 
         if (rectangle_contains_point(selection_rectangle, out_position) ||
             rectangle_contains_point(selection_rectangle, in_position)) {
           SLLQueuePush_NZ(env->context->active_processes.first, env->context->active_processes.last, env->p, next_active, 0);
         }
       } else {
-        Process_Shape shape = get_process_shape(env->context, env->p);
+        Process_Shape shape = get_process_shape(env->context, env->view, env->p);
 
         if (rectangle_contains_point(selection_rectangle, shape.center)) {
           SLLQueuePush_NZ(env->context->active_processes.first, env->context->active_processes.last, env->p, next_active, 0);
@@ -296,7 +296,7 @@ Define_Keybind(
         for (Process *p = view->processes.first; p != 0; p = p->next) {
           // per-process environment
           Keybind_Environment *p_env = env;//create_keybind_environment(env->context, env->selection);
-          p_env->selection = get_process_selection(p_env->context, p);
+          p_env->selection = get_process_selection(p_env->context, p_env->view, p);
           p_env->should_stop_dragging = env->should_stop_dragging;
           p_env->is_active = is_active_process(p_env->context, p);
           p_env->p = p;

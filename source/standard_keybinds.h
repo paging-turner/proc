@@ -104,7 +104,9 @@ Define_Keybind(
     })
 
 #define Push_Ds_View_Process(p)\
-  SLLQueuePush(context->ds_view_processes.first, context->ds_view_processes.last, (p))
+  SLLQueuePush(context->views[View_Kind_Trie].processes.first,\
+               context->views[View_Kind_Trie].processes.last,\
+               (p))
 
 function void proc_ds_view_root_clear_handler(
   void *maybe_context,
@@ -138,6 +140,7 @@ function void proc_ds_view_root_handler(
   Proc_Trie_Root *root
   ) {
   Context *context = (Context *)maybe_context;
+  View *view = context->views + View_Kind_Trie;
   Proc_Trie_Trie *trie = context->proc_trie;
 
   B32 null_trie_ref = trie->ref == 0;
@@ -160,13 +163,13 @@ function void proc_ds_view_root_handler(
     F32 padding = 20.0f;
     if (root->prev_edit && root->prev_edit->ref) {
       Process *prev_edit_p = root->prev_edit->ref;
-      Process_Shape shape = get_process_shape(context, prev_edit_p);
+      Process_Shape shape = get_process_shape(context, view, prev_edit_p);
       Vector2 p_size = get_process_size(context, prev_edit_p, shape);
       root->ref->position = (Vector2){prev_edit_p->position.x + (p_size.x + padding),
                                       prev_edit_p->position.y};
     }
     else {
-      Process_Shape shape = get_process_shape(context, trie->ref);
+      Process_Shape shape = get_process_shape(context, view, trie->ref);
       Vector2 p_size = get_process_size(context, trie->ref, shape);
       root->ref->position = (Vector2){ trie->ref->position.x,
                                        trie->ref->position.y - (p_size.y + padding)};
@@ -203,7 +206,7 @@ function void proc_ds_view_node_handler(
     Assert(iter->stack->next->node->ref);
     Process *out = iter->stack->next->node->ref;
 
-    for (Process *p = context->ds_view_processes.first; p != 0; p = p->next) {
+    for (Process *p = context->views[View_Kind_Trie].processes.first; p != 0; p = p->next) {
       if (p == node->ref) {
         contains_node = 1;
       }
@@ -238,11 +241,6 @@ Define_Keybind(
     handled = 1;
 
     if (Get_Flag(context->flags, Context_Flag_DataStructureView)) {
-      for (Process *p = context->processes.first; p != 0; p = p->next) {
-        remove_string_chunk_list(context, &p->label);
-      }
-      clear_processes(context);
-
       proc_trie_crawl_trie(context->per_frame_arena,
                            context->proc_trie,
                            proc_ds_view_root_clear_handler,
@@ -252,15 +250,8 @@ Define_Keybind(
       clear_ds_view_process_list(context);
 
       context->proc_trie->ref = 0;
-
-      // restore processes
-      context->processes = context->gross_temp_processes;
     }
     else {
-      // save processes for when we toggle back
-      context->gross_temp_processes = context->processes;
-      clear_processes(context);
-
       clear_ds_view_process_list(context);
 
       proc_trie_crawl_trie(context->per_frame_arena,
@@ -268,9 +259,6 @@ Define_Keybind(
                            proc_ds_view_root_handler,
                            proc_ds_view_node_handler,
                            context);
-
-      // patch in the data-structure view processes
-      context->processes = context->ds_view_processes;
     }
 
     // TODO: Map the proc-trie to processes with the same topology.
@@ -310,7 +298,7 @@ Define_Keybind(
   if (env->context && Test_Keybind(env, AutoAlignOneInOneOut, Enter)) {
     Context *context = env->context;
 
-    for (Process *w = context->processes.first; w != 0; w = w->next) {
+    for (Process *w = context->views[View_Kind_Procs].processes.first; w != 0; w = w->next) {
       if (Get_Flag(w->flags, Process_Flag_Wire)) {
         Assert(w->in && w->out);
         if (w->in && w->in->in_count == 1 &&
