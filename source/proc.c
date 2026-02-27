@@ -2583,23 +2583,24 @@ int main(void) {
     // Handle User Input
     //////////////////////////////////////////
     {
-      // get ui state
-      Ui_State ui_state = (Ui_State){0};
+      // update ui-state
       {
-        ui_state.mouse_position = GetMousePosition(); // TODO: mouse_position should go in ui_state
-        ui_state.mouse_wheel_movement = GetMouseWheelMoveV();
-        ui_state.kb_action = 0;
+        Ui_State *ui_state = &context.ui_state;
 
-        Assign_Flag(ui_state.flags, Ui_State_Flag_mouse0_pressed, IsMouseButtonPressed(0));
-        Assign_Flag(ui_state.flags, Ui_State_Flag_mouse1_pressed, IsMouseButtonPressed(1));
-        Assign_Flag(ui_state.flags, Ui_State_Flag_mouse0_down, IsMouseButtonDown(0));
-        Assign_Flag(ui_state.flags, Ui_State_Flag_mouse1_down, IsMouseButtonDown(1));
-        Unset_Flag(ui_state.flags, Ui_State_Flag_hot_id_assigned);
-        Assign_Flag(ui_state.flags, Ui_State_Flag_control_down, IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL));
-        Assign_Flag(ui_state.flags, Ui_State_Flag_shift_down, IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT));
-        Assign_Flag(ui_state.flags, Ui_State_Flag_alt_down, IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT));
-        Assign_Flag(ui_state.flags, Ui_State_Flag_super_down, IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER));
-        Unset_Flag(ui_state.flags, Ui_State_Flag_action_occured);
+        ui_state->mouse_position = GetMousePosition(); // TODO: mouse_position should go in ui_state
+        ui_state->mouse_wheel_movement = GetMouseWheelMoveV();
+        ui_state->kb_action = 0;
+
+        Assign_Flag(ui_state->flags, Ui_State_Flag_mouse0_pressed, IsMouseButtonPressed(0));
+        Assign_Flag(ui_state->flags, Ui_State_Flag_mouse1_pressed, IsMouseButtonPressed(1));
+        Assign_Flag(ui_state->flags, Ui_State_Flag_mouse0_down, IsMouseButtonDown(0));
+        Assign_Flag(ui_state->flags, Ui_State_Flag_mouse1_down, IsMouseButtonDown(1));
+        Unset_Flag(ui_state->flags, Ui_State_Flag_hot_id_assigned);
+        Assign_Flag(ui_state->flags, Ui_State_Flag_control_down, IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL));
+        Assign_Flag(ui_state->flags, Ui_State_Flag_shift_down, IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT));
+        Assign_Flag(ui_state->flags, Ui_State_Flag_alt_down, IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT));
+        Assign_Flag(ui_state->flags, Ui_State_Flag_super_down, IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER));
+        Unset_Flag(ui_state->flags, Ui_State_Flag_action_occured);
       }
 
       // get key presses
@@ -2628,7 +2629,7 @@ int main(void) {
         }
 
         // TODO: Having the switch above, and then calling do_menu_ui... just feels off. Like maybe it should all be unified.
-        // NOTE: @Speed We have to call UI code twice... onces for sizing and once for rendering/interaction.
+        // NOTE: @Speed We have to call UI code twice... once for sizing and once for rendering/interaction.
         do_menu_ui(&context, 1);
         do_menu_ui(&context, 0);
       }
@@ -2661,9 +2662,6 @@ int main(void) {
       //////////////////////////////////////////
       {
         Render_Context *rc = &context.process_render_context;
-        /* Process *processes_to_draw = Get_Flag(context.flags, Context_Flag_DataStructureView) */
-        /*   ? context.ds_view_processes.first */
-        /*   : context.processes.first; */
 
         Color bg_color = global_process_bg_color;
         Color invisible_bg_color = (Color){0, 0, 0, 0};
