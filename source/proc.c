@@ -416,25 +416,6 @@ function void remove_process_from_process_list(Context *context, Process_List *l
 }
 
 
-function void free_ui_element_list(Context *context, Process_List *l) {
-  // free the string-chunks
-  for (Process *e = l->first; e != 0; e = e->next) {
-    remove_string_chunk_list(context, &e->label);
-  }
-
-  // free the element-list
-  if (l->first && l->last) {
-    if (context->free_ui_elements.first && context->free_ui_elements.last) {
-      context->free_ui_elements.last->next = l->first;
-      context->free_ui_elements.last = l->last;
-    } else {
-      context->free_ui_elements.first = l->first;
-      context->free_ui_elements.last = l->last;
-    }
-  }
-}
-
-
 function String_Chunk_List copy_string_chunk_list(Context *context, String_Chunk_List *scl) {
   String_Chunk_List result = (String_Chunk_List){0};
 
@@ -2285,9 +2266,9 @@ function void do_menu_ui(Context *context, B32 sizing) {
 
 
 Define_Keybind(
-  ProcessInteraction, ,
+  process_interaction, ,
   Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0,
-  ""
+  "This is the function that calls all the defined keybinds. If you want to change the behavior of when things like undo/redo are called, you would want to overwrite this keybind with one that does what you want."
   ) {
   if (env->context) {
     Ui_State *ui_state = &env->context->ui_state;
@@ -2649,7 +2630,10 @@ int main(void) {
         env->moved_wire = 0;
         env->moved_wire_conn = 0;
 
-        Keybind_Handle(env, ProcessInteraction);
+        //////////////////////////////////////////
+        // Handle Process Interaction
+        //////////////////////////////////////////
+        Keybind_Handle(env, process_interaction);
       }
     }
 

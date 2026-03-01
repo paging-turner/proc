@@ -93,7 +93,6 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
 ///////////////////////////
 // Keybind Action
 ///////////////////////////
-
 #define SYMBOL_SET_DEFINE keybind_action
 #define keybind_action_Type      Keybind
 #define keybind_action_section   "_prckbac"
