@@ -2482,8 +2482,14 @@ int main(void) {
       context.process_render_context.arena = context.render_arena;
       prc = &context.process_render_context;
 
-      for (U32 i = 0; i < View_Kind__Count; ++i) {
-        context.views[i].camera.zoom = 1.0f;
+      // init views
+      {
+        for (U32 i = 0; i < View_Kind__Count; ++i) {
+          context.views[i].camera.zoom = 1.0f;
+          Set_Flag(context.views[i].flags, View_Flag_Active);
+        }
+
+        Set_Flag(context.views[View_Kind_Procs].flags, View_Flag_Editable);
       }
 
       context.proc_trie = proc_trie_create_trie(context.permanent_arena);

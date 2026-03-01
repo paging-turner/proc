@@ -296,8 +296,9 @@ Define_Keybind(
         for (Process *p = view->processes.first; p != 0; p = p->next) {
           // per-process environment
           Keybind_Environment *p_env = env;//create_keybind_environment(env->context, env->selection);
-          p_env->selection = get_process_selection(p_env->context, p_env->view, p);
+          p_env->selection = get_process_selection(p_env->context, view, p);
           p_env->should_stop_dragging = env->should_stop_dragging;
+          p_env->view = view;
           p_env->is_active = is_active_process(p_env->context, p);
           p_env->p = p;
 
