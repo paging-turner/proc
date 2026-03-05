@@ -15,37 +15,37 @@ typedef enum Keybind_Result Keybind_Result;
 typedef struct Keybind Keybind;
 typedef struct Context Context;
 typedef struct View View;
-function void clear_processes(View *view);
-function Process *create_detached_process(Context *context);
-function Process *create_process(Context *context);
-function String_Chunk *create_string_chunk(Context *context);
+function              void clear_processes(View *view);
+function              void clear_active_processes(Context *context);
+function              void clear_ds_view_process_list(Context *context);
+function          Process *create_detached_process(Context *context);
+function          Process *create_process(Context *context);
+function     String_Chunk *create_string_chunk(Context *context);
 function String_Chunk_List string_chunk_list_from_string8(Context *context, String8 string8);
-function S32 collect_save_files(Context *context);
-function Vector2 get_process_wire_position(Context *context, View *view, Process *p, Process_Shape shape, Process_Connection conn, U32 wire_index);
-function Process *get_process_wire_by_selection(Context *context, Process_Selection selection);
-function B32 is_active_process(Context *context, Process *p);
-function void remove_process_from_active_processes(Context *context, Process *p);
-function Keybind_Result check_keybind(Context *context, Keybind *keybind, Process_Selection selection);
-function void clear_active_processes(Context *context);
-function void exit_add_wire_mode(Context *context);
-function void delete_process(Context *context, Process *p);
-function void copy_active_processes(Context *context);
-function void paste_processes(Context *context);
-function void gather_processes_from_trie(Context *context);
-function Process *connect_detached_processes(Context *context, Process *out, Process *in);
-function Connection_Result connect_processes(Context *context, Process *out, Process *in);
-function void remove_process_from_process_list(Context *context, Process_List *list, Process *p);
-function void clear_ds_view_process_list(Context *context);
-function Process_Shape get_process_shape(Context *context, View *view, Process *p);
-function Vector2 get_process_size(Context *context, Process *p, Process_Shape shape);
-function Rectangle get_selection_rectangle(Context *context);
-function B32 rectangle_contains_point(Rectangle r, Vector2 p);
-function void remove_wire_connection(Context *context, Process *wire, Process_Connection_Flag conn_flags);
-function void add_wire_connection(Context *context, Process *wire, Process *process, Process_Connection conn, U32 which_conn);
-function Vector2 get_process_position(Context *context, View *view, Process *process);
-function void handle_label_editing(Context *context, Process_List ps);
+function               S32 collect_save_files(Context *context);
+function               B32 rectangle_contains_point(Rectangle r, Vector2 p);
+function           Vector2 get_process_wire_position(Context *context, View *view, Process *p, Process_Shape shape, Process_Connection conn, U32 wire_index);
+function          Process *get_process_wire_by_selection(Context *context, Process_Selection selection);
+function     Process_Shape get_process_shape(Context *context, View *view, Process *p);
+function           Vector2 get_process_size(Context *context, Process *p, Process_Shape shape);
+function         Rectangle get_selection_rectangle(Context *context);
+function           Vector2 get_process_position(Context *context, View *view, Process *process);
 function Process_Selection get_process_selection(Context *context, View *view, Process *p);
-function Process *find_process_connection(Context *context, Process *p, Process_Connection conn, U32 which_conn);
+function               B32 is_active_process(Context *context, Process *p);
+function              void remove_process_from_active_processes(Context *context, Process *p);
+function    Keybind_Result check_keybind(Context *context, Keybind *keybind, Process_Selection selection);
+function              void exit_add_wire_mode(Context *context);
+function              void delete_process(Context *context, Process *p);
+function              void copy_active_processes(Context *context);
+function              void paste_processes(Context *context);
+function              void gather_processes_from_trie(Context *context);
+function              void remove_process_from_process_list(Context *context, Process_List *list, Process *p);
+function          Process *connect_detached_processes(Context *context, Process *out, Process *in);
+function Connection_Result connect_processes(Context *context, Process *out, Process *in);
+function              void remove_wire_connection(Context *context, Process *wire, Process_Connection_Flag conn_flags);
+function              void add_wire_connection(Context *context, Process *wire, Process *process, Process_Connection conn, U32 which_conn);
+function              void handle_label_editing(Context *context, Process_List ps);
+function          Process *find_process_connection(Context *context, Process *p, Process_Connection conn, U32 which_conn);
 
 
 
@@ -295,14 +295,14 @@ typedef struct {
 //////////////////////////////////////
 
 
-// TODO: maybe this should be a mode and not flags?
+// NOTE: Flags like Context_Flag_AutoAlignChains are defined in Keybinds, so this Context_Flag enum probably also needs to be determined at link-time.
 typedef enum {
   Context_Flag_Dragging           = 1 << 0,
   Context_Flag_Bounding           = 1 << 1,
-  /* Context_Flag_Panning            = 1 << 2, */
-  Context_Flag_NewWire            = 1 << 3,
-  Context_Flag_RoundedShapes      = 1 << 4,
-  Context_Flag_DataStructureView  = 1 << 5,
+  Context_Flag_NewWire            = 1 << 2,
+  Context_Flag_RoundedShapes      = 1 << 3,
+  Context_Flag_DataStructureView  = 1 << 4,
+  Context_Flag_AutoAlignChains    = 1 << 5,
 } Context_Flag;
 
 

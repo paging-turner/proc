@@ -295,20 +295,17 @@ Define_Keybind(
   ) {
   B32 handled = 0;
 
-  B32 DEBUG_ALWAYS_AUTO_ALIGN_FOR_NOW = 1;
-  B32 should_auto_align = (
-    DEBUG_ALWAYS_AUTO_ALIGN_FOR_NOW ||
-    Test_Keybind(env, AutoAlignOneInOneOut, Enter));
-
-  if (env->context && should_auto_align) {
+  if (Get_Flag(env->context->flags, Context_Flag_AutoAlignChains) ||
+      Test_Keybind(env, AutoAlignOneInOneOut, Enter)) {
     Context *context = env->context;
+    View *view = context->views + View_Kind_Trie;
 
-    for (Process *w = context->views[View_Kind_Trie].processes.first; w != 0; w = w->next) {
+    for (Process *w = view->processes.first; w != 0; w = w->next) {
       if (Get_Flag(w->flags, Process_Flag_Wire)) {
         Assert(w->in && w->out);
         if (w->in && w->in->in_count == 1 &&
             w->out && w->out->out_count == 1) {
-          w->in->position = w->out->position;
+          w->in->position = get_process_position(context, view, w->out);
         }
       }
     }

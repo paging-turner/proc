@@ -2474,6 +2474,8 @@ int main(void) {
       }
 
       context.proc_trie = proc_trie_create_trie(context.permanent_arena);
+
+      Set_Flag(context.flags, Context_Flag_AutoAlignChains);
     }
 
     // init globals
