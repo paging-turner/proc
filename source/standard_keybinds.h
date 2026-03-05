@@ -295,10 +295,15 @@ Define_Keybind(
   ) {
   B32 handled = 0;
 
-  if (env->context && Test_Keybind(env, AutoAlignOneInOneOut, Enter)) {
+  B32 DEBUG_ALWAYS_AUTO_ALIGN_FOR_NOW = 1;
+  B32 should_auto_align = (
+    DEBUG_ALWAYS_AUTO_ALIGN_FOR_NOW ||
+    Test_Keybind(env, AutoAlignOneInOneOut, Enter));
+
+  if (env->context && should_auto_align) {
     Context *context = env->context;
 
-    for (Process *w = context->views[View_Kind_Procs].processes.first; w != 0; w = w->next) {
+    for (Process *w = context->views[View_Kind_Trie].processes.first; w != 0; w = w->next) {
       if (Get_Flag(w->flags, Process_Flag_Wire)) {
         Assert(w->in && w->out);
         if (w->in && w->in->in_count == 1 &&
