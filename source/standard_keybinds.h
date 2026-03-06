@@ -144,12 +144,21 @@ function void proc_ds_view_root_handler(
   Proc_Trie_Trie *trie = context->proc_trie;
 
   B32 null_trie_ref = trie->ref == 0;
+  S32 depth = proc_trie_get_depth_from_iterator(iter);
 
   // ensure trie exists
   Ensure_Process_Reference_Exists_No_Label(trie);
+  if (trie->ref && (trie->ref->label.first == 0 || trie->ref->label.last == 0)) {
+    String8 label = str8_lit("trie");
+    trie->ref->label = string_chunk_list_from_string8(context, label);
+  }
 
   // ensure root exists
   Ensure_Process_Reference_Exists_No_Label(root);
+  if (root->ref && (root->ref->label.first == 0 || root->ref->label.last == 0)) {
+    String8 label = str8_lit(Get_Trie_Root_C_String_From_Integer(depth));
+    root->ref->label = string_chunk_list_from_string8(context, label);
+  }
 
   // ensure first node exists
   Assert(root->node);
@@ -195,8 +204,13 @@ function void proc_ds_view_node_handler(
   Proc_Trie_Node *node
   ) {
   Context *context = (Context *)maybe_context;
+  S32 depth = proc_trie_get_depth_from_iterator(iter);
 
   Ensure_Process_Reference_Exists_No_Label(node);
+  if (node->ref && (node->ref->label.first == 0 || node->ref->label.last == 0)) {
+    String8 label = str8_lit(Get_Trie_Node_C_String_From_Integer(depth));
+    node->ref->label = string_chunk_list_from_string8(context, label);
+  }
 
   if (iter->stack->next) {
     B32 contains_node = 0;
@@ -235,7 +249,6 @@ Define_Keybind(
   B32 handled = 0;
   Context *context = env->context;
   Process_Selection selection = env->selection;
-
 
   if (check_keybind(context, keybind_action_REF(ToggleDataStructureView), selection) == Keybind_Result_Enter) {
     handled = 1;
@@ -305,6 +318,7 @@ Define_Keybind(
         Assert(w->in && w->out);
         if (w->in && w->in->in_count == 1 &&
             w->out && w->out->out_count == 1) {
+          // copy position
           w->in->position = get_process_position(context, view, w->out);
         }
       }

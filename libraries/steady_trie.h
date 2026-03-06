@@ -289,6 +289,16 @@ Steady_Function void steady_trie(delete_stack_node)(
   // TODO: Implement and use
 }
 
+Steady_Function S32 steady_trie(get_depth_from_iterator)(Steady_Trie(Iterator) *iter) {
+  S32 depth = -1;
+
+  // @Speed
+  for (Steady_Trie(Stack_Node) *node = iter->stack; node != 0; node = node->next) {
+    depth += 1;
+  }
+
+  return depth;
+}
 
 Steady_Function void steady_trie(iter_next)(Steady_Trie(Iterator) *iter) {
   // Do a depth-first search until we find the next occupied key.
