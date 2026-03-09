@@ -265,9 +265,27 @@ Define_Keybind(
 
 
 
+#define Auto_Align_X_Offset_Count  (Proc_Trie_Key_Bits / Proc_Trie_Slot_Bits)
+global_variable F32 global_auto_align_x_offset[Auto_Align_X_Offset_Count];
+
+Define_Keybind(
+  AutoAlignOneInOneOut_Pre,,
+  Keybind_Behavior_Overwrite, 1, AtTheStart,
+  0, 0, 0,
+  "Prep for auto-alignment."
+  ) {
+  B32 handled = 0;
+
+  for (S32 i = 0; i < Auto_Align_X_Offset_Count; ++i) {
+    global_auto_align_x_offset[i] = 0.0f;
+  }
+
+  return handled;
+}
+
 Define_Keybind(
   AutoAlignOneInOneOut,,
-  Keybind_Behavior_Overwrite, 1, AtTheStart,
+  Keybind_Behavior_Overwrite, 1, AtTheEnd,
   KEY_A, Modifier_Keys(Control, Super),
   Ui_Constraint_ActionNotOccured,
   "Align any following processes after a given node, but only if the following processes have a single in and a single out."
@@ -290,22 +308,30 @@ Define_Keybind(
       }
       else if (p->ref && p->ref_kind) {
         // fix process y-position
-        F32 y_pos = 0.0f;
         F32 y_scale = 100.0f;
+        S32 depth = 0;
 
         switch(p->ref_kind) {
         case Ref_Kind_ProcTrie: {
-          y_pos = y_scale;
+          depth = -1;
         } break;
         case Ref_Kind_ProcTrieNode: {
-          y_pos = -y_scale * (F32)(((Proc_Trie_Node *)p->ref)->depth);
+          depth = ((Proc_Trie_Node *)p->ref)->depth;
         } break;
         case Ref_Kind_ProcTrieRoot: {
-          y_pos = -y_scale * (F32)(((Proc_Trie_Root *)p->ref)->depth);
+          depth = ((Proc_Trie_Root *)p->ref)->depth;
         } break;
         }
-        /* if (p->ref */
-        p->position.y = y_pos;
+
+        if (depth >= 0 && depth < Auto_Align_X_Offset_Count) {
+          F32 *x_pos = global_auto_align_x_offset + depth;
+          Process_Shape shape = get_process_shape(context, view, p);
+          Vector2 size = get_process_size(context, p, shape);
+          p->position.x = *x_pos;
+          *x_pos += size.x + 60.0f;
+        }
+
+        p->position.y = -y_scale * (F32)depth;
       }
     }
   }
