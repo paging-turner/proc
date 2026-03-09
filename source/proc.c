@@ -316,6 +316,25 @@ function Process *create_ui_element(Context *context) {
 
 
 
+function void update_data_structure_view_processes(Context *context) {
+  proc_trie_crawl_trie(context->per_frame_arena,
+                       context->proc_trie,
+                       proc_ds_view_root_clear_handler,
+                       proc_ds_view_node_clear_handler,
+                       context);
+
+  clear_ds_view_process_list(context);
+
+  context->proc_trie->ref = 0;
+  clear_ds_view_process_list(context);
+
+  proc_trie_crawl_trie(context->per_frame_arena,
+                       context->proc_trie,
+                       proc_ds_view_root_handler,
+                       proc_ds_view_node_handler,
+                       context);
+}
+
 
 function void gather_processes_from_trie(Context *context) {
   Arena *arena = context->per_frame_arena;
@@ -331,6 +350,8 @@ function void gather_processes_from_trie(Context *context) {
     Process *p = (Process *)iter->key;
     SLLQueuePush(context->views[View_Kind_Procs].processes.first, context->views[View_Kind_Procs].processes.last, p);
   }
+
+  update_data_structure_view_processes(context);
 }
 
 
@@ -2476,6 +2497,7 @@ int main(void) {
       context.proc_trie = proc_trie_create_trie(context.permanent_arena);
 
       Set_Flag(context.flags, Context_Flag_AutoAlignChains);
+      gather_processes_from_trie(&context);
     }
 
     // init globals
@@ -2668,7 +2690,11 @@ int main(void) {
 
         for (U32 v = 0; v < View_Kind__Count; ++v) {
           View *view = context.views + v;
-          Process *processes_to_draw = view->processes.first;
+          B32 is_trie_view = v == View_Kind_Trie;
+          B32 should_draw = (is_trie_view
+                             ? Get_Flag(context.flags, Context_Flag_DataStructureView) != 0
+                             : 1);
+          Process *processes_to_draw = should_draw ? view->processes.first : 0;
           F32 font_size = view->camera.zoom * global_process_font_size;
 
           // draw processes
@@ -2797,7 +2823,7 @@ int main(void) {
           }
 
           // draw wires
-          for (Process *p = view->processes.first; p != 0; p = p->next) {
+          for (Process *p = processes_to_draw; p != 0; p = p->next) {
             B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
 
             if (is_wire) {

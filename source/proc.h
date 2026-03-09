@@ -94,6 +94,13 @@ struct Connection_Result {
 };
 
 
+typedef enum Ref_Kind {
+  Ref_Kind__Null,
+  Ref_Kind_ProcTrie,
+  Ref_Kind_ProcTrieNode,
+  Ref_Kind_ProcTrieRoot,
+} Ref_Kind;
+
 
 
 struct Process {
@@ -145,6 +152,7 @@ struct Process {
   U8 *label_c_string;
   U32 label_cursor;
 
+  Ref_Kind ref_kind;
   void *ref;
 };
 

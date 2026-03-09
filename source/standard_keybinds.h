@@ -148,6 +148,7 @@ function void proc_ds_view_root_handler(
 
   // ensure trie exists
   Ensure_Process_Reference_Exists_No_Label(trie);
+  trie->ref->ref_kind = Ref_Kind_ProcTrie;
   if (trie->ref && (trie->ref->label.first == 0 || trie->ref->label.last == 0)) {
     String8 label = str8_lit("trie");
     trie->ref->label = string_chunk_list_from_string8(context, label);
@@ -155,6 +156,8 @@ function void proc_ds_view_root_handler(
 
   // ensure root exists
   Ensure_Process_Reference_Exists_No_Label(root);
+  root->ref->ref_kind = Ref_Kind_ProcTrieRoot;
+  root->depth = depth;
   if (root->ref && (root->ref->label.first == 0 || root->ref->label.last == 0)) {
     String8 label = str8_lit(Get_Trie_Root_C_String_From_Integer(depth));
     root->ref->label = string_chunk_list_from_string8(context, label);
@@ -207,6 +210,8 @@ function void proc_ds_view_node_handler(
   S32 depth = proc_trie_get_depth_from_iterator(iter);
 
   Ensure_Process_Reference_Exists_No_Label(node);
+  node->ref->ref_kind = Ref_Kind_ProcTrieNode;
+  node->depth = depth;
   if (node->ref && (node->ref->label.first == 0 || node->ref->label.last == 0)) {
     String8 label = str8_lit(Get_Trie_Node_C_String_From_Integer(depth));
     node->ref->label = string_chunk_list_from_string8(context, label);
@@ -250,30 +255,7 @@ Define_Keybind(
   Context *context = env->context;
   Process_Selection selection = env->selection;
 
-  if (check_keybind(context, keybind_action_REF(ToggleDataStructureView), selection) == Keybind_Result_Enter) {
-    handled = 1;
-
-    if (Get_Flag(context->flags, Context_Flag_DataStructureView)) {
-      proc_trie_crawl_trie(context->per_frame_arena,
-                           context->proc_trie,
-                           proc_ds_view_root_clear_handler,
-                           proc_ds_view_node_clear_handler,
-                           context);
-
-      clear_ds_view_process_list(context);
-
-      context->proc_trie->ref = 0;
-    }
-    else {
-      clear_ds_view_process_list(context);
-
-      proc_trie_crawl_trie(context->per_frame_arena,
-                           context->proc_trie,
-                           proc_ds_view_root_handler,
-                           proc_ds_view_node_handler,
-                           context);
-    }
-
+  if (Test_Keybind(env, ToggleDataStructureView, Enter)) {
     // TODO: Map the proc-trie to processes with the same topology.
     Toggle_Flag(context->flags, Context_Flag_DataStructureView);
   }
@@ -281,22 +263,6 @@ Define_Keybind(
   return handled;
 }
 
-Define_Keybind(
-  HandleDataStructureView,,
-  Keybind_Behavior_Overwrite, 100, AtTheStart,
-  0, 0, 0,
-  "Handle 'Data Structure View'."
-  ) {
-  if (env->context) {
-    Context *context = env->context;
-
-    if (Get_Flag(context->flags, Context_Flag_DataStructureView)) {
-      // TODO: Crawl roots and nodes for "linear" procs that can be stacked up.
-    }
-  }
-
-  return 0;
-}
 
 
 Define_Keybind(
@@ -313,14 +279,33 @@ Define_Keybind(
     Context *context = env->context;
     View *view = context->views + View_Kind_Trie;
 
-    for (Process *w = view->processes.first; w != 0; w = w->next) {
-      if (Get_Flag(w->flags, Process_Flag_Wire)) {
-        Assert(w->in && w->out);
-        if (w->in && w->in->in_count == 1 &&
-            w->out && w->out->out_count == 1) {
+    for (Process *p = view->processes.first; p != 0; p = p->next) {
+      if (Get_Flag(p->flags, Process_Flag_Wire)) {
+        Assert(p->in && p->out);
+        if (p->in && p->in->in_count == 1 &&
+            p->out && p->out->out_count == 1) {
           // copy position
-          w->in->position = get_process_position(context, view, w->out);
+          p->in->position = get_process_position(context, view, p->out);
         }
+      }
+      else if (p->ref && p->ref_kind) {
+        // fix process y-position
+        F32 y_pos = 0.0f;
+        F32 y_scale = 100.0f;
+
+        switch(p->ref_kind) {
+        case Ref_Kind_ProcTrie: {
+          y_pos = y_scale;
+        } break;
+        case Ref_Kind_ProcTrieNode: {
+          y_pos = -y_scale * (F32)(((Proc_Trie_Node *)p->ref)->depth);
+        } break;
+        case Ref_Kind_ProcTrieRoot: {
+          y_pos = -y_scale * (F32)(((Proc_Trie_Root *)p->ref)->depth);
+        } break;
+        }
+        /* if (p->ref */
+        p->position.y = y_pos;
       }
     }
   }

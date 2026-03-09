@@ -181,6 +181,7 @@ typedef struct Steady_Trie(Node) {
 #endif
 
   Steady_Trie_Value_Type *ref;
+  S32 depth;
 } Steady_Trie(Node);
 
 typedef struct Steady_Trie(Root) {
@@ -191,6 +192,7 @@ typedef struct Steady_Trie(Root) {
   Steady_Trie(Node) *node;
 
   Steady_Trie_Value_Type *ref;
+  S32 depth;
 } Steady_Trie(Root);
 
 typedef struct Steady_Trie(Root_Stack) {
