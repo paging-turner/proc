@@ -325,10 +325,9 @@ Define_Keybind(
 
         if (depth >= 0 && depth < Auto_Align_X_Offset_Count) {
           F32 *x_pos = global_auto_align_x_offset + depth;
-          Process_Shape shape = get_process_shape(context, view, p);
-          Vector2 size = get_process_size(context, p, shape);
           p->position.x = *x_pos;
-          *x_pos += size.x + 60.0f;
+          S32 max_conn_count = Max(p->in_count, p->out_count);
+          *x_pos += 80.0f + (30.0f * max_conn_count);
         }
 
         p->position.y = -y_scale * (F32)depth;
