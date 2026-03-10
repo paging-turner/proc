@@ -16,6 +16,7 @@
 #include "../source/_include_raylib.h"
 
 
+#include "../libraries/ryn_prof.h"
 
 
 
@@ -2466,6 +2467,7 @@ int main(void) {
   //////////////////////////////////////////
   Context context = (Context){0};
   Render_Context *prc = 0;
+  uint64_t cpu_freq;
   {
     InitWindow(800, 500, "proc");
     SetExitKey(0);
@@ -2575,6 +2577,7 @@ int main(void) {
       SetWindowSize(global_window_size.x, global_window_size.y);
       render_Initialize(context.temp_arena);
       set_global_window_render_size();
+      cpu_freq = ryn_EstimateCpuFrequency(100);
     }
   }
 
@@ -2582,6 +2585,9 @@ int main(void) {
   // Main Loop
   //////////////////////////////////////////
   while (!WindowShouldClose()) {
+    ryn_BeginProfile();
+    ryn_BEGIN_TIMED_BLOCK(main_loop);
+
     if (IsWindowResized()) {
       set_global_window_render_size();
     }
@@ -2940,6 +2946,24 @@ int main(void) {
     }
 
 
+    ryn_END_TIMED_BLOCK(main_loop);
+
+    //////////////////////////////////////////
+    // End Profiler
+    //////////////////////////////////////////
+    ryn_EndAndPrintProfile(cpu_freq);
+    /* // clear profile timers */
+    for(uint32_t TimerIndex = 0; TimerIndex < SymbolCount(ryn_sym_timer); ++TimerIndex)
+    {
+      ryn_timer_data *Timer = SymbolMetadataFromID(ryn_sym_timer, TimerIndex+1);
+
+      Timer->ElapsedExclusive = 0;
+      Timer->ElapsedInclusive = 0;
+      Timer->HitCount = 0;
+      Timer->ProcessedByteCount = 0;
+    }
+
+
     //////////////////////////////////////////
     // Cleanup
     //////////////////////////////////////////
@@ -2952,7 +2976,6 @@ int main(void) {
       context.process_render_context.command_list.first = 0;
       context.process_render_context.command_list.last = 0;
     }
-
 
     EndDrawing();
   }
