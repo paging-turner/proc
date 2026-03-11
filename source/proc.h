@@ -61,12 +61,14 @@ typedef enum {
   Process_Flag_Identity    = 1 << 4,
   Process_Flag_Drag_In     = 1 << 5,
   Process_Flag_Drag_Out    = 1 << 6,
+  Process_Flag_Invisible   = 1 << 7,
+  Process_Flag_AsBox       = 1 << 8,
   // UI features
-  Process_Flag_TextEdit        = 1 << 7,
-  Process_Flag_CanBeActive     = 1 << 8,
-  Process_Flag_Clickable       = 1 << 9,
-  Process_Flag_FitToText       = 1 << 10,
-  Process_Flag_UseLabelCString = 1 << 11,
+  Process_Flag_TextEdit        = 1 << 9,
+  Process_Flag_CanBeActive     = 1 << 10,
+  Process_Flag_Clickable       = 1 << 11,
+  Process_Flag_FitToText       = 1 << 12,
+  Process_Flag_UseLabelCString = 1 << 13,
 } Process_Flag;
 
 #define Process_Connection_Xlist\
@@ -168,7 +170,7 @@ struct Process {
 #define Steady_Trie_Use_Key_Value_Pair   Proc_Trie_Use_Key_Value
 #define Steady_Trie_Value_Type           Process
 #define Steady_Trie_Default_Value        (Process){0}
-#define Steady_Trie_Use_Debug_Log        1
+#define Steady_Trie_Use_Debug_Log        0
 #include "../libraries/steady_trie.h"
 #define Proc_Trie_Iterate(iter_name, arena, trie)\
   for (Proc_Trie_Iterator *iter_name = proc_trie_iter_init(arena, trie->current_root->node);\

@@ -1948,12 +1948,13 @@ function Process_Shape get_process_shape(
 
   S32 has_in = p->in_count > 0;
   S32 has_out = p->out_count > 0;
+  B32 as_box = Get_Flag(p->flags, Process_Flag_AsBox);
 
   B32 rounded = Get_Flag(context->flags, Context_Flag_RoundedShapes);
 
-  if (has_in && has_out) {
+  if (as_box || (has_in && has_out)) {
     // rectangular
-    F32 max_conn = (F32)Max(p->in_count, p->out_count);
+    F32 max_conn = as_box ? 1.0f : (F32)Max(p->in_count, p->out_count);
     F32 half_width = 0.5f*(2.0f*padding + max_conn*spacing);
     // fit shape to text if text is wide enough
     if ((F32)text_width > half_width) {
@@ -2499,6 +2500,7 @@ int main(void) {
       context.proc_trie = proc_trie_create_trie(context.permanent_arena);
 
       Set_Flag(context.flags, Context_Flag_AutoAlignChains);
+      Set_Flag(context.flags, Context_Flag_DataStructureView);
       gather_processes_from_trie(&context);
     }
 
@@ -2708,8 +2710,9 @@ int main(void) {
             B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
             U8 *label_c_string = c_string_from_string_chunk_list(context.temp_arena, &p->label);
             S32 text_width = MeasureText((char *)label_c_string, font_size);
+            B32 is_invisible = Get_Flag(p->flags, Process_Flag_Invisible);
 
-            if (!is_wire) {
+            if (!(is_wire || is_invisible)) {
               Process_Shape shape = get_process_shape(&context, view, p);
 
               B32 is_hot = context.hot_process == p;
@@ -2831,8 +2834,9 @@ int main(void) {
           // draw wires
           for (Process *p = processes_to_draw; p != 0; p = p->next) {
             B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
+            B32 is_invisible = Get_Flag(p->flags, Process_Flag_Invisible);
 
-            if (is_wire) {
+            if (is_wire && !is_invisible) {
               Process_Shape out_shape = get_process_shape(&context, view, p->out);
               Process_Shape in_shape = get_process_shape(&context, view, p->in);
 

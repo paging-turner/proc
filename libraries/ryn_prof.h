@@ -48,6 +48,16 @@ int main(void) {
 # include <mach-o/getsect.h>
 #endif
 
+#if Ryn_Prof_Use_Print
+# define Print_String(s)\
+    printf(s)
+
+# define Print_Format_String(f, ...)\
+    printf(f, __VA_ARGS__)
+#else
+# define Print_String(s)
+# define Print_Format_String(f, ...)
+#endif
 
 typedef struct
 {
@@ -186,11 +196,11 @@ static ryn_timer_data ryn_prof_ZeroTimerData;
 static void PrintTimeElapsed(uint64_t TotalElapsedTime, uint64_t CPUFreq, ryn_timer_data *Timer)
 {
     double Percent = 100.0 * ((double)Timer->ElapsedExclusive / (double)TotalElapsedTime);
-    printf("  %s[%llu]: %llu (%.2f%%", Timer->Label, Timer->HitCount, Timer->ElapsedExclusive, Percent);
+    Print_Format_String("  %s[%llu]: %llu (%.2f%%", Timer->Label, Timer->HitCount, Timer->ElapsedExclusive, Percent);
     if(Timer->ElapsedInclusive != Timer->ElapsedExclusive)
     {
         double PercentWithChildren = 100.0 * ((double)Timer->ElapsedInclusive / (double)TotalElapsedTime);
-        printf(", %.2f%% w/children", PercentWithChildren);
+        Print_Format_String(", %.2f%% w/children", PercentWithChildren);
     }
 
     if(Timer->ProcessedByteCount)
@@ -203,9 +213,9 @@ static void PrintTimeElapsed(uint64_t TotalElapsedTime, uint64_t CPUFreq, ryn_ti
         double Megabytes = (double)Timer->ProcessedByteCount / (double)Megabyte;
         double GigabytesPerSecond = BytesPerSecond / Gigabyte;
 
-        printf("  %.3fmb at %.2fgb/s", Megabytes, GigabytesPerSecond);
+        Print_Format_String("  %.3fmb at %.2fgb/s", Megabytes, GigabytesPerSecond);
     }
-    printf(")\n");
+    Print_String(")\n");
 }
 
 void ryn_BeginProfile(void)
@@ -227,7 +237,7 @@ void ryn_EndAndPrintProfile(uint64_t CPUFreq)
     if(CPUFreq)
     {
         float TotalElapsedTimeInMs = 1000.0 * (double)TotalElapsedTime / (double)CPUFreq;
-        printf("\nTotal time: %0.4fms (CPU freq %llu)\n", TotalElapsedTimeInMs, CPUFreq);
+        Print_Format_String("\nTotal time: %0.4fms (CPU freq %llu)\n", TotalElapsedTimeInMs, CPUFreq);
     }
 
     for(uint32_t TimerIndex = 0; TimerIndex < SymbolCount(ryn_sym_timer); ++TimerIndex)

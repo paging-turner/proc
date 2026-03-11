@@ -302,8 +302,13 @@ Define_Keybind(
         Assert(p->in && p->out);
         if (p->in && p->in->in_count == 1 &&
             p->out && p->out->out_count == 1) {
-          // copy position
           p->in->position = get_process_position(context, view, p->out);
+          Set_Flag(p->in->flags, Process_Flag_AsBox);
+
+          Unset_Flag(p->out->flags, Process_Flag_AsBox);
+          Set_Flag(p->out->flags, Process_Flag_Invisible);
+
+          Set_Flag(p->flags, Process_Flag_Invisible);
         }
       }
       else if (p->ref && p->ref_kind) {

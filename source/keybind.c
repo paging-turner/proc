@@ -507,18 +507,17 @@ Define_Keybind(
 
   if (check_keybind(context, keybind_action_REF(CreateProcess), selection)) {
     handled = 1;
-    for (S32 v = 0; v < View_Count; ++v) {
-      View *view = context->views + v;
-      // TODO: do bounds check to see if we should add process
-      if (Get_Flag(view->flags, View_Flag_Active) &&
-          Get_Flag(view->flags, View_Flag_Editable)) {
-        Process *new_p = create_process(context);
-        if (new_p) {
-          Set_Flag(new_p->flags, Process_Flag_TextEdit);
-          new_p->position = GetScreenToWorld2D(context->ui_state.mouse_position, view->camera);
-          clear_active_processes(context);
-          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, new_p, next_active, 0);
-        }
+    View *view = context->views + View_Kind_Procs;
+
+    // TODO: do bounds check to see if we should add process
+    if (Get_Flag(view->flags, View_Flag_Active) &&
+        Get_Flag(view->flags, View_Flag_Editable)) {
+      Process *new_p = create_process(context);
+      if (new_p) {
+        Set_Flag(new_p->flags, Process_Flag_TextEdit);
+        new_p->position = GetScreenToWorld2D(context->ui_state.mouse_position, view->camera);
+        clear_active_processes(context);
+        SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, new_p, next_active, 0);
       }
     }
 
