@@ -2288,9 +2288,8 @@ function void do_menu_ui(Context *context, B32 sizing) {
 
 
 
-Define_Keybind(
-  process_interaction, ,
-  Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0,
+Define_Keybind_Action(
+  process_interaction,
   "This is the function that calls all the defined keybinds. If you want to change the behavior of when things like undo/redo are called, you would want to overwrite this keybind with one that does what you want."
   ) {
   if (env->context) {
@@ -2306,23 +2305,23 @@ Define_Keybind(
       }
     }
 
-    Keybind_Handle(env, BoundDesiredKbResStack_Exit);
-    Keybind_Handle(env, Undo);
-    Keybind_Handle(env, Redo);
-    Keybind_Handle(env, Pan);
-    Keybind_Handle(env, ZoomIn);
-    Keybind_Handle(env, ZoomOut);
-    Keybind_Handle(env, ForAllProcessInteractions);
-    Keybind_Handle(env, ZeroOutSelection);
-    Keybind_Handle(env, MoreRectangleSelectionHandling);
-    Keybind_Handle(env, CreateProcess);
-    Keybind_Handle(env, CancelSelection);
-    Keybind_Handle(env, BoundDesiredKbResStack_Enter);
-    Keybind_Handle(env, ToggleDisplayMode);
-    Keybind_Handle(env, CopyProcess);
-    Keybind_Handle(env, PasteProcess);
-    Keybind_Handle(env, HandleMovedWire);
-    Keybind_Handle(env, HandleActiveProcess);
+    Handle_Keybind_Action(env, BoundDesiredKbResStack_Exit);
+    Handle_Keybind_Action(env, Undo);
+    Handle_Keybind_Action(env, Redo);
+    Handle_Keybind_Action(env, Pan);
+    Handle_Keybind_Action(env, ZoomIn);
+    Handle_Keybind_Action(env, ZoomOut);
+    Handle_Keybind_Action(env, ForAllProcessInteractions);
+    Handle_Keybind_Action(env, ZeroOutSelection);
+    Handle_Keybind_Action(env, MoreRectangleSelectionHandling);
+    Handle_Keybind_Action(env, CreateProcess);
+    Handle_Keybind_Action(env, CancelSelection);
+    Handle_Keybind_Action(env, BoundDesiredKbResStack_Enter);
+    Handle_Keybind_Action(env, ToggleDisplayMode);
+    Handle_Keybind_Action(env, CopyProcess);
+    Handle_Keybind_Action(env, PasteProcess);
+    Handle_Keybind_Action(env, HandleMovedWire);
+    Handle_Keybind_Action(env, HandleActiveProcess);
 
     // custom keybinds at-the-end
     for (U32 i = 0; i < SymbolCount(keybind_action); ++i) {
@@ -2337,6 +2336,10 @@ Define_Keybind(
 
   return 0;
 }
+
+Define_Keybind(
+  process_interaction, ,
+  Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0) ;
 
 
 
@@ -2665,7 +2668,7 @@ int main(void) {
         //////////////////////////////////////////
         // Handle Process Interaction
         //////////////////////////////////////////
-        Keybind_Handle(env, process_interaction);
+        Handle_Keybind_Action(env, process_interaction);
       }
     }
 

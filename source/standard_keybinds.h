@@ -25,13 +25,8 @@ function S32 process_compare_pos_x(void *a, void *b, void *udata) {
 ////////////////////////////////////////
 // Process-Connection By Clicking
 ////////////////////////////////////////
-Define_Keybind(
-  ProcessConnectionByModClick, ,
-  Keybind_Behavior_Alternate, 34, AtTheStart,
-  Key_Kind_Mouse0, Modifier_Key_Super,
-  (Ui_Constraint_ActionNotOccured |
-   Ui_Constraint_HotProcess |
-   Ui_Constraint_ActiveProcesses),
+Define_Keybind_Action(
+  ProcessConnectionByModClick,
   "Connect clicked process to all active processes."
   ) {
   B32 handled = 0;
@@ -75,6 +70,14 @@ Define_Keybind(
 
   return handled;
 }
+
+Define_Keybind(
+  ProcessConnectionByModClick, ,
+  Keybind_Behavior_Alternate, 34, AtTheStart,
+  Key_Kind_Mouse0, Modifier_Key_Super,
+  (Ui_Constraint_ActionNotOccured |
+   Ui_Constraint_HotProcess |
+   Ui_Constraint_ActiveProcesses));
 
 
 
@@ -244,11 +247,8 @@ function void proc_ds_view_node_handler(
   }
 }
 
-Define_Keybind(
-  ToggleDataStructureView,,
-  Keybind_Behavior_Overwrite, 274, AtTheStart,
-  KEY_D, Modifier_Key_Control|Modifier_Key_Shift,
-  Ui_Constraint_ActionNotOccured,
+Define_Keybind_Action(
+  ToggleDataStructureView,
   "Toggle a 'Data Structure View', which shows the proc-trie using processes."
   ) {
   B32 handled = 0;
@@ -263,15 +263,19 @@ Define_Keybind(
   return handled;
 }
 
+Define_Keybind(
+  ToggleDataStructureView, ,
+  Keybind_Behavior_Overwrite, 274, AtTheStart,
+  KEY_D, Modifier_Key_Control|Modifier_Key_Shift,
+  Ui_Constraint_ActionNotOccured);
+
 
 
 #define Auto_Align_X_Offset_Count  (Proc_Trie_Key_Bits / Proc_Trie_Slot_Bits)
 global_variable F32 global_auto_align_x_offset[Auto_Align_X_Offset_Count];
 
-Define_Keybind(
-  AutoAlignOneInOneOut_Pre,,
-  Keybind_Behavior_Overwrite, 1, AtTheStart,
-  0, 0, 0,
+Define_Keybind_Action(
+  AutoAlignOneInOneOut_Pre,
   "Prep for auto-alignment."
   ) {
   B32 handled = 0;
@@ -284,10 +288,12 @@ Define_Keybind(
 }
 
 Define_Keybind(
-  AutoAlignOneInOneOut,,
-  Keybind_Behavior_Overwrite, 1, AtTheEnd,
-  KEY_A, Modifier_Keys(Control, Super),
-  Ui_Constraint_ActionNotOccured,
+  AutoAlignOneInOneOut_Pre, ,
+  Keybind_Behavior_Overwrite, 1, AtTheStart,
+  0, 0, 0);
+
+Define_Keybind_Action(
+  AutoAlignOneInOneOut,
   "Align any following processes after a given node, but only if the following processes have a single in and a single out."
   ) {
   B32 handled = 0;
@@ -342,3 +348,9 @@ Define_Keybind(
 
   return handled;
 }
+
+Define_Keybind(
+  AutoAlignOneInOneOut, ,
+  Keybind_Behavior_Overwrite, 1, AtTheEnd,
+  KEY_A, Modifier_Keys(Control, Super),
+  Ui_Constraint_ActionNotOccured);

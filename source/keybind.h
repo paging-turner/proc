@@ -4,6 +4,22 @@
 // Keybind Declarations
 //////////////////////////////////
 
+
+/*
+ *
+ * TODO: Split up the idea of keybind and keybind-action. Many keybinds can map to one action...
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ */
+
+
 typedef enum {
   Keybind_Behavior_Overwrite,
   Keybind_Behavior_Alternate
@@ -79,7 +95,7 @@ struct Keybind {
   U32 modifiers;
   Ui_Constraint constraint;
   String8 name;
-  String8 description;
+  /* String8 description; */
   B32 (*handle)(Keybind_Environment *env);
   Keybind *next;
 };
@@ -122,20 +138,24 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
 #define Is_Keybind_Custom(keybind)\
   ((keybind) && (keybind)->bind > 0 && (keybind)->handle)
 
+#define Define_Keybind_Action(action_name, d)\
+  static keybind_action_DECL(action_name);\
+  function B32 handle_keybind_##action_name(Keybind_Environment *env)
+
+
 
 #define Define_Keybind(\
   action_name, keybind_name,\
   behavior_name, bind_value, timing_name,\
-  k, m, c, d)\
+  k, m, c)\
   static keybind_action_DECL(action_name);\
   static keybind_DECL(action_name##keybind_name);\
-  function B32 handle_keybind_##action_name##bind_value(Keybind_Environment *env);\
+  function B32 handle_keybind_##action_name(Keybind_Environment *env);\
   MR4TH_BEFORE_MAIN(proc_keybind_##action_name##_##bind_value){\
-    keybind_Type *keybind = keybind_action_REF(action_name);\
+    keybind_Type *keybind = keybind_REF(action_name##keybind_name);\
     B32 both_zero = (U32)(bind_value) == 0 && keybind->bind == 0;\
     B32 stronger_bind = (U32)(bind_value) >= keybind->bind;\
-    if (keybind->handle == 0 ||\
-        (behavior_name == Keybind_Behavior_Overwrite && stronger_bind)) {\
+    if (keybind->handle == 0) {\
       keybind->behavior = (behavior_name);\
       keybind->bind = (bind_value);\
       Set_Flag(keybind->timing, Keybind_Timing_##timing_name);\
@@ -143,18 +163,13 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
       keybind->modifiers = (m);\
       keybind->constraint = (c);\
       keybind->name = str8_lit(Stringify(action_name##keybind_name));\
-      keybind->description = str8_lit(d);\
-      keybind->handle = handle_keybind_##action_name##bind_value;\
+      keybind->handle = handle_keybind_##action_name;\
     }\
-    else if (behavior_name == Keybind_Behavior_Alternate &&\
-             keybind->behavior != Keybind_Behavior_Overwrite) {\
-    }\
-  }\
-  function B32 handle_keybind_##action_name##bind_value(Keybind_Environment *env)
+  }
 
 
-#define Keybind_Handle(e, n)\
-  keybind_action_REF(n)->handle(env)
+#define Handle_Keybind_Action(env, n)\
+  handle_keybind_##n(env)
 
 
 #define Keybind_Has_Mouse_Wheel_Movement(keybind_name)\
