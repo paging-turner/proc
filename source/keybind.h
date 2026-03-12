@@ -168,6 +168,14 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
     }\
   }
 
+#define Define_Keybind_And_Action(\
+  action_name, keybind_name,\
+  behavior_name, bind_value, timing_name,\
+  k, m, c, d)\
+  Define_Keybind(action_name, keybind_name, behavior_name, bind_value, timing_name, k, m, c);\
+  Define_Keybind_Action(action_name, d)
+
+
 
 #define Handle_Keybind_Action(env, n)\
   handle_keybind_##n(env)

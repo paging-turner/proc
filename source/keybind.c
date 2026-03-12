@@ -9,8 +9,11 @@ static keybind_action_DECL(CycleProcessDisplay);
 function B32 handle_keybind_DeleteProcess(Keybind_Environment *env);
 static keybind_action_DECL(DeleteProcess);
 
-Define_Keybind_Action(
-  HandleActiveProcess,
+
+Define_Keybind_And_Action(
+  HandleActiveProcess, ,
+  Keybind_Behavior_Alternate, 0, AtTheStart,
+  0, 0, 0,
   "handle active-process"
   ) {
   if (env->context) {
@@ -41,17 +44,16 @@ Define_Keybind_Action(
   return 0;
 }
 
-Define_Keybind(
-  HandleActiveProcess, ,
+
+
+
+
+
+Define_Keybind_And_Action(
+  Bound, ,
   Keybind_Behavior_Alternate, 0, AtTheStart,
-  0, 0, 0)
-
-
-
-
-
-Define_Keybind_Action(
-  Bound,
+  Key_Kind_Mouse0, 0,
+  Ui_Constraint_NoHotProcess|Ui_Constraint_ExitOnKeyup,
   "Select multiple processes by drawing a rectangle with your mouse."
   ) {
   B32 handled = 0;
@@ -83,18 +85,14 @@ Define_Keybind_Action(
   return handled;
 }
 
-Define_Keybind(
-  Bound, ,
-  Keybind_Behavior_Alternate, 0, AtTheStart,
-  Key_Kind_Mouse0, 0,
-  Ui_Constraint_NoHotProcess|Ui_Constraint_ExitOnKeyup);
 
 
 
 
-
-Define_Keybind_Action(
-  PerProcessBounding,
+Define_Keybind_And_Action(
+  PerProcessBounding, ,
+  Keybind_Behavior_Alternate, 0, ForAllProcesses,
+  0, 0, 0,
   "Per-process bounding."
   ) {
   if (env->context && env->p) {
@@ -124,15 +122,13 @@ Define_Keybind_Action(
   return 0;
 }
 
-Define_Keybind(
-  PerProcessBounding, ,
-  Keybind_Behavior_Alternate, 0, ForAllProcesses,
-  0, 0, 0);
 
 
 
-Define_Keybind_Action(
-  ZeroOutSelection,
+
+Define_Keybind_And_Action(
+  ZeroOutSelection, ,
+  Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0,
   ""
   ) {
   if (env->context) {
@@ -147,14 +143,12 @@ Define_Keybind_Action(
   return 0;
 }
 
-Define_Keybind(
-  ZeroOutSelection, ,
-  Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0);
 
 
 
-Define_Keybind_Action(
-  MoreRectangleSelectionHandling,
+Define_Keybind_And_Action(
+  MoreRectangleSelectionHandling, ,
+  Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0,
   "more rectangle selection handling"
   ) {
   if (env->context) {
@@ -172,15 +166,12 @@ Define_Keybind_Action(
   return 0;
 }
 
-Define_Keybind(
-  MoreRectangleSelectionHandling, ,
-  Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0);
 
 
 
-
-Define_Keybind_Action(
-  HandleMovedWire,
+Define_Keybind_And_Action(
+  HandleMovedWire, ,
+  Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0,
   "handle moved wire"
   ) {
   if (env->moved_wire && env->context) {
@@ -213,17 +204,18 @@ Define_Keybind_Action(
   return 0;
 }
 
-Define_Keybind(
-  HandleMovedWire, ,
-  Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0);
 
 
 
 
 
 
-Define_Keybind_Action(
-  Pan,
+
+Define_Keybind_And_Action(
+  Pan, ,
+  Keybind_Behavior_Alternate, 0, _Null,
+  Key_Kind_Mouse1, 0,
+  Ui_Constraint_ExitOnKeyup,
   "Slide your field of view by moving your mouse."
   ) {
   B32 handled = 1;
@@ -263,18 +255,16 @@ Define_Keybind_Action(
   return handled;
 }
 
-Define_Keybind(
-  Pan, ,
+
+
+
+
+
+Define_Keybind_And_Action(
+  ZoomIn, ,
   Keybind_Behavior_Alternate, 0, _Null,
-  Key_Kind_Mouse1, 0,
-  Ui_Constraint_ExitOnKeyup);
-
-
-
-
-
-Define_Keybind_Action(
-  ZoomIn,
+  Key_Kind_MouseWheelUp, 0,
+  Ui_Constraint_ActionNotOccured,
   "Zoom your field of view in to make objects appear closer."
   ) {
   Context *context = env->context;
@@ -283,14 +273,12 @@ Define_Keybind_Action(
   return keybind_zoom_handler(env);
 }
 
-Define_Keybind(
-  ZoomIn, ,
-  Keybind_Behavior_Alternate, 0, _Null,
-  Key_Kind_MouseWheelUp, 0,
-  Ui_Constraint_ActionNotOccured);
 
-Define_Keybind_Action(
-  ZoomOut,
+Define_Keybind_And_Action(
+  ZoomOut, ,
+  Keybind_Behavior_Alternate, 0, _Null,
+  Key_Kind_MouseWheelDown, 0,
+  Ui_Constraint_ActionNotOccured,
   "Zoom your field of view out to make objects appear further."
   ) {
   Context *context = env->context;
@@ -298,12 +286,6 @@ Define_Keybind_Action(
 
   return keybind_zoom_handler(env);
 }
-
-Define_Keybind(
-  ZoomOut, ,
-  Keybind_Behavior_Alternate, 0, _Null,
-  Key_Kind_MouseWheelDown, 0,
-  Ui_Constraint_ActionNotOccured);
 
 
 static keybind_action_DECL(CheckIfWeNeedToStopDraggingTheWire);
@@ -350,8 +332,10 @@ Define_Keybind_Action(
 
 
 
-Define_Keybind_Action(
-  CheckIfWeNeedToStopDraggingTheWire,
+
+Define_Keybind_And_Action(
+  CheckIfWeNeedToStopDraggingTheWire, ,
+  Keybind_Behavior_Alternate, 0, ForAllProcesses, 0, 0, 0,
   ""
   ) {
   B32 handled = 0;
@@ -372,13 +356,13 @@ Define_Keybind_Action(
   return handled;
 }
 
-Define_Keybind(
-  CheckIfWeNeedToStopDraggingTheWire, ,
-  Keybind_Behavior_Alternate, 0, ForAllProcesses, 0, 0, 0);
 
 
-Define_Keybind_Action(
-  SelectSingleProcess,
+Define_Keybind_And_Action(
+  SelectSingleProcess, ,
+  Keybind_Behavior_Alternate, 0, ForAllProcesses,
+  Key_Kind_Mouse0, 0,
+  Ui_Constraint_HotProcess|Ui_Constraint_ExitOnKeyup|Ui_Constraint_ActionNotOccured,
   "Select a single process."
   ) {
   B32 handled = 0;
@@ -434,20 +418,16 @@ Define_Keybind_Action(
   return handled;
 }
 
-Define_Keybind(
-  SelectSingleProcess, ,
-  Keybind_Behavior_Alternate, 0, ForAllProcesses,
-  Key_Kind_Mouse0, 0,
-  Ui_Constraint_HotProcess|Ui_Constraint_ExitOnKeyup|Ui_Constraint_ActionNotOccured);
-
 
 
 
 function B32 handle_keybind_SelectAnotherProcess(Keybind_Environment *env);
 static keybind_action_DECL(SelectAnotherProcess);
 
-Define_Keybind_Action(
-  MaybeSetHotProcess,
+
+Define_Keybind_And_Action(
+  MaybeSetHotProcess, ,
+  Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0,
   "Maybe select another process, or maybe set the context's hot-process to the keybind-environment's process."
   ) {
   if (Handle_Keybind_Action(env, SelectAnotherProcess)) {
@@ -462,16 +442,15 @@ Define_Keybind_Action(
   return 0;
 }
 
-Define_Keybind(
-  MaybeSetHotProcess, ,
-  Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0);
 
 
 
 
-
-Define_Keybind_Action(
-  SelectAnotherProcess,
+Define_Keybind_And_Action(
+  SelectAnotherProcess, ,
+  Keybind_Behavior_Alternate, 0, _Null,
+  Key_Kind_Mouse0, Modifier_Key_Control,
+  Ui_Constraint_HoverProcess,
   "Add a process to the selected processes."
   ) {
   B32 handled = 0;
@@ -501,16 +480,13 @@ Define_Keybind_Action(
   return handled;
 }
 
-Define_Keybind(
-  SelectAnotherProcess, ,
+
+
+Define_Keybind_And_Action(
+  CancelSelection, ,
   Keybind_Behavior_Alternate, 0, _Null,
-  Key_Kind_Mouse0, Modifier_Key_Control,
-  Ui_Constraint_HoverProcess);
-
-
-
-Define_Keybind_Action(
-  CancelSelection,
+  Key_Kind_Mouse0, 0,
+  Ui_Constraint_NoHotProcess,
   "Clear out the selected processes."
   ) {
   B32 handled = 0;
@@ -526,16 +502,13 @@ Define_Keybind_Action(
   return handled;
 }
 
-Define_Keybind(
-  CancelSelection, ,
+
+
+Define_Keybind_And_Action(
+  CreateProcess, ,
   Keybind_Behavior_Alternate, 0, _Null,
-  Key_Kind_Mouse0, 0,
-  Ui_Constraint_NoHotProcess);
-
-
-
-Define_Keybind_Action(
-  CreateProcess,
+  Key_Kind_Mouse0, Modifier_Key_Control,
+  Ui_Constraint_NoHotProcess,
   "Create a new process."
   ) {
   B32 handled = 0;
@@ -564,16 +537,12 @@ Define_Keybind_Action(
   return handled;
 }
 
-Define_Keybind(
-  CreateProcess, ,
+
+
+Define_Keybind_And_Action(
+  DeleteProcess, ,
   Keybind_Behavior_Alternate, 0, _Null,
-  Key_Kind_Mouse0, Modifier_Key_Control,
-  Ui_Constraint_NoHotProcess);
-
-
-
-Define_Keybind_Action(
-  DeleteProcess,
+  KEY_D, Modifier_Key_Control, 0,
   "Delete the selected processes."
   ) {
   B32 handled = 0;
@@ -595,15 +564,12 @@ Define_Keybind_Action(
   return handled;
 }
 
-Define_Keybind(
-  DeleteProcess, ,
+
+
+Define_Keybind_And_Action(
+  CycleProcessDisplay, ,
   Keybind_Behavior_Alternate, 0, _Null,
-  KEY_D, Modifier_Key_Control, 0);
-
-
-
-Define_Keybind_Action(
-  CycleProcessDisplay,
+  KEY_TAB, 0, 0,
   "Cycle through special displays for selected processes."
   ) {
   B32 handled = 0;
@@ -639,15 +605,12 @@ Define_Keybind_Action(
   return handled;
 }
 
-Define_Keybind(
-  CycleProcessDisplay, ,
+
+
+Define_Keybind_And_Action(
+  ToggleDisplayMode, ,
   Keybind_Behavior_Alternate, 0, _Null,
-  KEY_TAB, 0, 0);
-
-
-
-Define_Keybind_Action(
-  ToggleDisplayMode,
+  KEY_M, Modifier_Key_Control, 0,
   "Toggle between 'classic' and 'rounded' display modes."
   ) {
   B32 handler = 0;
@@ -663,16 +626,13 @@ Define_Keybind_Action(
   return handler;
 }
 
-Define_Keybind(
-  ToggleDisplayMode, ,
+
+
+
+Define_Keybind_And_Action(
+  CopyProcess, ,
   Keybind_Behavior_Alternate, 0, _Null,
-  KEY_M, Modifier_Key_Control, 0);
-
-
-
-
-Define_Keybind_Action(
-  CopyProcess,
+  KEY_C, Modifier_Key_Control, 0,
   "Copy selected processes."
   ) {
   B32 handled = 0;
@@ -688,15 +648,12 @@ Define_Keybind_Action(
   return handled;
 }
 
-Define_Keybind(
-  CopyProcess, ,
+
+
+Define_Keybind_And_Action(
+  PasteProcess, ,
   Keybind_Behavior_Alternate, 0, _Null,
-  KEY_C, Modifier_Key_Control, 0);
-
-
-
-Define_Keybind_Action(
-  PasteProcess,
+  KEY_V, Modifier_Key_Control, 0,
   "Paste copied processes, centered at the mouse."
   ) {
   B32 handled = 0;
@@ -712,16 +669,13 @@ Define_Keybind_Action(
   return handled;
 }
 
-Define_Keybind(
-  PasteProcess, ,
+
+
+
+Define_Keybind_And_Action(
+  Undo, ,
   Keybind_Behavior_Alternate, 0, _Null,
-  KEY_V, Modifier_Key_Control, 0);
-
-
-
-
-Define_Keybind_Action(
-  Undo,
+  KEY_Z, Modifier_Key_Control, 0,
   "Performs undo on the proc-trie."
   ) {
   B32 handled = 0;
@@ -738,15 +692,12 @@ Define_Keybind_Action(
   return handled;
 }
 
-Define_Keybind(
-  Undo, ,
+
+
+Define_Keybind_And_Action(
+  Redo, ,
   Keybind_Behavior_Alternate, 0, _Null,
-  KEY_Z, Modifier_Key_Control, 0);
-
-
-
-Define_Keybind_Action(
-  Redo,
+  KEY_Z, Modifier_Key_Control|Modifier_Key_Shift, 0,
   "Performs redo on the proc-trie."
   ) {
   B32 handled = 0;
@@ -762,11 +713,6 @@ Define_Keybind_Action(
 
   return handled;
 }
-
-Define_Keybind(
-  Redo, ,
-  Keybind_Behavior_Alternate, 0, _Null,
-  KEY_Z, Modifier_Key_Control|Modifier_Key_Shift, 0);
 
 
 

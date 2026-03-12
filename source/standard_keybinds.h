@@ -25,6 +25,14 @@ function S32 process_compare_pos_x(void *a, void *b, void *udata) {
 ////////////////////////////////////////
 // Process-Connection By Clicking
 ////////////////////////////////////////
+Define_Keybind(
+  ProcessConnectionByModClick, ,
+  Keybind_Behavior_Alternate, 34, AtTheStart,
+  Key_Kind_Mouse0, Modifier_Key_Super,
+  (Ui_Constraint_ActionNotOccured |
+   Ui_Constraint_HotProcess |
+   Ui_Constraint_ActiveProcesses));
+
 Define_Keybind_Action(
   ProcessConnectionByModClick,
   "Connect clicked process to all active processes."
@@ -70,14 +78,6 @@ Define_Keybind_Action(
 
   return handled;
 }
-
-Define_Keybind(
-  ProcessConnectionByModClick, ,
-  Keybind_Behavior_Alternate, 34, AtTheStart,
-  Key_Kind_Mouse0, Modifier_Key_Super,
-  (Ui_Constraint_ActionNotOccured |
-   Ui_Constraint_HotProcess |
-   Ui_Constraint_ActiveProcesses));
 
 
 
@@ -247,6 +247,12 @@ function void proc_ds_view_node_handler(
   }
 }
 
+Define_Keybind(
+  ToggleDataStructureView, ,
+  Keybind_Behavior_Overwrite, 274, AtTheStart,
+  KEY_D, Modifier_Key_Control|Modifier_Key_Shift,
+  Ui_Constraint_ActionNotOccured);
+
 Define_Keybind_Action(
   ToggleDataStructureView,
   "Toggle a 'Data Structure View', which shows the proc-trie using processes."
@@ -263,16 +269,15 @@ Define_Keybind_Action(
   return handled;
 }
 
-Define_Keybind(
-  ToggleDataStructureView, ,
-  Keybind_Behavior_Overwrite, 274, AtTheStart,
-  KEY_D, Modifier_Key_Control|Modifier_Key_Shift,
-  Ui_Constraint_ActionNotOccured);
-
 
 
 #define Auto_Align_X_Offset_Count  (Proc_Trie_Key_Bits / Proc_Trie_Slot_Bits)
 global_variable F32 global_auto_align_x_offset[Auto_Align_X_Offset_Count];
+
+Define_Keybind(
+  AutoAlignOneInOneOut_Pre, ,
+  Keybind_Behavior_Overwrite, 1, AtTheStart,
+  0, 0, 0);
 
 Define_Keybind_Action(
   AutoAlignOneInOneOut_Pre,
@@ -288,9 +293,10 @@ Define_Keybind_Action(
 }
 
 Define_Keybind(
-  AutoAlignOneInOneOut_Pre, ,
-  Keybind_Behavior_Overwrite, 1, AtTheStart,
-  0, 0, 0);
+  AutoAlignOneInOneOut, ,
+  Keybind_Behavior_Overwrite, 1, AtTheEnd,
+  KEY_A, Modifier_Keys(Control, Super),
+  Ui_Constraint_ActionNotOccured);
 
 Define_Keybind_Action(
   AutoAlignOneInOneOut,
@@ -348,9 +354,3 @@ Define_Keybind_Action(
 
   return handled;
 }
-
-Define_Keybind(
-  AutoAlignOneInOneOut, ,
-  Keybind_Behavior_Overwrite, 1, AtTheEnd,
-  KEY_A, Modifier_Keys(Control, Super),
-  Ui_Constraint_ActionNotOccured);

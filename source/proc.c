@@ -2287,6 +2287,9 @@ function void do_menu_ui(Context *context, B32 sizing) {
 
 
 
+Define_Keybind(
+  process_interaction, ,
+  Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0);
 
 Define_Keybind_Action(
   process_interaction,
@@ -2337,9 +2340,6 @@ Define_Keybind_Action(
   return 0;
 }
 
-Define_Keybind(
-  process_interaction, ,
-  Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0) ;
 
 
 
