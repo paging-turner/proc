@@ -379,6 +379,7 @@ struct View {
   Rectangle screen_region;
   Camera2D camera;
   Process_List processes;
+  Process_List active_processes;
 };
 
 struct Context {

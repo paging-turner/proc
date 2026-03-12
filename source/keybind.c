@@ -56,9 +56,6 @@ Define_Keybind(
   Context *context = env->context;
   Process_Selection selection = env->selection;
 
-  /* env->old_kb_res = env->desired_kb_res; */
-  /* env->desired_kb_res = Keybind_Result_Enter; */
-
   if (env->desired_kb_res == Keybind_Result_Exit) {
     if (Get_Flag(context->flags, Context_Flag_Bounding)) {
       // exit
@@ -79,8 +76,6 @@ Define_Keybind(
       handled = 1;
     }
   }
-
-  /* env->desired_kb_res = env->old_kb_res; */
 
   return handled;
 }
@@ -295,17 +290,15 @@ Define_Keybind(
       if (Get_Flag(view->flags, View_Flag_Active)) {
         for (Process *p = view->processes.first; p != 0; p = p->next) {
           // per-process environment
-          Keybind_Environment *p_env = env;//create_keybind_environment(env->context, env->selection);
-          p_env->selection = get_process_selection(p_env->context, view, p);
-          p_env->should_stop_dragging = env->should_stop_dragging;
-          p_env->view = view;
-          p_env->is_active = is_active_process(p_env->context, p);
-          p_env->p = p;
+          env->selection = get_process_selection(env->context, view, p);
+          env->view = view;
+          env->is_active = is_active_process(env->context, p);
+          env->p = p;
 
           // hot id assignment
-          B32 ui_state_hot_id_assigned = Get_Flag(p_env->context->ui_state.flags, Ui_State_Flag_hot_id_assigned);
-          B32 hot_id_assigned = p_env->selection.hot_id_assigned || ui_state_hot_id_assigned;
-          Assign_Flag(p_env->context->ui_state.flags, Ui_State_Flag_hot_id_assigned, hot_id_assigned);
+          B32 ui_state_hot_id_assigned = Get_Flag(env->context->ui_state.flags, Ui_State_Flag_hot_id_assigned);
+          B32 hot_id_assigned = env->selection.hot_id_assigned || ui_state_hot_id_assigned;
+          Assign_Flag(env->context->ui_state.flags, Ui_State_Flag_hot_id_assigned, hot_id_assigned);
 
           // per-process keybinds
           for (U32 i = 0; i < SymbolCount(keybind_action); ++i) {
