@@ -2661,7 +2661,7 @@ int main(void) {
         Process_Selection selection = (Process_Selection){0};
         Keybind_Environment env_raw = create_keybind_environment(&context, selection);
         Keybind_Environment *env = &env_raw;
-        env->should_stop_dragging = check_keybind(&context, keybind_action_REF(SelectSingleProcess), selection) == Keybind_Result_Exit;
+        env->should_stop_dragging = check_keybind(&context, keybind_REF(SelectSingleProcess), selection) == Keybind_Result_Exit;
         env->moved_wire = 0;
         env->moved_wire_conn = 0;
 

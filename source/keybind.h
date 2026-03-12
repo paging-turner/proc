@@ -139,6 +139,7 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
   ((keybind) && (keybind)->bind > 0 && (keybind)->handle)
 
 #define Define_Keybind_Action(action_name, d)\
+  static keybind_DECL(action_name);\
   static keybind_action_DECL(action_name);\
   function B32 handle_keybind_##action_name(Keybind_Environment *env)
 
@@ -173,8 +174,8 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
 
 
 #define Keybind_Has_Mouse_Wheel_Movement(keybind_name)\
-  (keybind_action_REF(keybind_name)->key_kind == Key_Kind_MouseWheelUp ||\
-   keybind_action_REF(keybind_name)->key_kind == Key_Kind_MouseWheelDown)
+  (keybind_REF(keybind_name)->key_kind == Key_Kind_MouseWheelUp ||\
+   keybind_REF(keybind_name)->key_kind == Key_Kind_MouseWheelDown)
 
 
 
@@ -194,7 +195,7 @@ function Keybind_Environment create_keybind_environment(
 
 #define Check_Keybind(env, _name)\
   (((env) && (env)->context)\
-   ? check_keybind((env)->context, keybind_action_REF(_name), (env)->selection)\
+   ? check_keybind((env)->context, keybind_REF(_name), (env)->selection)\
    : 0)
 
 #define Test_Keybind(env, _name, _kb_res)\
@@ -303,7 +304,10 @@ function Keybind_Result check_keybind(Context *context, Keybind *keybind, Proces
 
 // TODO: @Cleanup We should NOT need to have these DECL's here...
 static keybind_action_DECL(ZoomIn);
+static keybind_DECL(ZoomIn);
+
 static keybind_action_DECL(ZoomOut);
+static keybind_DECL(ZoomOut);
 
 function B32 keybind_zoom_handler(Keybind_Environment *env) {
   B32 handled = 0;
