@@ -95,9 +95,7 @@ struct Keybind {
   U32 modifiers;
   Ui_Constraint constraint;
   String8 name;
-  /* String8 description; */
   B32 (*handle)(Keybind_Environment *env);
-  Keybind *next;
 };
 
 
@@ -139,7 +137,6 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
   ((keybind) && (keybind)->bind > 0 && (keybind)->handle)
 
 #define Define_Keybind_Action(action_name, d)\
-  static keybind_DECL(action_name);\
   static keybind_action_DECL(action_name);\
   function B32 handle_keybind_##action_name(Keybind_Environment *env)
 
@@ -263,12 +260,12 @@ function Keybind_Result check_keybind(Context *context, Keybind *keybind, Proces
     B32 con_hot = Keybind_Constraint_Holds(
       keybind,
       HotProcess,
-      (context->hot_process != 0));
+      (context->hot_process.process != 0));
 
     B32 con_no_hot = Keybind_Constraint_Holds(
       keybind,
       NoHotProcess,
-      (context->hot_process == 0));
+      (context->hot_process.process == 0));
 
     U32 kb_action_id = SymbolIDFromMetadata(keybind_action, keybind);
     B32 action_occured_bool = Get_Flag_Bool(ui_state->flags, Ui_State_Flag_action_occured);
@@ -311,10 +308,7 @@ function Keybind_Result check_keybind(Context *context, Keybind *keybind, Proces
 }
 
 // TODO: @Cleanup We should NOT need to have these DECL's here...
-static keybind_action_DECL(ZoomIn);
 static keybind_DECL(ZoomIn);
-
-static keybind_action_DECL(ZoomOut);
 static keybind_DECL(ZoomOut);
 
 function B32 keybind_zoom_handler(Keybind_Environment *env) {

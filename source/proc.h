@@ -63,12 +63,13 @@ typedef enum {
   Process_Flag_Drag_Out    = 1 << 6,
   Process_Flag_Invisible   = 1 << 7,
   Process_Flag_AsBox       = 1 << 8,
+  Process_Flag_RefIsActive = 1 << 9,
   // UI features
-  Process_Flag_TextEdit        = 1 << 9,
-  Process_Flag_CanBeActive     = 1 << 10,
-  Process_Flag_Clickable       = 1 << 11,
-  Process_Flag_FitToText       = 1 << 12,
-  Process_Flag_UseLabelCString = 1 << 13,
+  Process_Flag_TextEdit        = 1 << 10,
+  Process_Flag_CanBeActive     = 1 << 11,
+  Process_Flag_Clickable       = 1 << 12,
+  Process_Flag_FitToText       = 1 << 13,
+  Process_Flag_UseLabelCString = 1 << 14,
 } Process_Flag;
 
 #define Process_Connection_Xlist\
@@ -382,6 +383,11 @@ struct View {
   Process_List active_processes;
 };
 
+typedef struct Process_Loc {
+  View *view;
+  Process *process;
+} Process_Loc;
+
 struct Context {
   Arena *render_arena;
   Arena *permanent_arena;
@@ -392,14 +398,11 @@ struct Context {
   U32 flags;
 
   Proc_Trie_Trie *proc_trie;
-  /* Process_List processes; */
   Process_List free_processes;
   Process_List free_ui_elements;
-  /* Process_List ds_view_processes; // Used with Context_Flag_DataStructureView */
-  /* Process_List gross_temp_processes; */
   String_Chunk_List free_strings;
 
-  Process *hot_process;
+  Process_Loc hot_process;
   // TODO: do active/copy_processes need to be per-view? What about hot_process?
   Process_List active_processes;
   Process_List copy_processes;

@@ -45,7 +45,7 @@ Define_Keybind_Action(
     handled = 1;
 
     Assert(context->active_processes.first);
-    Assert(context->hot_process);
+    Assert(context->hot_process.process);
 
     // @Speed
     U32 active_count = 0;
@@ -69,7 +69,7 @@ Define_Keybind_Action(
 
     if (sorted_processes) {
       Connection_Result conn_res = (Connection_Result){0};
-      conn_res.in = context->hot_process;
+      conn_res.in = context->hot_process.process;
       for (U32 i = 0; i < active_count; ++i) {
         conn_res = connect_processes(context, sorted_processes[i], conn_res.in);
       }
@@ -303,6 +303,7 @@ Define_Keybind_Action(
   "Align any following processes after a given node, but only if the following processes have a single in and a single out."
   ) {
   B32 handled = 0;
+  Assert(0);
 
   if (Get_Flag(env->context->flags, Context_Flag_AutoAlignChains) ||
       Test_Keybind(env, AutoAlignOneInOneOut, Enter)) {

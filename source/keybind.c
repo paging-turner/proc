@@ -4,10 +4,8 @@
 
 
 function B32 handle_keybind_CycleProcessDisplay(Keybind_Environment *env);
-static keybind_action_DECL(CycleProcessDisplay);
 
 function B32 handle_keybind_DeleteProcess(Keybind_Environment *env);
-static keybind_action_DECL(DeleteProcess);
 
 
 Define_Keybind_And_Action(
@@ -136,7 +134,7 @@ Define_Keybind_And_Action(
     env->selection = (Process_Selection){0};
     // zero the old hot-id
     if (!Get_Flag(env->context->ui_state.flags, Ui_State_Flag_hot_id_assigned)) {
-      env->context->hot_process = 0;
+      env->context->hot_process = (Process_Loc){0};
     }
   }
 
@@ -154,10 +152,11 @@ Define_Keybind_And_Action(
   if (env->context) {
     if (Get_Flag(env->context->flags, Context_Flag_Bounding)) {
       // add hot process to active processes
-      if (env->context->hot_process) {
-        B32 hot_is_active = is_active_process(env->context, env->context->hot_process);
+      Process *hot_process = env->context->hot_process.process;
+      if (hot_process) {
+        B32 hot_is_active = is_active_process(env->context, hot_process);
         if (!hot_is_active) {
-          SLLQueuePush_NZ(env->context->active_processes.first, env->context->active_processes.last, env->context->hot_process, next_active, 0);
+          SLLQueuePush_NZ(env->context->active_processes.first, env->context->active_processes.last, hot_process, next_active, 0);
         }
       }
     }
@@ -175,19 +174,21 @@ Define_Keybind_And_Action(
   "handle moved wire"
   ) {
   if (env->moved_wire && env->context) {
-    if (env->context->hot_process) {
-      if (Get_Flag(env->context->hot_process->flags, Process_Flag_Wire)) {
-        Process *connected_process = env->context->hot_process->conn[env->moved_wire_conn];
+    Process *hot_process = env->context->hot_process.process;
+
+    if (hot_process) {
+      if (Get_Flag(hot_process->flags, Process_Flag_Wire)) {
+        Process *connected_process = hot_process->conn[env->moved_wire_conn];
         if (connected_process) {
           // move wire to hovered wire
-          U32 which_conn = env->context->hot_process->which_conn[env->moved_wire_conn];
-          if (env->moved_wire != env->context->hot_process) {
+          U32 which_conn = hot_process->which_conn[env->moved_wire_conn];
+          if (env->moved_wire != hot_process) {
             remove_wire_connection(env->context, env->moved_wire, (1<<env->moved_wire_conn));
             add_wire_connection(env->context, env->moved_wire, connected_process, env->moved_wire_conn, which_conn);
           }
         }
       } else {
-        Process *connected_process = env->context->hot_process;
+        Process *connected_process = hot_process;
         // move wire to last wire of process
         U32 which_conn;
         if (env->moved_wire->conn[env->moved_wire_conn] == connected_process) {
@@ -288,9 +289,6 @@ Define_Keybind_And_Action(
 }
 
 
-static keybind_action_DECL(CheckIfWeNeedToStopDraggingTheWire);
-static keybind_action_DECL(SelectSingleProcess);
-static keybind_action_DECL(MaybeSetHotProcessDesiredKbResStack);
 
 Define_Keybind_Action(
   ForAllProcessInteractions,
@@ -388,7 +386,7 @@ Define_Keybind_And_Action(
           SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, wire, next_active, 0);
         }
       }
-    } else if ((env->is_active || context->hot_process == env->p) &&
+    } else if ((env->is_active || context->hot_process.process == env->p) &&
                selection.type == Process_Selection_NewWire) {
       // begin new-wire
       Set_Flag(context->flags, Context_Flag_NewWire);
@@ -403,7 +401,7 @@ Define_Keybind_And_Action(
         exit_add_wire_mode(context);
       } else {
         // select process
-        context->hot_process = env->p;
+        context->hot_process.process = env->p;
         if (!env->is_active) {
           clear_active_processes(context);
           SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, env->p, next_active, 0);
@@ -422,7 +420,6 @@ Define_Keybind_And_Action(
 
 
 function B32 handle_keybind_SelectAnotherProcess(Keybind_Environment *env);
-static keybind_action_DECL(SelectAnotherProcess);
 
 
 Define_Keybind_And_Action(
@@ -435,7 +432,7 @@ Define_Keybind_And_Action(
   } else if (env->selection.type == Process_Selection_Process) {
     // process hover
     if (env->context) {
-      env->context->hot_process = env->p;
+      env->context->hot_process.process = env->p;
     }
   }
 

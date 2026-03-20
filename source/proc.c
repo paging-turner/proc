@@ -1042,7 +1042,7 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
       if (Get_Flag(element->flags, Process_Flag_Clickable) &&
           !Get_Flag(ui_state->flags, Ui_State_Flag_action_occured) &&
           hover_element && hover_box) {
-        context->hot_process = 0;
+        context->hot_process = (Process_Loc){0};
         is_hot = 1;
 
         if (IsMouseButtonPressed(0)) {
@@ -1058,7 +1058,7 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
       B32 is_hot_bg_color = is_hot || element == context->selected_element;
       Color bg_color = is_hot_bg_color ? hot_bg_color : dormant_bg_color;
       if (is_hot) {
-        context->hot_process = element;
+        context->hot_process.process = element;
       }
 
       render_DrawRectangle(rc, element_rect.x, element_rect.y, element_rect.width, element_rect.height, bg_color);
@@ -2157,7 +2157,7 @@ get_process_selection(Context *context, View *view, Process *p) {
     if (rectangle_contains_point(new_wire_box, context->ui_state.mouse_position)) {
       // check new-wire-box
       selection.type = Process_Selection_NewWire;
-      context->hot_process = p;
+      context->hot_process.process = p;
       selection.hot_id_assigned = 1;
     } else {
       // check in wire-boxes
@@ -2168,7 +2168,7 @@ get_process_selection(Context *context, View *view, Process *p) {
           selection.type = Process_Selection_In;
           selection.index = i;
           Process *wire = get_process_wire_by_selection(context, selection);
-          context->hot_process = wire;
+          context->hot_process.process = wire;
           selection.hot_id_assigned = 1;
           break;
         }
@@ -2183,7 +2183,7 @@ get_process_selection(Context *context, View *view, Process *p) {
             selection.type = Process_Selection_Out;
             selection.index = i;
             Process *wire = get_process_wire_by_selection(context, selection);
-            context->hot_process = wire;
+            context->hot_process.process = wire;
             selection.hot_id_assigned = 1;
             break;
           }
@@ -2194,7 +2194,7 @@ get_process_selection(Context *context, View *view, Process *p) {
         if (process_shape_contains_point(context, shape, context->ui_state.mouse_position)) {
           // process selection
           selection.type = Process_Selection_Process;
-          context->hot_process = p;
+          context->hot_process.process = p;
           selection.hot_id_assigned = 1;
         }
       }
@@ -2243,7 +2243,7 @@ function void do_menu_ui(Context *context, B32 sizing) {
         clicked_active_menu_button = i;
       }
 
-      if (context->hot_process == menu_button && Has_Active_Menu_Element(context)) {
+      if (context->hot_process.process == menu_button && Has_Active_Menu_Element(context)) {
         hot_active_menu_button = i;
       }
     }
@@ -2332,6 +2332,9 @@ Define_Keybind_Action(
 
       if (Is_Keybind_Custom(keybind) &&
           keybind->timing == Keybind_Timing_AtTheEnd) {
+        if (keybind->handle == handle_keybind_AutoAlignOneInOneOut) {
+          B32 hmmmmm = 0;
+        }
         keybind->handle(env);
       }
     }
@@ -2718,7 +2721,7 @@ int main(void) {
             if (!(is_wire || is_invisible)) {
               Process_Shape shape = get_process_shape(&context, view, p);
 
-              B32 is_hot = context.hot_process == p;
+              B32 is_hot = context.hot_process.process == p;
               B32 is_active = is_active_process(&context, p);
               F32 thickness = (is_hot||is_active) ? global_active_line_thickness : global_line_thickness;
               thickness *= view->camera.zoom;
@@ -2858,11 +2861,11 @@ int main(void) {
               Vector2 in_control = in_position;
               in_control.y += view->camera.zoom * 30.0f;
 
-              B32 is_active = is_active_process(&context, p) || context.hot_process == p;
+              B32 is_active = is_active_process(&context, p) || context.hot_process.process == p;
               B32 connected_in_active = (is_active_process(&context, p->in) ||
-                                         context.hot_process == p->in);
+                                         context.hot_process.process == p->in);
               B32 connected_out_active = (is_active_process(&context, p->out) ||
-                                          context.hot_process == p->out);
+                                          context.hot_process.process == p->out);
               F32 thickness = is_active ? global_active_line_thickness : global_line_thickness;
               thickness *= view->camera.zoom;
 
