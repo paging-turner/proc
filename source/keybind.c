@@ -311,8 +311,8 @@ Define_Keybind_Action(
           Assign_Flag(env->context->ui_state.flags, Ui_State_Flag_hot_id_assigned, hot_id_assigned);
 
           // per-process keybinds
-          for (U32 i = 0; i < SymbolCount(keybind); ++i) {
-            Keybind *keybind = SymbolMetadataFromID(keybind, i+1);
+          for (U32 i = 0; i < SymbolCount(Keybind_Sym); ++i) {
+            Keybind *keybind = SymbolMetadataFromID(Keybind_Sym, i+1);
 
             if (Get_Flag(keybind->timing, Keybind_Timing_ForAllProcesses)) {
               keybind->handle(env);
@@ -367,7 +367,7 @@ Define_Keybind_And_Action(
   Context *context = env->context;
   Process_Selection selection = env->selection;
 
-  if (check_keybind(context, keybind_REF(SelectSingleProcess), selection) == Keybind_Result_Enter) {
+  if (check_keybind(context, Keybind_Sym_REF(SelectSingleProcess), selection) == Keybind_Result_Enter) {
     handled = 1;
     B32 in_selection = selection.type == Process_Selection_In;
     B32 out_selection = selection.type == Process_Selection_Out;
@@ -454,7 +454,7 @@ Define_Keybind_And_Action(
   Context *context = env->context;
   Process_Selection selection = env->selection;
 
-  if (env->desired_kb_res == check_keybind(context, keybind_REF(SelectAnotherProcess), selection)) {
+  if (env->desired_kb_res == check_keybind(context, Keybind_Sym_REF(SelectAnotherProcess), selection)) {
     handled = 1;
     if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
       Process *wire = get_process_wire_by_selection(context, selection);
@@ -491,7 +491,7 @@ Define_Keybind_And_Action(
   Process_Selection selection = env->selection;
 
 
-  if (check_keybind(context, keybind_REF(CancelSelection), selection)) {
+  if (check_keybind(context, Keybind_Sym_REF(CancelSelection), selection)) {
     handled = 1;
     exit_add_wire_mode(context);
   }
@@ -512,7 +512,7 @@ Define_Keybind_And_Action(
   Context *context = env->context;
   Process_Selection selection = env->selection;
 
-  if (check_keybind(context, keybind_REF(CreateProcess), selection)) {
+  if (check_keybind(context, Keybind_Sym_REF(CreateProcess), selection)) {
     handled = 1;
     View *view = context->views + View_Kind_Procs;
 
@@ -547,7 +547,7 @@ Define_Keybind_And_Action(
   Process_Selection selection = env->selection;
 
 
-  if (check_keybind(context, keybind_REF(DeleteProcess), selection)) {
+  if (check_keybind(context, Keybind_Sym_REF(DeleteProcess), selection)) {
     handled = 1;
     // delete processes
     for (Process *a = context->active_processes.first; a != 0;) {
@@ -574,7 +574,7 @@ Define_Keybind_And_Action(
   Process_Selection selection = env->selection;
 
 
-  if (check_keybind(context, keybind_REF(CycleProcessDisplay), selection)) {
+  if (check_keybind(context, Keybind_Sym_REF(CycleProcessDisplay), selection)) {
     handled = 1;
     // cycle through special process types (cups/caps/empty)
     for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
@@ -615,7 +615,7 @@ Define_Keybind_And_Action(
   Process_Selection selection = env->selection;
 
 
-  if (check_keybind(context, keybind_REF(ToggleDisplayMode), selection) == Keybind_Result_Enter) {
+  if (check_keybind(context, Keybind_Sym_REF(ToggleDisplayMode), selection) == Keybind_Result_Enter) {
     handler = 1;
     Toggle_Flag(context->flags, Context_Flag_RoundedShapes);
   }
@@ -637,7 +637,7 @@ Define_Keybind_And_Action(
   Process_Selection selection = env->selection;
 
 
-  if (check_keybind(context, keybind_REF(CopyProcess), selection) == Keybind_Result_Enter) {
+  if (check_keybind(context, Keybind_Sym_REF(CopyProcess), selection) == Keybind_Result_Enter) {
     handled = 1;
     copy_active_processes(context);
   }
@@ -658,7 +658,7 @@ Define_Keybind_And_Action(
   Process_Selection selection = env->selection;
 
 
-  if (check_keybind(context, keybind_REF(PasteProcess), selection) == Keybind_Result_Enter) {
+  if (check_keybind(context, Keybind_Sym_REF(PasteProcess), selection) == Keybind_Result_Enter) {
     handled = 1;
     paste_processes(context);
   }
@@ -680,7 +680,7 @@ Define_Keybind_And_Action(
   Process_Selection selection = env->selection;
 
 
-  if (check_keybind(context, keybind_REF(Undo), selection) == Keybind_Result_Enter) {
+  if (check_keybind(context, Keybind_Sym_REF(Undo), selection) == Keybind_Result_Enter) {
     handled = 1;
     proc_trie_undo(context->proc_trie);
     gather_processes_from_trie(context);
@@ -702,7 +702,7 @@ Define_Keybind_And_Action(
   Process_Selection selection = env->selection;
 
 
-  if (check_keybind(context, keybind_REF(Redo), selection) == Keybind_Result_Enter) {
+  if (check_keybind(context, Keybind_Sym_REF(Redo), selection) == Keybind_Result_Enter) {
     handled = 1;
     proc_trie_redo(context->proc_trie);
     gather_processes_from_trie(context);

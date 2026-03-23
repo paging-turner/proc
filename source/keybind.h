@@ -102,18 +102,29 @@ struct Keybind {
 function B32 keybind_zoom_handler(Keybind_Environment *env);
 
 
+function void print_keybind(Keybind *keybind) {
+  printf("keybind %s\n"      , keybind->name.str);
+  printf("  behavior %d\n"   , keybind->behavior);
+  printf("  timing %d\n"     , keybind->timing);
+  printf("  bind %d\n"       , keybind->bind);
+  printf("  key_kind %d\n"   , keybind->key_kind);
+  printf("  modifiers %d\n"  , keybind->modifiers);
+  printf("  constraint %d\n" , keybind->constraint);
+  printf("  handle %p\n"     , keybind->handle);
+}
+
 
 
 ///////////////////////////
 // Keybind Action
 ///////////////////////////
-#define SYMBOL_SET_DEFINE keybind_action
-#define keybind_action_Type      Keybind
-#define keybind_action_section   "_prckbac"
-#define keybind_action_ID(N)    SymbolID(keybind_action, N)
-#define keybind_action_RAW(N)   SymbolRaw(keybind_action, N)
-#define keybind_action_DECL(N)  SymbolDeclare(keybind_action, N)
-#define keybind_action_REF(N)   SymbolMetadata(keybind_action, N)
+#define SYMBOL_SET_DEFINE Keybind_Action_Sym
+#define Keybind_Action_Sym_Type      Keybind
+#define Keybind_Action_Sym_section   "_prckbac"
+#define Keybind_Action_Sym_ID(  N)  SymbolID(      Keybind_Action_Sym, N)
+#define Keybind_Action_Sym_RAW( N)  SymbolRaw(     Keybind_Action_Sym, N)
+#define Keybind_Action_Sym_DECL(N)  SymbolDeclare( Keybind_Action_Sym, N)
+#define Keybind_Action_Sym_REF( N)  SymbolMetadata(Keybind_Action_Sym, N)
 #include "../libraries/mr4th/src/mr4th_symbol_set.define.h"
 
 
@@ -122,13 +133,13 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
 ///////////////////////////
 // Keybind
 ///////////////////////////
-#define SYMBOL_SET_DEFINE keybind
-#define keybind_Type      Keybind
-#define keybind_section   "_prckbnd"
-#define keybind_ID(N)    SymbolID(keybind, N)
-#define keybind_RAW(N)   SymbolRaw(keybind, N)
-#define keybind_DECL(N)  SymbolDeclare(keybind, N)
-#define keybind_REF(N)   SymbolMetadata(keybind, N)
+#define SYMBOL_SET_DEFINE Keybind_Sym
+#define Keybind_Sym_Type      Keybind
+#define Keybind_Sym_section   "_prckbnd"
+#define Keybind_Sym_ID(N)    SymbolID(Keybind_Sym, N)
+#define Keybind_Sym_RAW(N)   SymbolRaw(Keybind_Sym, N)
+#define Keybind_Sym_DECL(N)  SymbolDeclare(Keybind_Sym, N)
+#define Keybind_Sym_REF(N)   SymbolMetadata(Keybind_Sym, N)
 #include "../libraries/mr4th/src/mr4th_symbol_set.define.h"
 
 
@@ -137,7 +148,13 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
   ((keybind) && (keybind)->bind > 0 && (keybind)->handle)
 
 #define Define_Keybind_Action(action_name, d)\
-  static keybind_action_DECL(action_name);\
+  static Keybind_Action_Sym_DECL(action_name);\
+  function B32 handle_keybind_##action_name(Keybind_Environment *env);\
+  MR4TH_BEFORE_MAIN(proc_keybind_action##action_name){\
+    Keybind_Sym_Type *keybind = Keybind_Action_Sym_REF(action_name);\
+    keybind->name = str8_lit(Stringify(action_name));\
+    keybind->handle = handle_keybind_##action_name;\
+  }\
   function B32 handle_keybind_##action_name(Keybind_Environment *env)
 
 
@@ -146,14 +163,14 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
   action_name, keybind_name,\
   behavior_name, bind_value, timing_name,\
   k, m, c)\
-  static keybind_action_DECL(action_name);\
-  static keybind_DECL(action_name##keybind_name);\
+  static Keybind_Action_Sym_DECL(action_name);\
+  static Keybind_Sym_DECL(action_name##keybind_name);\
   function B32 handle_keybind_##action_name(Keybind_Environment *env);\
   MR4TH_BEFORE_MAIN(proc_keybind_##action_name##_##bind_value){\
-    keybind_Type *keybind = keybind_REF(action_name##keybind_name);\
+    Keybind_Sym_Type *keybind = Keybind_Sym_REF(action_name##keybind_name);\
     B32 both_zero = (U32)(bind_value) == 0 && keybind->bind == 0;\
     B32 stronger_bind = (U32)(bind_value) >= keybind->bind;\
-    if (keybind->handle == 0) {\
+    if (both_zero || stronger_bind/*keybind->handle == 0*/) {\
       keybind->behavior = (behavior_name);\
       keybind->bind = (bind_value);\
       Set_Flag(keybind->timing, Keybind_Timing_##timing_name);\
@@ -163,6 +180,8 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
       keybind->name = str8_lit(Stringify(action_name##keybind_name));\
       keybind->handle = handle_keybind_##action_name;\
     }\
+    print_keybind(keybind);\
+    printf("\n");\
   }
 
 #define Define_Keybind_And_Action(\
@@ -179,8 +198,8 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
 
 
 #define Keybind_Has_Mouse_Wheel_Movement(keybind_name)\
-  (keybind_REF(keybind_name)->key_kind == Key_Kind_MouseWheelUp ||\
-   keybind_REF(keybind_name)->key_kind == Key_Kind_MouseWheelDown)
+  (Keybind_Sym_REF(keybind_name)->key_kind == Key_Kind_MouseWheelUp ||\
+   Keybind_Sym_REF(keybind_name)->key_kind == Key_Kind_MouseWheelDown)
 
 
 
@@ -200,7 +219,7 @@ function Keybind_Environment create_keybind_environment(
 
 #define Check_Keybind(env, _name)\
   (((env) && (env)->context)\
-   ? check_keybind((env)->context, keybind_REF(_name), (env)->selection)\
+   ? check_keybind((env)->context, Keybind_Sym_REF(_name), (env)->selection)\
    : 0)
 
 #define Test_Keybind(env, _name, _kb_res)\
@@ -267,7 +286,7 @@ function Keybind_Result check_keybind(Context *context, Keybind *keybind, Proces
       NoHotProcess,
       (context->hot_process.process == 0));
 
-    U32 kb_action_id = SymbolIDFromMetadata(keybind_action, keybind);
+    U32 kb_action_id = SymbolIDFromMetadata(Keybind_Action_Sym, keybind);
     B32 action_occured_bool = Get_Flag_Bool(ui_state->flags, Ui_State_Flag_action_occured);
     B32 con_action_not_occured = Keybind_Constraint_Holds(
       keybind,
@@ -301,15 +320,15 @@ function Keybind_Result check_keybind(Context *context, Keybind *keybind, Proces
 
   if (result == Keybind_Result_Enter) {
     Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
-    ui_state->kb_action = SymbolIDFromMetadata(keybind_action, keybind);
+    ui_state->kb_action = SymbolIDFromMetadata(Keybind_Action_Sym, keybind);
   }
 
   return result;
 }
 
 // TODO: @Cleanup We should NOT need to have these DECL's here...
-static keybind_DECL(ZoomIn);
-static keybind_DECL(ZoomOut);
+static Keybind_Sym_DECL(ZoomIn);
+static Keybind_Sym_DECL(ZoomOut);
 
 function B32 keybind_zoom_handler(Keybind_Environment *env) {
   B32 handled = 0;

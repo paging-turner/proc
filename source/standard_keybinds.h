@@ -303,7 +303,6 @@ Define_Keybind_Action(
   "Align any following processes after a given node, but only if the following processes have a single in and a single out."
   ) {
   B32 handled = 0;
-  Assert(0);
 
   if (Get_Flag(env->context->flags, Context_Flag_AutoAlignChains) ||
       Test_Keybind(env, AutoAlignOneInOneOut, Enter)) {

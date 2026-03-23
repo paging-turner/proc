@@ -5,13 +5,12 @@ Compiler="clang"
 
 GO_FAST=0
 DO_NOT_Compile_With_Custom_Keybinds=0
+Debug=1
 
 if [ $GO_FAST -eq 1 ]; then
-    Debug=0
     Optimized=1
     No_Assert=1
 else
-    Debug=1
     Optimized=0
     No_Assert=0
 fi

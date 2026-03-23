@@ -2298,9 +2298,11 @@ Define_Keybind_Action(
   if (env->context) {
     Ui_State *ui_state = &env->context->ui_state;
 
+    U32 some_count = SymbolCount(Keybind_Sym);
+
     // custom keybinds at-the-start
-    for (U32 i = 0; i < SymbolCount(keybind_action); ++i) {
-      Keybind *keybind = SymbolMetadataFromID(keybind_action, i+1);
+    for (U32 i = 0; i < some_count; ++i) {
+      Keybind *keybind = SymbolMetadataFromID(Keybind_Sym, i+1);
 
       if (Is_Keybind_Custom(keybind) &&
           keybind->timing == Keybind_Timing_AtTheStart) {
@@ -2327,8 +2329,8 @@ Define_Keybind_Action(
     Handle_Keybind_Action(env, HandleActiveProcess);
 
     // custom keybinds at-the-end
-    for (U32 i = 0; i < SymbolCount(keybind_action); ++i) {
-      Keybind *keybind = SymbolMetadataFromID(keybind_action, i+1);
+    for (U32 i = 0; i < some_count; ++i) {
+      Keybind *keybind = SymbolMetadataFromID(Keybind_Sym, i+1);
 
       if (Is_Keybind_Custom(keybind) &&
           keybind->timing == Keybind_Timing_AtTheEnd) {
@@ -2664,7 +2666,7 @@ int main(void) {
         Process_Selection selection = (Process_Selection){0};
         Keybind_Environment env_raw = create_keybind_environment(&context, selection);
         Keybind_Environment *env = &env_raw;
-        env->should_stop_dragging = check_keybind(&context, keybind_REF(SelectSingleProcess), selection) == Keybind_Result_Exit;
+        env->should_stop_dragging = check_keybind(&context, Keybind_Sym_REF(SelectSingleProcess), selection) == Keybind_Result_Exit;
         env->moved_wire = 0;
         env->moved_wire_conn = 0;
 
