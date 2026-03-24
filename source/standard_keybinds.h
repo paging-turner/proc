@@ -289,6 +289,52 @@ Define_Keybind_Action(
     global_auto_align_x_offset[i] = 0.0f;
   }
 
+  if (env->context) {
+    for (U32 v = 0; v < View_Kind__Count; ++v) {
+      View *view = env->context->views + v;
+      for (Process *p = view->processes.first; p != 0; p = p->next) {
+        Unset_Flag(p->flags, Process_Flag_RefIsActive);
+      }
+    }
+  }
+
+  return handled;
+}
+
+Define_Keybind_And_Action(
+  AutoAlignOneInOneOut_PerProc_Pre, ,
+  Keybind_Behavior_Overwrite, 1, ForAllProcesses,
+  0, 0, 0,
+  "Stuff we do per-process before auto-aligning chains."
+  ) {
+  B32 handled = 0;
+
+  if (env->context) {
+    if (env->context->hot_process.process == env->p) {
+      /* Set_Flag(env->p->flags, Process_Flag_RefIsActive); */
+
+      if (env->p->ref) {
+        Process *ref_p = 0;
+
+        switch(env->p->ref_kind) {
+        case Ref_Kind_ProcTrie: {
+          ref_p = ((Proc_Trie_Trie *)env->p->ref)->ref;
+        } break;
+        case Ref_Kind_ProcTrieNode: {
+          ref_p = ((Proc_Trie_Node *)env->p->ref)->ref;
+        } break;
+        case Ref_Kind_ProcTrieRoot: {
+          ref_p = ((Proc_Trie_Root *)env->p->ref)->ref;
+        } break;
+        }
+
+        if (ref_p) {
+          Set_Flag(ref_p->flags, Process_Flag_RefIsActive);
+        }
+      }
+    }
+  }
+
   return handled;
 }
 
@@ -314,13 +360,19 @@ Define_Keybind_Action(
         Assert(p->in && p->out);
         if (p->in && p->in->in_count == 1 &&
             p->out && p->out->out_count == 1) {
+          // copy position
           p->in->position = get_process_position(context, view, p->out);
           Set_Flag(p->in->flags, Process_Flag_AsBox);
 
+          // hide inner process
           Unset_Flag(p->out->flags, Process_Flag_AsBox);
           Set_Flag(p->out->flags, Process_Flag_Invisible);
 
+          // hide wire
           Set_Flag(p->flags, Process_Flag_Invisible);
+
+          // copy over active flag
+          Set_Flag(p->in->flags, Get_Flag(p->out->flags, Process_Flag_RefIsActive));
         }
       }
       else if (p->ref && p->ref_kind) {

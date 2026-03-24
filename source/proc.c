@@ -339,17 +339,21 @@ function void update_data_structure_view_processes(Context *context) {
 
 function void gather_processes_from_trie(Context *context) {
   Arena *arena = context->per_frame_arena;
+  View *view = context->views + View_Kind_Procs;
   Proc_Trie_Trie *trie = context->proc_trie;
 
   proc_trie_commit(trie);
 
   clear_processes(context->views + View_Kind_Procs);
 
+
   for (Proc_Trie_Iterator *iter = proc_trie_iter_init(arena, trie->current_root->node);
        proc_trie_iter_test(iter);
        proc_trie_iter_next(iter)) {
     Process *p = (Process *)iter->key;
-    SLLQueuePush(context->views[View_Kind_Procs].processes.first, context->views[View_Kind_Procs].processes.last, p);
+    p->ref_kind = Ref_Kind_ProcTrieNode;
+    p->ref = iter->stack->node;
+    SLLQueuePush(view->processes.first, view->processes.last, p);
   }
 
   update_data_structure_view_processes(context);
@@ -697,10 +701,15 @@ function void paste_processes(Context *context) {
 function B32 is_active_process(Context *context, Process *p) {
   B32 is_active = 0;
 
-  for (Process *test_p = context->active_processes.first; test_p != 0; test_p = test_p->next_active) {
-    if (test_p == p) {
-      is_active = 1;
-      break;
+  if (Get_Flag(p->flags, Process_Flag_RefIsActive)) {
+    is_active = 1;
+  }
+  else {
+    for (Process *test_p = context->active_processes.first; test_p != 0; test_p = test_p->next_active) {
+      if (test_p == p) {
+        is_active = 1;
+        break;
+      }
     }
   }
 
