@@ -388,7 +388,11 @@ Define_Keybind_Action(
           depth = ((Proc_Trie_Node *)p->ref)->depth;
         } break;
         case Ref_Kind_ProcTrieRoot: {
-          depth = ((Proc_Trie_Root *)p->ref)->depth;
+          Proc_Trie_Root * root = (Proc_Trie_Root *)p->ref;
+          depth = root->depth;
+
+          B32 is_current_root = root == env->context->proc_trie->current_root;
+          Set_Flag(p->flags, is_current_root << Process_Flag_Kind_RefIsActive);
         } break;
         }
 

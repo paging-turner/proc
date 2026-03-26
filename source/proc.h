@@ -53,24 +53,39 @@ function          Process *find_process_connection(Context *context, Process *p,
 // Process
 //////////////////////////////////////
 
+#define Process_Flag_Xlist(X)\
+  /* Name               Shift */\
+  X( Wire            ,  0      )\
+  X( Empty           ,  1      )\
+  X( Cup             ,  2      )\
+  X( Cap             ,  3      )\
+  X( Identity        ,  4      )\
+  X( Drag_In         ,  5      )\
+  X( Drag_Out        ,  6      )\
+  X( Invisible       ,  7      )\
+  X( AsBox           ,  8      )\
+  X( RefIsActive     ,  9      )\
+  /**/\
+  X( TextEdit        , 10      )\
+  X( CanBeActive     , 11      )\
+  X( Clickable       , 12      )\
+  X( FitToText       , 13      )\
+  X( UseLabelCString , 14      )
+
+
 typedef enum {
-  Process_Flag_Wire        = 1 << 0,
-  Process_Flag_Empty       = 1 << 1,
-  Process_Flag_Cup         = 1 << 2,
-  Process_Flag_Cap         = 1 << 3,
-  Process_Flag_Identity    = 1 << 4,
-  Process_Flag_Drag_In     = 1 << 5,
-  Process_Flag_Drag_Out    = 1 << 6,
-  Process_Flag_Invisible   = 1 << 7,
-  Process_Flag_AsBox       = 1 << 8,
-  Process_Flag_RefIsActive = 1 << 9,
-  // UI features
-  Process_Flag_TextEdit        = 1 << 10,
-  Process_Flag_CanBeActive     = 1 << 11,
-  Process_Flag_Clickable       = 1 << 12,
-  Process_Flag_FitToText       = 1 << 13,
-  Process_Flag_UseLabelCString = 1 << 14,
+#define X(name, shift, ...)\
+  Process_Flag_##name        = 1 << (shift),
+  Process_Flag_Xlist(X)
+#undef X
 } Process_Flag;
+
+typedef enum {
+#define X(name, shift, ...)\
+  Process_Flag_Kind_##name        = (shift),
+  Process_Flag_Xlist(X)
+#undef X
+} Process_Flag_Kind;
 
 #define Process_Connection_Xlist\
   X(In, 0) X(Out, 1)
