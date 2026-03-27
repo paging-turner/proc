@@ -184,6 +184,7 @@ typedef struct Steady_Trie(Node) {
   S32 depth;
 } Steady_Trie(Node);
 
+
 typedef struct Steady_Trie(Root) {
   struct Steady_Trie(Root) *next_edit;
   struct Steady_Trie(Root) *prev_edit;
@@ -195,10 +196,12 @@ typedef struct Steady_Trie(Root) {
   S32 depth;
 } Steady_Trie(Root);
 
+
 typedef struct Steady_Trie(Root_Stack) {
   Steady_Trie(Root) *root;
   struct Steady_Trie(Root_Stack) *next;
 } Steady_Trie(Root_Stack);
+
 
 typedef struct Steady_Trie(Settings) {
   U32 key_bits;
@@ -208,6 +211,7 @@ typedef struct Steady_Trie(Settings) {
   U32 slot_count;
   U32 max_depth;
 } Steady_Trie(Settings);
+
 
 typedef struct Steady_Trie(Trie) {
   Steady_Trie(Root) *root;
@@ -226,6 +230,7 @@ typedef struct Steady_Trie(Stack_Node) {
   U32 visited_plus_one;
 } Steady_Trie(Stack_Node);
 
+
 typedef struct Steady_Trie(Iterator) {
   Arena *arena;
   Steady_Trie(Stack_Node) *stack;
@@ -234,11 +239,13 @@ typedef struct Steady_Trie(Iterator) {
   Steady_Trie(Key) key;
 } Steady_Trie(Iterator);
 
+
 typedef enum Steady_Trie(Edit_Kind) {
   Steady_Trie(Edit_Insert),
   Steady_Trie(Edit_Delete),
   Steady_Trie(Edit_Search),
 } Steady_Trie(Edit_Kind);
+
 
 typedef struct Steady_Trie(Edit_Result) {
   B32 found;
@@ -283,6 +290,7 @@ Steady_Function Steady_Trie(Stack_Node) *steady_trie(create_stack_node)(
   return node;
 }
 
+
 Steady_Function void steady_trie(delete_stack_node)(
   Arena *arena,
   Steady_Trie(Stack_Node) *free_stack,
@@ -290,6 +298,7 @@ Steady_Function void steady_trie(delete_stack_node)(
   ) {
   // TODO: Implement and use
 }
+
 
 Steady_Function S32 steady_trie(get_depth_from_iterator)(Steady_Trie(Iterator) *iter) {
   S32 depth = -1;
@@ -301,6 +310,7 @@ Steady_Function S32 steady_trie(get_depth_from_iterator)(Steady_Trie(Iterator) *
 
   return depth;
 }
+
 
 Steady_Function void steady_trie(iter_next)(Steady_Trie(Iterator) *iter) {
   // Do a depth-first search until we find the next occupied key.
@@ -568,6 +578,8 @@ Steady_Function Steady_Trie(Edit_Result) steady_trie(edit)(
 #endif
         }
         else if (edit_kind == Steady_Trie(Edit_Delete)) {
+          // TODO: We do *NOT* want to set the occupied value here to 0!!!!!!!
+          //       Insteady, we need to introduce the idea of generations or something, in order to determing whether or not to take a branch when crawling the proc-trie!!!!!
           node->occupied[slot_value] = 0;
         }
         else if (edit_kind == Steady_Trie(Edit_Search)) {
@@ -576,6 +588,7 @@ Steady_Function Steady_Trie(Edit_Result) steady_trie(edit)(
             result.value = &node->values[slot_value];
           }
 #else
+          // TODO: Similar to delete above!!!! We do *NOT* want to set the occupied value to zero! We need generational indices or something.....
           result.found = node->occupied[slot_value] ? 1 : 0;
 #endif
         }
@@ -771,12 +784,12 @@ Steady_Function B32 steady_trie(ensure_key_has_occupation)(
 }
 
 
-#define Steady_Trie_Print_Connection(gen, a, b)\
-  printf("\"%llx_%llx\"->\"%llx_%llx\";\n", gen, (U64)(a), gen, (U64)(b))
+#define Steady_Trie_Print_Connection(a, b)\
+  printf("\"%llx\"->\"%llx\";\n", (U64)(a), (U64)(b))
 
 
-#define Steady_Trie_Print_Leaf(gen, a, b, stack_index)\
-  printf("\"%llx_%llx\"->\"%llx_%llx_%d\";\n", gen, (U64)(a), gen, (U64)(b), stack_index)
+#define Steady_Trie_Print_Leaf(a, b, stack_index)\
+  printf("\"%llx\"->\"%llx_%d\";\n", (U64)(a), (U64)(b), stack_index)
 
 
 Steady_Function void steady_trie(crawl_trie)(
@@ -845,13 +858,12 @@ Steady_Function void steady_trie(crawl_trie)(
 
 Steady_Function void steady_trie(print_trie)(
   Arena *arena,
-  Steady_Trie(Trie) *trie,
-  U64 generation
+  Steady_Trie(Trie) *trie
   ) {
   printf("digraph Trie {\n");
   char *ref_format = "%llx_%llx";
   for (Steady_Trie(Root) *root = trie->root; root != 0; root = root->next_edit) {
-    Steady_Trie_Print_Connection(generation, trie, root);
+    Steady_Trie_Print_Connection(trie, root);
     Steady_Trie(Node) *prev_node = 0;
 
     // Init iterator
@@ -862,7 +874,7 @@ Steady_Function void steady_trie(print_trie)(
       iter->stack = stack;
       iter->stack->node = root->node;
 
-      Steady_Trie_Print_Connection(generation, root, iter->stack->node);
+      Steady_Trie_Print_Connection(root, iter->stack->node);
 
       for (;;) {
         if (iter->stack && iter->stack && iter->stack->node) {
@@ -872,7 +884,7 @@ Steady_Function void steady_trie(print_trie)(
             B32 occupied = iter->stack->node->occupied[iter->stack->index];
             if (occupied && not_visited) {
               iter->stack->visited_plus_one = iter->stack->index+1;
-              Steady_Trie_Print_Leaf(generation, iter->stack->node, iter->stack->node, iter->stack->index);
+              Steady_Trie_Print_Leaf(iter->stack->node, iter->stack->node, iter->stack->index);
             }
             else if (iter->stack->node->slots[iter->stack->index]) {
               // Child slot is present, so descend.
@@ -881,7 +893,7 @@ Steady_Function void steady_trie(print_trie)(
               Steady_Trie(Stack_Node) *new_stack_node = arena_push(iter->arena, sizeof(Steady_Trie(Stack_Node)));
               iter->stack->index += 1;
               new_stack_node->node = next_node;
-              Steady_Trie_Print_Connection(generation, iter->stack->node, next_node);
+              Steady_Trie_Print_Connection(iter->stack->node, next_node);
               SLLStackPush(iter->stack, new_stack_node);
             }
             else {

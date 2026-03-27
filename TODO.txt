@@ -1,7 +1,7 @@
 ==================
 === Autolayout ===
 ==================
-  [ ] Write some code to help auto-layout the trie ds-view.
+  [x] Write some code to help auto-layout the trie ds-view.
   [ ] Consider writing generic helpers that allow you to autolayout sets of processes.
 
 
@@ -61,7 +61,7 @@
   [X] Allow for multiple keybind definitions.
   [ ] Add ability to define bindings for mouse buttons and mouse-wheels
   [x] Create symbol-set to replace Proc_Keybind_Def_Kind enum
-  [ ] Make a way to create keybind aliases, so you can define a new keybind for an existing handler-function.
+  [x] Make a way to create keybind aliases, so you can define a new keybind for an existing handler-function.
 
 
 ===============
