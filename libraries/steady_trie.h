@@ -15,7 +15,7 @@
    [x] Allow for identifier renaming (for constructing multiple types of trie)
    [x] Allow configuration to store keys least-to-most significant byte or most-to-least.
    [x] Right now the keys are the values, but we probably want the option of having key/value pairs.
-   [ ] BUG: Steady_Trie_Slot_Bits == 2  and  Steady_Trie_Root_Is_Lowest_Significant_Byte == 0 causes errors.
+   [ ] BUG: Steady_Trie_Slot_Bits == 2  and  Steady_Trie_Root_Is_Least_Significant_Byte == 0 causes errors.
 */
 
 
@@ -39,8 +39,8 @@
 # define Steady_Trie_Slot_Bits 2
 #endif
 
-#ifndef  Steady_Trie_Root_Is_Lowest_Significant_Byte
-# define Steady_Trie_Root_Is_Lowest_Significant_Byte 1
+#ifndef  Steady_Trie_Root_Is_Least_Significant_Byte
+# define Steady_Trie_Root_Is_Least_Significant_Byte 1
 #endif
 
 #ifndef Steady_Trie_Use_Key_Value_Pair
@@ -92,7 +92,13 @@ typedef U8 Steady_Trie(Slot_Type);
 ////////////////////////////
 // Helper Macros
 ////////////////////////////
-#if Steady_Trie_Root_Is_Lowest_Significant_Byte
+
+
+
+#if Steady_Trie_Root_Is_Least_Significant_Byte
+//
+// Root Is Least Byte
+//
 # define Steady_Trie_Slot_Mask(depth)\
   (~(((U64)1<<((depth+1)*Steady_Trie_Slot_Bits))-1))
 
@@ -100,8 +106,15 @@ typedef U8 Steady_Trie(Slot_Type);
   (depth)
 
 # define Steady_Trie_Get_Next_Iter_Key_Chunk(key, key_shift, index)\
-  (((key) << Steady_Trie_Slot_Bits) | ((index)-1))
+  (((U64)(key) << Steady_Trie_Slot_Bits) | ((index)-1))
+
+# define Steady_Trie_Increment_The_Value_For_Key(k, s, d)\
+  ((U64)(k) | ((U64)(s) << ((d) * Steady_Trie_Slot_Bits)))
+
 #else
+//
+// Root Is Most Byte
+//
 # define Steady_Trie_Slot_Mask(depth)\
   (~(max_U64<<(((Steady_Trie_Max_Depth-1)-depth)*Steady_Trie_Slot_Bits)))
 
@@ -110,7 +123,13 @@ typedef U8 Steady_Trie(Slot_Type);
 
 # define Steady_Trie_Get_Next_Iter_Key_Chunk(key, key_shift, index)\
   ((key) | ((U64)((index)-1) << ((key_shift)*Steady_Trie_Slot_Bits)))
-#endif // Steady_Trie_Root_Is_Lowest_Significant_Byte
+
+# define Steady_Trie_Increment_The_Value_For_Key(k, s, d)\
+  Assert(0)
+
+#endif // END Steady_Trie_Root_Is_*_Significant_Byte
+
+
 
 #define Steady_Trie_Get_Initial_Iter_Key_Chunk(index)\
   (index)
@@ -132,7 +151,9 @@ typedef U8 Steady_Trie(Slot_Type);
 # define Steady_Trie_Debug_Print(...)  printf(__VA_ARGS__)
 #else
 # define Steady_Trie_Debug_Print(...)
-#endif
+
+
+#endif // END Steady_Trie_Root_Is_*_Significant_Byte
 
 
 ////////////////////////////
@@ -321,7 +342,7 @@ Steady_Function void steady_trie(iter_next)(Steady_Trie(Iterator) *iter) {
                            (iter->stack->visited_plus_one-1 < iter->stack->index));
         B32 occupied = iter->stack->node->occupied[iter->stack->index];
         if (occupied && not_visited) {
-          // NOTE: key_shift is only used for when the root is the most-significant byte.
+          // TODO: We lost `key_shift` because this lib has been developed using least-significant byte mode. We will need to test how to define/replace/delete `key_shift` from this code.
           U64 key = Steady_Trie_Get_Initial_Iter_Key_Chunk(iter->stack->index);
           // Build up the key value by collecting all the indices on the stack.
           for (Steady_Trie(Stack_Node) *stack_node = iter->stack->next;
@@ -330,7 +351,7 @@ Steady_Function void steady_trie(iter_next)(Steady_Trie(Iterator) *iter) {
             // NOTE: All of the nodes in the stack, aside from the current one, have had their indices iterated, so we need to subtract one from them. (This is alway why we do not process the current stack-node in the loop.)
             key = Steady_Trie_Get_Next_Iter_Key_Chunk(key, key_shift, stack_node->index);
           }
-#if !Steady_Trie_Root_Is_Lowest_Significant_Byte
+#if !Steady_Trie_Root_Is_Least_Significant_Byte
           // fill in zeros at the end
           key = key << ((Steady_Trie_Max_Depth - depth) * Steady_Trie_Slot_Bits);
 #endif
@@ -451,17 +472,17 @@ Steady_Function void steady_trie(clear_refs)(
 
 
 
-// TODO: Do we need to rename new_root_with_keys?
 Steady_Function void steady_trie(new_root_with_keys)(
   Arena *arena,
   Steady_Trie(Trie) *trie,
   Steady_Trie(Key) *keys,
-  U32 key_count
+  U32 key_count,
+  Steady_Trie(Edit_Kind) edit_kind
   ) {
-  Steady_Trie_Debug_Print("new_root_with_keys\n");
   Steady_Trie(Root) *new_root = trie->edit_root;
   B32 began_with_no_edit_root = trie->edit_root == 0;
 
+  // If this is the first edit being performed since the last commit, we need to generate the edit-root.
   if (began_with_no_edit_root) {
     new_root = arena_push(arena, sizeof(Steady_Trie(Root)));
     trie->edit_root = new_root;
@@ -470,15 +491,15 @@ Steady_Function void steady_trie(new_root_with_keys)(
   if (trie->current_root && new_root) {
     Steady_Trie(Node) *new_node = trie->edit_root ? trie->edit_root->node : 0;
 
+    // Setup new root.
     if (began_with_no_edit_root) {
       new_node = arena_push(arena, sizeof(Steady_Trie(Node)));
-
-      // Setup new node.
       *new_node = *trie->current_root->node;
       new_root->node = new_node;
 
       // Push new root.
       if (trie->current_root->next_edit) {
+        // Branch from the current edit.
         // @Speed
         Steady_Trie(Root) *last_branch = trie->current_root;
         for (;last_branch->next_branch != 0;) {
@@ -489,44 +510,63 @@ Steady_Function void steady_trie(new_root_with_keys)(
         new_root->prev_branch = last_branch;
       }
       else {
+        // Fill in the "next_edit".
         trie->current_root->next_edit = new_root;
         new_root->prev_edit = trie->current_root;
       }
 
-      // Set current root
+      // Set current root.
       trie->current_root = new_root;
     }
 
     // Fill out the root with new nodes.
     for (U32 k = 0; k < key_count; ++k) {
       Steady_Trie(Key) key = keys[k];
-
       // TODO: `current_node` and `current_new_node` are confusing names.
       Steady_Trie(Node) *current_node = trie->current_root->node;
       Steady_Trie(Node) *current_new_node = new_node;
 
+      U64 current_key = 0;
+
       for (U32 d = 0; d < Steady_Trie_Max_Depth; ++d) {
         Steady_Trie(Slot_Type) slot_value = Steady_Trie_Get_Slot_Value(key, d);
         Assert(slot_value >= 0 && slot_value <= Steady_Trie_Single_Slot_Mask);
-        B32 final_depth = Steady_Trie_Is_Key_At_Final_Depth(key, d);
 
-        if (!final_depth && current_node->slots[slot_value] && current_new_node->slots[slot_value]) {
-          // Copy and descend.
-          Steady_Trie(Node) *new_node = arena_push(arena, sizeof(Steady_Trie(Node)));
-          if (new_node) {
-            current_node = current_node->slots[slot_value];
-            *new_node = *current_node;
-            current_new_node->slots[slot_value] = new_node;
-            current_new_node = new_node;
+        if (current_node->slots[slot_value] && current_new_node->slots[slot_value]) {
+          B32 should_descend = 1;
+          current_key = Steady_Trie_Increment_The_Value_For_Key(current_key, slot_value, d);
+
+          // potentially remove occupancy if we are deleting
+          if (edit_kind == Steady_Trie(Edit_Delete)) {
+            if (Steady_Trie_Is_Key_At_Final_Depth(key, d+1)) {
+              Steady_Trie(Slot_Type) next_slot_value = Steady_Trie_Get_Slot_Value(key, d+1);
+              U64 test_key = Steady_Trie_Increment_The_Value_For_Key(current_key, next_slot_value, d+1);
+
+              if (test_key == key) {
+                current_new_node->slots[slot_value] = 0;
+                should_descend = 0;
+              }
+
+              // Current trie ends here.
+              break;
+            }
           }
-          else {
-            // Arena failure.
-            break;
+
+          if (should_descend) {
+            // Copy and descend.
+            Steady_Trie(Node) *new_node = arena_push(arena, sizeof(Steady_Trie(Node)));
+            if (new_node) {
+              current_node = current_node->slots[slot_value];
+              *new_node = *current_node;
+
+              current_new_node->slots[slot_value] = new_node;
+              current_new_node = new_node;
+            }
+            else {
+              // Arena failure.
+              break;
+            }
           }
-        }
-        else {
-          // Current trie ends here.
-          break;
         }
       }
     }
@@ -534,15 +574,6 @@ Steady_Function void steady_trie(new_root_with_keys)(
 }
 
 
-Steady_Function void steady_trie(new_root)(
-  Arena *arena,
-  Steady_Trie(Trie) *trie,
-  Steady_Trie(Key) key
-  ) {
-  Steady_Trie_Debug_Print("new_root\n");
-  Steady_Trie(Key) keys[] = {key};
-  steady_trie(new_root_with_keys)(arena, trie, keys, 1);
-}
 
 
 Steady_Function Steady_Trie(Edit_Result) steady_trie(edit)(
@@ -555,8 +586,14 @@ Steady_Function Steady_Trie(Edit_Result) steady_trie(edit)(
   ) {
   Steady_Trie_Debug_Print("edit %s\n", steady_trie(get_edit_kind_name)(edit_kind));
   Steady_Trie(Edit_Result) result = (Steady_Trie(Edit_Result)){0};
+
   if (edit_kind != Steady_Trie(Edit_Search) && trie->edit_root == 0) {
-    steady_trie(new_root_with_keys)(arena, trie, keys, count);
+    steady_trie(new_root_with_keys)(arena, trie, keys, count, edit_kind);
+  }
+
+  // TODO: it would be nice not to do an early return here...
+  if (edit_kind == Steady_Trie(Edit_Delete)) {
+    return result;
   }
 
   for (U32 i = 0; i < count; ++i) {
@@ -580,7 +617,7 @@ Steady_Function Steady_Trie(Edit_Result) steady_trie(edit)(
         else if (edit_kind == Steady_Trie(Edit_Delete)) {
           // TODO: We do *NOT* want to set the occupied value here to 0!!!!!!!
           //       Insteady, we need to introduce the idea of generations or something, in order to determing whether or not to take a branch when crawling the proc-trie!!!!!
-          node->occupied[slot_value] = 0;
+          /* node->occupied[slot_value] = 0; */
         }
         else if (edit_kind == Steady_Trie(Edit_Search)) {
 #if Steady_Trie_Use_Key_Value_Pair
@@ -589,7 +626,7 @@ Steady_Function Steady_Trie(Edit_Result) steady_trie(edit)(
           }
 #else
           // TODO: Similar to delete above!!!! We do *NOT* want to set the occupied value to zero! We need generational indices or something.....
-          result.found = node->occupied[slot_value] ? 1 : 0;
+          /* result.found = node->occupied[slot_value] ? 1 : 0; */
 #endif
         }
         break;
@@ -667,7 +704,7 @@ Steady_Function Steady_Trie(Trie) *steady_trie(create_trie)(Arena *arena) {
 
     trie->settings.key_bits = Steady_Trie_Key_Bits;
     trie->settings.slot_bits = Steady_Trie_Slot_Bits;
-    trie->settings.root_is_lowest_significant_byte = Steady_Trie_Root_Is_Lowest_Significant_Byte;
+    trie->settings.root_is_lowest_significant_byte = Steady_Trie_Root_Is_Least_Significant_Byte;
     trie->settings.use_key_value_pair = Steady_Trie_Use_Key_Value_Pair;
     trie->settings.slot_count = Steady_Trie_Slot_Count;
     trie->settings.max_depth = Steady_Trie_Max_Depth;
@@ -1114,7 +1151,7 @@ Steady_Function U32 steady_trie(run_tests)(Arena *arena) {
 #undef steady_trie
 #undef Steady_Trie_Key_Bits
 #undef Steady_Trie_Slot_Bits
-#undef Steady_Trie_Root_Is_Lowest_Significant_Byte
+#undef Steady_Trie_Root_Is_Least_Significant_Byte
 #undef Steady_Trie_Use_Key_Value_Pair
 #undef Steady_Trie_Use_Debug_Log
 
@@ -1125,7 +1162,6 @@ Steady_Function U32 steady_trie(run_tests)(Arena *arena) {
 #undef Steady_Trie_Get_Next_Iter_Key_Chunk
 #undef Steady_Trie_Slot_Mask
 #undef Steady_Trie_Get_Slot_Shift
-#undef Steady_Trie_Get_Next_Iter_Key_Chunk
 #undef Steady_Trie_Get_Initial_Iter_Key_Chunk
 #undef Steady_Trie_Get_Slot_Value
 #undef Steady_Trie_Is_Max_Depth

@@ -317,24 +317,6 @@ function Process *create_ui_element(Context *context) {
 
 
 
-function void update_data_structure_view_processes(Context *context) {
-  proc_trie_crawl_trie(context->per_frame_arena,
-                       context->proc_trie,
-                       proc_ds_view_root_clear_handler,
-                       proc_ds_view_node_clear_handler,
-                       context);
-
-  clear_ds_view_process_list(context);
-
-  context->proc_trie->ref = 0;
-  clear_ds_view_process_list(context);
-
-  proc_trie_crawl_trie(context->per_frame_arena,
-                       context->proc_trie,
-                       proc_ds_view_root_handler,
-                       proc_ds_view_node_handler,
-                       context);
-}
 
 
 function void gather_processes_from_trie(Context *context) {
@@ -346,7 +328,6 @@ function void gather_processes_from_trie(Context *context) {
 
   clear_processes(context->views + View_Kind_Procs);
 
-
   for (Proc_Trie_Iterator *iter = proc_trie_iter_init(arena, trie->current_root->node);
        proc_trie_iter_test(iter);
        proc_trie_iter_next(iter)) {
@@ -356,7 +337,25 @@ function void gather_processes_from_trie(Context *context) {
     SLLQueuePush(view->processes.first, view->processes.last, p);
   }
 
-  update_data_structure_view_processes(context);
+  // Update data-structure view processes
+  {
+    proc_trie_crawl_trie(context->per_frame_arena,
+                         context->proc_trie,
+                         proc_ds_view_root_clear_handler,
+                         proc_ds_view_node_clear_handler,
+                         context);
+
+    clear_ds_view_process_list(context);
+
+    context->proc_trie->ref = 0;
+    clear_ds_view_process_list(context);
+
+    proc_trie_crawl_trie(context->per_frame_arena,
+                         context->proc_trie,
+                         proc_ds_view_root_handler,
+                         proc_ds_view_node_handler,
+                         context);
+  }
 }
 
 

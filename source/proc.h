@@ -182,7 +182,7 @@ struct Process {
 #define steady_trie(ident)               proc_trie_##ident
 #define Steady_Trie_Key_Bits             Proc_Trie_Key_Bits
 #define Steady_Trie_Slot_Bits            Proc_Trie_Slot_Bits
-#define Steady_Trie_Root_Is_Lowest_Significant_Byte 1
+#define Steady_Trie_Root_Is_Least_Significant_Byte 1
 #define Steady_Trie_Use_Key_Value_Pair   Proc_Trie_Use_Key_Value
 #define Steady_Trie_Value_Type           Process
 #define Steady_Trie_Default_Value        (Process){0}
