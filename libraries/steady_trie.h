@@ -587,58 +587,55 @@ Steady_Function Steady_Trie(Edit_Result) steady_trie(edit)(
   Steady_Trie_Debug_Print("edit %s\n", steady_trie(get_edit_kind_name)(edit_kind));
   Steady_Trie(Edit_Result) result = (Steady_Trie(Edit_Result)){0};
 
-  if (edit_kind != Steady_Trie(Edit_Search) && trie->edit_root == 0) {
+  if (edit_kind != Steady_Trie(Edit_Search)) {
     steady_trie(new_root_with_keys)(arena, trie, keys, count, edit_kind);
   }
 
-  // TODO: it would be nice not to do an early return here...
-  if (edit_kind == Steady_Trie(Edit_Delete)) {
-    return result;
-  }
+  if (edit_kind != Steady_Trie(Edit_Delete)) {
+    for (U32 i = 0; i < count; ++i) {
+      Steady_Trie(Node) *node = trie->current_root->node;
+      Steady_Trie(Key) key = keys[i];
 
-  for (U32 i = 0; i < count; ++i) {
-    Steady_Trie(Node) *node = trie->current_root->node;
-    Steady_Trie(Key) key = keys[i];
+      for (U32 d = 0; (d < Steady_Trie_Max_Depth) && node; ++d) {
+        Steady_Trie(Slot_Type) slot_value = Steady_Trie_Get_Slot_Value(key, d);
+        Assert(slot_value >= 0 && slot_value <= Steady_Trie_Single_Slot_Mask);
 
-    for (U32 d = 0; (d < Steady_Trie_Max_Depth) && node; ++d) {
-      Steady_Trie(Slot_Type) slot_value = Steady_Trie_Get_Slot_Value(key, d);
-      Assert(slot_value >= 0 && slot_value <= Steady_Trie_Single_Slot_Mask);
-
-      if (Steady_Trie_Is_Key_At_Final_Depth(key, d)) {
-        if (edit_kind == Steady_Trie(Edit_Insert)) {
-          node->occupied[slot_value] = 1;
+        if (Steady_Trie_Is_Key_At_Final_Depth(key, d)) {
+          if (edit_kind == Steady_Trie(Edit_Insert)) {
+            node->occupied[slot_value] = 1;
 #if Steady_Trie_Use_Key_Value_Pair
-          if (values) {
-            Steady_Trie_Value_Type value = values[i];
-            node->values[slot_value] = value;
-          }
+            if (values) {
+              Steady_Trie_Value_Type value = values[i];
+              node->values[slot_value] = value;
+            }
 #endif
-        }
-        else if (edit_kind == Steady_Trie(Edit_Delete)) {
-          // TODO: We do *NOT* want to set the occupied value here to 0!!!!!!!
-          //       Insteady, we need to introduce the idea of generations or something, in order to determing whether or not to take a branch when crawling the proc-trie!!!!!
-          /* node->occupied[slot_value] = 0; */
-        }
-        else if (edit_kind == Steady_Trie(Edit_Search)) {
-#if Steady_Trie_Use_Key_Value_Pair
-          if (node->occupied[slot_value]) {
-            result.value = &node->values[slot_value];
           }
+          else if (edit_kind == Steady_Trie(Edit_Delete)) {
+            // TODO: We do *NOT* want to set the occupied value here to 0!!!!!!!
+            //       Insteady, we need to introduce the idea of generations or something, in order to determing whether or not to take a branch when crawling the proc-trie!!!!!
+            /* node->occupied[slot_value] = 0; */
+          }
+          else if (edit_kind == Steady_Trie(Edit_Search)) {
+#if Steady_Trie_Use_Key_Value_Pair
+            if (node->occupied[slot_value]) {
+              result.value = &node->values[slot_value];
+            }
 #else
-          // TODO: Similar to delete above!!!! We do *NOT* want to set the occupied value to zero! We need generational indices or something.....
-          /* result.found = node->occupied[slot_value] ? 1 : 0; */
+            // TODO: Similar to delete above!!!! We do *NOT* want to set the occupied value to zero! We need generational indices or something.....
+            /* result.found = node->occupied[slot_value] ? 1 : 0; */
 #endif
+          }
+          break;
         }
-        break;
-      }
-      else {
-        if (edit_kind == Steady_Trie(Edit_Insert) && node->slots[slot_value] == 0) {
-          // Add new node
-          node->slots[slot_value] = arena_push(arena, sizeof(Steady_Trie(Node)));
-        }
+        else {
+          if (edit_kind == Steady_Trie(Edit_Insert) && node->slots[slot_value] == 0) {
+            // Add new node
+            node->slots[slot_value] = arena_push(arena, sizeof(Steady_Trie(Node)));
+          }
 
-        // Descend
-        node = node->slots[slot_value];
+          // Descend
+          node = node->slots[slot_value];
+        }
       }
     }
   }

@@ -61,7 +61,9 @@ function Process *push_permanent_process(Context *context) {
 }
 
 
+// TODO: At this point, this is just `push_permanent_process`
 function Process *create_detached_process(Context *context) {
+#if 0
   Process *p = context->free_processes.first;
 
   if (p) {
@@ -69,6 +71,9 @@ function Process *create_detached_process(Context *context) {
   } else {
     p = push_permanent_process(context);
   }
+#else
+  Process *p = push_permanent_process(context);
+#endif
 
   if (p) {
     *p = (Process){0};

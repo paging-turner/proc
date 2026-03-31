@@ -490,7 +490,7 @@ function Process *replace_process_with(
     *p = p_lit;
     proc_trie_delete(context->permanent_arena, trie, IntFromPtr(to_replace));
 #if Proc_Trie_Use_Key_Value
-    proc_trie_set(context->permanent_arena, context->proc_trie, (U64)p, p);
+    proc_trie_set(context->permanent_arena, context->proc_trie, IntFromPtr(p), p);
 #else
     proc_trie_insert(context->permanent_arena, trie, IntFromPtr(p));
 #endif
