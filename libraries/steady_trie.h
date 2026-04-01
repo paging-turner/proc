@@ -410,68 +410,6 @@ Steady_Function B32 steady_trie(iter_test)(Steady_Trie(Iterator) *iter) {
 
 
 
-
-
-Steady_Function void steady_trie(crawl_roots)(
-  Arena *temp_arena,
-  Steady_Trie(Trie) *trie,
-  void (*handle_root)(void *user_data, Steady_Trie(Root) *root)
-  ) {
-  U64 pos = arena_current_pos(temp_arena);
-  Steady_Trie(Root_Stack) *stack = arena_push(temp_arena, sizeof(Steady_Trie(Root_Stack)));
-  if (stack) {
-    stack->root = trie->root;
-  }
-
-  for (; stack != 0 && stack->root;) {
-    handle_root(trie, stack->root);
-
-    if (stack->root->next_edit) {
-      if (arena_has_space_for(temp_arena, sizeof(Steady_Trie(Root_Stack)))) {
-        Steady_Trie(Root_Stack) *new_stack = arena_push(temp_arena, sizeof(Steady_Trie(Root_Stack)));
-        new_stack->root = stack->root->next_edit;
-        SLLStackPush(stack, new_stack);
-      }
-      else {
-        Steady_Trie_Debug_Print("[ ERROR ] Pushing Steady_Trie(Root_Stack) in steady_trie(crawl_roots)\n");
-        break;
-      }
-    }
-    else if (stack->root->next_branch) {
-      stack->root = stack->root->next_branch;
-    }
-    else {
-      SLLStackPop(stack);
-
-      if (stack) {
-        stack->root = stack->root->next_branch;
-      }
-    }
-  }
-
-  arena_pop_to(temp_arena, pos);
-}
-
-
-
-Steady_Function void steady_trie(clear_ref_handler)(
-  void *user_data,
-  Steady_Trie(Root) *root
-  ) {
-  root->ref = 0;
-}
-
-
-Steady_Function void steady_trie(clear_refs)(
-  Arena *arena,
-  Steady_Trie(Trie) *trie
-  ) {
-  trie->ref = 0;
-  proc_trie_crawl_roots(arena, trie, steady_trie(clear_ref_handler));
-}
-
-
-
 Steady_Function void steady_trie(new_root_with_keys)(
   Arena *arena,
   Steady_Trie(Trie) *trie,
@@ -826,6 +764,7 @@ Steady_Function B32 steady_trie(ensure_key_has_occupation)(
   printf("\"%llx\"->\"%llx_%d\";\n", (U64)(a), (U64)(b), stack_index)
 
 
+
 Steady_Function void steady_trie(crawl_trie)(
   Arena *arena,
   Steady_Trie(Trie) *trie,
@@ -833,18 +772,43 @@ Steady_Function void steady_trie(crawl_trie)(
   void (*node_handler)(void *caller_data, Steady_Trie(Iterator) *iter, Steady_Trie(Node) *node),
   void *caller_data
   ) {
-  for (Steady_Trie(Root) *root = trie->root; root != 0; root = root->next_edit) {
-    Steady_Trie(Node) *prev_node = 0;
+  Steady_Trie(Root_Stack) *root_stack = arena_push(arena, sizeof(Steady_Trie(Root_Stack)));
+  if (root_stack) {
+    root_stack->root = trie->root;
+  }
+
+  for (; root_stack != 0 && root_stack->root;) {
+    if (root_stack->root->next_edit) {
+      if (arena_has_space_for(arena, sizeof(Steady_Trie(Root_Stack)))) {
+        Steady_Trie(Root_Stack) *new_stack = arena_push(arena, sizeof(Steady_Trie(Root_Stack)));
+        new_stack->root = root_stack->root->next_edit;
+        SLLStackPush(root_stack, new_stack);
+      }
+      else {
+        Steady_Trie_Debug_Print("[ ERROR ] Pushing Steady_Trie(Root_Stack) in steady_trie(crawl_roots)\n");
+        break;
+      }
+    }
+    else if (root_stack->root->next_branch) {
+      root_stack->root = root_stack->root->next_branch;
+    }
+    else {
+      SLLStackPop(root_stack);
+
+      if (root_stack) {
+        root_stack->root = root_stack->root->next_branch;
+      }
+    }
 
     // Init iterator
     Steady_Trie(Iterator) *iter = arena_push(arena, sizeof(Steady_Trie(Iterator)));
     Steady_Trie(Stack_Node) *stack = arena_push(arena, sizeof(Steady_Trie(Stack_Node)));
-    if (iter && stack) {
+    if (iter && stack && root_stack && root_stack->root) {
       iter->arena = arena;
       iter->stack = stack;
-      iter->stack->node = root->node;
+      iter->stack->node = root_stack->root->node;
 
-      root_handler(caller_data, iter, root);
+      root_handler(caller_data, iter, root_stack->root);
 
       if (iter && iter->stack && iter->stack->node) {
         node_handler(caller_data, iter, iter->stack->node);

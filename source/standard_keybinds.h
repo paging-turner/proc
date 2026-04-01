@@ -191,7 +191,8 @@ function void proc_ds_view_root_handler(
     }
   }
 
-  Process *trie_to_root_wire = connect_detached_processes(context, trie->ref, root->ref);
+  Process *proc_before_root = root->prev_branch ? root->prev_branch->ref : trie->ref;
+  Process *to_root_wire = connect_detached_processes(context, proc_before_root, root->ref);
   Process *root_to_first_node_wire = connect_detached_processes(context, root->ref, root->node->ref);
 
   if (null_trie_ref) {
@@ -199,7 +200,7 @@ function void proc_ds_view_root_handler(
   }
   Push_Ds_View_Process(root->ref);
   Push_Ds_View_Process(root->node->ref);
-  Push_Ds_View_Process(trie_to_root_wire);
+  Push_Ds_View_Process(to_root_wire);
   Push_Ds_View_Process(root_to_first_node_wire);
 }
 
