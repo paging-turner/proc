@@ -111,6 +111,7 @@ Define_Keybind_Action(
                context->views[View_Kind_Trie].processes.last,\
                (p))
 
+
 function void proc_ds_view_root_clear_handler(
   void *maybe_context,
   Proc_Trie_Iterator *iter,
@@ -124,6 +125,7 @@ function void proc_ds_view_root_clear_handler(
   }
 }
 
+
 function void proc_ds_view_node_clear_handler(
   void *maybe_context,
   Proc_Trie_Iterator *iter,
@@ -136,6 +138,7 @@ function void proc_ds_view_node_clear_handler(
     node->ref = 0;
   }
 }
+
 
 function void proc_ds_view_root_handler(
   void *maybe_context,
@@ -191,8 +194,25 @@ function void proc_ds_view_root_handler(
     }
   }
 
+#if 0
   Process *proc_before_root = root->prev_branch ? root->prev_branch->ref : trie->ref;
   Process *to_root_wire = connect_detached_processes(context, proc_before_root, root->ref);
+#else
+  if (root->prev_branch) {
+    Process *new_wire = connect_detached_processes(context, root->prev_branch->ref, root->ref);
+    Push_Ds_View_Process(new_wire);
+  }
+
+  if (root->prev_edit) {
+    Process *new_wire = connect_detached_processes(context, root->prev_edit->ref, root->ref);
+    Push_Ds_View_Process(new_wire);
+  }
+
+  if (!(root->prev_branch || root->prev_edit)) {
+    Process *new_wire = connect_detached_processes(context, trie->ref, root->ref);
+    Push_Ds_View_Process(new_wire);
+  }
+#endif
   Process *root_to_first_node_wire = connect_detached_processes(context, root->ref, root->node->ref);
 
   if (null_trie_ref) {
@@ -200,7 +220,8 @@ function void proc_ds_view_root_handler(
   }
   Push_Ds_View_Process(root->ref);
   Push_Ds_View_Process(root->node->ref);
-  Push_Ds_View_Process(to_root_wire);
+  /* Assert(to_root_wire); */
+  /* Push_Ds_View_Process(to_root_wire); */
   Push_Ds_View_Process(root_to_first_node_wire);
 }
 
@@ -248,11 +269,13 @@ function void proc_ds_view_node_handler(
   }
 }
 
+
 Define_Keybind(
   ToggleDataStructureView, ,
   Keybind_Behavior_Overwrite, 274, AtTheStart,
   KEY_D, Modifier_Key_Control|Modifier_Key_Shift,
   Ui_Constraint_ActionNotOccured);
+
 
 Define_Keybind_Action(
   ToggleDataStructureView,
@@ -263,7 +286,7 @@ Define_Keybind_Action(
   Process_Selection selection = env->selection;
 
   if (Test_Keybind(env, ToggleDataStructureView, Enter)) {
-    // TODO: Map the proc-trie to processes with the same topology.
+    // TODO: Map the proc-trie to processes with the same referential structure.
     Toggle_Flag(context->flags, Context_Flag_DataStructureView);
   }
 
@@ -380,6 +403,7 @@ Define_Keybind_Action(
         // fix process y-position
         F32 y_scale = 100.0f;
         S32 depth = 0;
+        B32 has_prev_branch_ref = 0;
 
         switch(p->ref_kind) {
         case Ref_Kind_ProcTrie: {
@@ -389,8 +413,9 @@ Define_Keybind_Action(
           depth = ((Proc_Trie_Node *)p->ref)->depth;
         } break;
         case Ref_Kind_ProcTrieRoot: {
-          Proc_Trie_Root * root = (Proc_Trie_Root *)p->ref;
+          Proc_Trie_Root *root = (Proc_Trie_Root *)p->ref;
           depth = root->depth;
+          has_prev_branch_ref = root->prev_branch && root->prev_branch->ref;
 
           B32 is_current_root = root == env->context->proc_trie->current_root;
           Set_Flag(p->flags, is_current_root << Process_Flag_Kind_RefIsActive);
@@ -398,13 +423,21 @@ Define_Keybind_Action(
         }
 
         if (depth >= 0 && depth < Auto_Align_X_Offset_Count) {
-          F32 *x_pos = global_auto_align_x_offset + depth;
-          p->position.x = *x_pos;
-          S32 max_conn_count = Max(p->in_count, p->out_count);
-          *x_pos += 80.0f + (30.0f * max_conn_count);
+          if (has_prev_branch_ref) {
+            Proc_Trie_Root *root = (Proc_Trie_Root *)p->ref;
+            Vector2 prev_position = root->prev_branch->ref->position;
+            p->position.x = prev_position.x;
+            p->position.y = prev_position.y - y_scale;
+          }
+          else {
+            F32 *x_pos = global_auto_align_x_offset + depth;
+            S32 max_conn_count = Max(p->in_count, p->out_count);
+            *x_pos += 80.0f + (30.0f * max_conn_count);
+            p->position.x = *x_pos;
+            p->position.y = -y_scale * (F32)depth;
+          }
         }
 
-        p->position.y = -y_scale * (F32)depth;
       }
     }
   }

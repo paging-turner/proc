@@ -13,4 +13,9 @@ For now, we will have to manually test a bunch of features. This file exists to 
 
 
 ------------------------------------------
-002 ???
+002 Connect and delete write
+    1. Create process
+    2. Create another process
+    3. Connect processes
+    4. Delete the new wire.
+    EXPECT: To only have the two processes, and the wire connecting them should be gone.
