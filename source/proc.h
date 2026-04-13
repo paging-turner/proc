@@ -8,6 +8,8 @@ typedef struct Process Process;
 typedef struct Process_Shape Process_Shape;
 typedef struct Process_Selection Process_Selection;
 typedef struct Process_List Process_List;
+typedef struct Process_Ref Process_Ref;
+typedef struct Process_Edit Process_Edit;
 typedef enum Process_Connection Process_Connection;
 typedef enum Process_Connection_Flag Process_Connection_Flag;
 typedef struct Connection_Result Connection_Result;
@@ -42,7 +44,7 @@ function              void gather_processes_from_trie(Context *context);
 function              void remove_process_from_process_list(Context *context, Process_List *list, Process *p);
 function          Process *connect_detached_processes(Context *context, Process *out, Process *in);
 function Connection_Result connect_processes(Context *context, Process *out, Process *in);
-function              void remove_wire_connection(Context *context, Process *wire, Process_Connection_Flag conn_flags);
+function              void remove_wire_connection(Context *context, Process_Edit proc_edit, Process *wire, Process_Connection_Flag conn_flags);
 function              void add_wire_connection(Context *context, Process *wire, Process *process, Process_Connection conn, U32 which_conn);
 function              void handle_label_editing(Context *context, Process_List ps);
 function          Process *find_process_connection(Context *context, Process *p, Process_Connection conn, U32 which_conn);
@@ -173,6 +175,18 @@ struct Process {
   Ref_Kind ref_kind;
   void *ref;
 };
+
+struct Process_Ref {
+  Process *process;
+  struct Process_Ref *next;
+};
+
+struct Process_Edit {
+  Process_Ref *to_delete;
+  Process_Ref *to_edit;
+};
+
+
 
 // Process Trie
 #define Proc_Trie_Key_Bits               64
