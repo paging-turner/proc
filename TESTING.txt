@@ -19,3 +19,13 @@ For now, we will have to manually test a bunch of features. This file exists to 
     3. Connect processes
     4. Delete the new wire.
     EXPECT: To only have the two processes, and the wire connecting them should be gone.
+
+
+
+------------------------------------------
+003 Delete one of two wires
+    1. Create three processes
+    2. Connect the first to the third
+    3. Connect the second to the third
+    4. Delete the wire from the first connection
+    NOTE: The test can be generalized, as long as you don't delete the *last* wire.

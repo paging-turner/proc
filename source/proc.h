@@ -3,92 +3,6 @@
 //////////////////////////////////////
 // Forward Declarations
 //////////////////////////////////////
-
-typedef struct Process Process;
-typedef struct Process_Shape Process_Shape;
-typedef struct Process_Selection Process_Selection;
-typedef struct Process_List Process_List;
-typedef struct Process_Ref Process_Ref;
-typedef struct Process_Edit Process_Edit;
-typedef enum Process_Connection Process_Connection;
-typedef enum Process_Connection_Flag Process_Connection_Flag;
-typedef struct Connection_Result Connection_Result;
-typedef enum Keybind_Result Keybind_Result;
-typedef struct Keybind Keybind;
-typedef struct Context Context;
-typedef struct View View;
-function              void clear_processes(View *view);
-function              void clear_active_processes(Context *context);
-function              void clear_ds_view_process_list(Context *context);
-function          Process *create_detached_process(Context *context);
-function          Process *create_process(Context *context);
-function     String_Chunk *create_string_chunk(Context *context);
-function String_Chunk_List string_chunk_list_from_string8(Context *context, String8 string8);
-function               S32 collect_save_files(Context *context);
-function               B32 rectangle_contains_point(Rectangle r, Vector2 p);
-function           Vector2 get_process_wire_position(Context *context, View *view, Process *p, Process_Shape shape, Process_Connection conn, U32 wire_index);
-function          Process *get_process_wire_by_selection(Context *context, Process_Selection selection);
-function     Process_Shape get_process_shape(Context *context, View *view, Process *p);
-function           Vector2 get_process_size(Context *context, Process *p, Process_Shape shape);
-function         Rectangle get_selection_rectangle(Context *context);
-function           Vector2 get_process_position(Context *context, View *view, Process *process);
-function Process_Selection get_process_selection(Context *context, View *view, Process *p);
-function               B32 is_active_process(Context *context, Process *p);
-function              void remove_process_from_active_processes(Context *context, Process *p);
-function    Keybind_Result check_keybind(Context *context, Keybind *keybind, Process_Selection selection);
-function              void exit_add_wire_mode(Context *context);
-function              void delete_process(Context *context, Process *p);
-function              void copy_active_processes(Context *context);
-function              void paste_processes(Context *context);
-function              void gather_processes_from_trie(Context *context);
-function              void remove_process_from_process_list(Context *context, Process_List *list, Process *p);
-function          Process *connect_detached_processes(Context *context, Process *out, Process *in);
-function Connection_Result connect_processes(Context *context, Process *out, Process *in);
-function              void remove_wire_connection(Context *context, Process_Edit proc_edit, Process *wire, Process_Connection_Flag conn_flags);
-function              void add_wire_connection(Context *context, Process *wire, Process *process, Process_Connection conn, U32 which_conn);
-function              void handle_label_editing(Context *context, Process_List ps);
-function          Process *find_process_connection(Context *context, Process *p, Process_Connection conn, U32 which_conn);
-
-
-
-//////////////////////////////////////
-// Process
-//////////////////////////////////////
-
-#define Process_Flag_Xlist(X)\
-  /* Name               Shift */\
-  X( Wire            ,  0      )\
-  X( Empty           ,  1      )\
-  X( Cup             ,  2      )\
-  X( Cap             ,  3      )\
-  X( Identity        ,  4      )\
-  X( Drag_In         ,  5      )\
-  X( Drag_Out        ,  6      )\
-  X( Invisible       ,  7      )\
-  X( AsBox           ,  8      )\
-  X( RefIsActive     ,  9      )\
-  /**/\
-  X( TextEdit        , 10      )\
-  X( CanBeActive     , 11      )\
-  X( Clickable       , 12      )\
-  X( FitToText       , 13      )\
-  X( UseLabelCString , 14      )
-
-
-typedef enum {
-#define X(name, shift, ...)\
-  Process_Flag_##name        = 1 << (shift),
-  Process_Flag_Xlist(X)
-#undef X
-} Process_Flag;
-
-typedef enum {
-#define X(name, shift, ...)\
-  Process_Flag_Kind_##name        = (shift),
-  Process_Flag_Xlist(X)
-#undef X
-} Process_Flag_Kind;
-
 #define Process_Connection_Xlist\
   X(In, 0) X(Out, 1)
 
@@ -107,12 +21,8 @@ enum Process_Connection_Flag {
 #undef X
 };
 
-struct Connection_Result {
-  Process *out;
-  Process *in;
-  Process *new_wire;
-};
-
+typedef struct Process Process;
+typedef struct Context Context;
 
 typedef enum Ref_Kind {
   Ref_Kind__Null,
@@ -120,8 +30,6 @@ typedef enum Ref_Kind {
   Ref_Kind_ProcTrieNode,
   Ref_Kind_ProcTrieRoot,
 } Ref_Kind;
-
-
 
 struct Process {
   //////////////
@@ -176,18 +84,6 @@ struct Process {
   void *ref;
 };
 
-struct Process_Ref {
-  Process *process;
-  struct Process_Ref *next;
-};
-
-struct Process_Edit {
-  Process_Ref *to_delete;
-  Process_Ref *to_edit;
-};
-
-
-
 // Process Trie
 #define Proc_Trie_Key_Bits               64
 #define Proc_Trie_Slot_Bits              2
@@ -206,6 +102,117 @@ struct Process_Edit {
   for (Proc_Trie_Iterator *iter_name = proc_trie_iter_init(arena, trie->current_root->node);\
        proc_trie_iter_test(iter_name);\
        proc_trie_iter_next(iter_name))
+
+typedef struct Process_Shape Process_Shape;
+typedef struct Process_Selection Process_Selection;
+typedef struct Process_List Process_List;
+typedef struct Process_Ref Process_Ref;
+// TODO: rename
+typedef struct NEW_Process_Edit {
+  Proc_Trie_Edit_Kind edit_kind;
+  Process *process;
+  Process new_process;
+  struct NEW_Process_Edit *next;
+} NEW_Process_Edit;
+// TODO: rename
+typedef struct What_Is_This {
+  NEW_Process_Edit *first;
+  NEW_Process_Edit *last;
+} What_Is_This;
+typedef enum Process_Connection Process_Connection;
+typedef enum Process_Connection_Flag Process_Connection_Flag;
+typedef struct Connection_Result Connection_Result;
+typedef enum Keybind_Result Keybind_Result;
+typedef struct Keybind Keybind;
+typedef struct View View;
+function              void clear_processes(View *view);
+function              void clear_active_processes(Context *context);
+function              void clear_ds_view_process_list(Context *context);
+function          Process *create_detached_process(Context *context);
+function          Process *create_process(Context *context);
+function     String_Chunk *create_string_chunk(Context *context);
+function String_Chunk_List string_chunk_list_from_string8(Context *context, String8 string8);
+function               S32 collect_save_files(Context *context);
+function               B32 rectangle_contains_point(Rectangle r, Vector2 p);
+function           Vector2 get_process_wire_position(Context *context, View *view, Process *p, Process_Shape shape, Process_Connection conn, U32 wire_index);
+function          Process *get_process_wire_by_selection(Context *context, Process_Selection selection);
+function     Process_Shape get_process_shape(Context *context, View *view, Process *p);
+function           Vector2 get_process_size(Context *context, Process *p, Process_Shape shape);
+function         Rectangle get_selection_rectangle(Context *context);
+function           Vector2 get_process_position(Context *context, View *view, Process *process);
+function Process_Selection get_process_selection(Context *context, View *view, Process *p);
+function               B32 is_active_process(Context *context, Process *p);
+function              void remove_process_from_active_processes(Context *context, Process *p);
+function    Keybind_Result check_keybind(Context *context, Keybind *keybind, Process_Selection selection);
+function              void exit_add_wire_mode(Context *context);
+function              void delete_process(Context *context, Process *p);
+function              void copy_active_processes(Context *context);
+function              void paste_processes(Context *context);
+function              void gather_processes_from_trie(Context *context);
+
+function              void remove_process_from_process_list(Context *context, Process_List *list, Process *p);
+function          Process *connect_detached_processes(Context *context, Process *out, Process *in);
+function Connection_Result connect_processes(Context *context, Process *out, Process *in);
+function              void remove_wire_connection(Context *context, Process *wire, Process_Connection_Flag conn_flags);
+function              void add_wire_connection(Context *context, Process *wire, Process *process, Process_Connection conn, U32 which_conn);
+function              void handle_label_editing(Context *context, Process_List ps);
+function          Process *find_process_connection(Context *context, Process *p, Process_Connection conn, U32 which_conn);
+
+
+
+//////////////////////////////////////
+// Process
+//////////////////////////////////////
+
+#define Process_Flag_Xlist(X)\
+  /* Name               Shift */\
+  X( Wire            ,  0      )\
+  X( Empty           ,  1      )\
+  X( Cup             ,  2      )\
+  X( Cap             ,  3      )\
+  X( Identity        ,  4      )\
+  X( Drag_In         ,  5      )\
+  X( Drag_Out        ,  6      )\
+  X( Invisible       ,  7      )\
+  X( AsBox           ,  8      )\
+  X( RefIsActive     ,  9      )\
+  /**/\
+  X( TextEdit        , 10      )\
+  X( CanBeActive     , 11      )\
+  X( Clickable       , 12      )\
+  X( FitToText       , 13      )\
+  X( UseLabelCString , 14      )
+
+
+typedef enum {
+#define X(name, shift, ...)\
+  Process_Flag_##name        = 1 << (shift),
+  Process_Flag_Xlist(X)
+#undef X
+} Process_Flag;
+
+typedef enum {
+#define X(name, shift, ...)\
+  Process_Flag_Kind_##name        = (shift),
+  Process_Flag_Xlist(X)
+#undef X
+} Process_Flag_Kind;
+
+struct Connection_Result {
+  Process *out;
+  Process *in;
+  Process *new_wire;
+};
+
+
+
+
+struct Process_Ref {
+  Process *process;
+  struct Process_Ref *next;
+};
+
+
 
 
 
@@ -451,6 +458,8 @@ struct Context {
   String_Chunk_List save_file_name;
 
   View views[View_Count];
+
+  What_Is_This what_is_this;
 };
 
 

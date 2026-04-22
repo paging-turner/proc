@@ -175,7 +175,6 @@ Define_Keybind_And_Action(
   ) {
   if (env->moved_wire && env->context) {
     Process *hot_process = env->context->hot_process.process;
-    Process_Edit empty_proc_edit = (Process_Edit){0};
 
     if (hot_process) {
       if (Get_Flag(hot_process->flags, Process_Flag_Wire)) {
@@ -184,7 +183,7 @@ Define_Keybind_And_Action(
           // move wire to hovered wire
           U32 which_conn = hot_process->which_conn[env->moved_wire_conn];
           if (env->moved_wire != hot_process) {
-            remove_wire_connection(env->context, empty_proc_edit, env->moved_wire, (1<<env->moved_wire_conn));
+            remove_wire_connection(env->context, env->moved_wire, (1<<env->moved_wire_conn));
             add_wire_connection(env->context, env->moved_wire, connected_process, env->moved_wire_conn, which_conn);
           }
         }
@@ -197,7 +196,7 @@ Define_Keybind_And_Action(
         } else {
           which_conn = connected_process->conn_count[env->moved_wire_conn];
         }
-        remove_wire_connection(env->context, empty_proc_edit, env->moved_wire, (1<<env->moved_wire_conn));
+        remove_wire_connection(env->context, env->moved_wire, (1<<env->moved_wire_conn));
         add_wire_connection(env->context, env->moved_wire, connected_process, env->moved_wire_conn, which_conn);
       }
     }
@@ -681,7 +680,6 @@ Define_Keybind_And_Action(
   Context *context = env->context;
   Process_Selection selection = env->selection;
 
-
   if (check_keybind(context, Keybind_Sym_REF(Undo), selection) == Keybind_Result_Enter) {
     handled = 1;
     proc_trie_undo(context->proc_trie);
@@ -702,7 +700,6 @@ Define_Keybind_And_Action(
   B32 handled = 0;
   Context *context = env->context;
   Process_Selection selection = env->selection;
-
 
   if (check_keybind(context, Keybind_Sym_REF(Redo), selection) == Keybind_Result_Enter) {
     handled = 1;

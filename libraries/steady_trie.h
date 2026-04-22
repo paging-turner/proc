@@ -264,6 +264,7 @@ typedef struct Steady_Trie(Iterator) {
 typedef enum Steady_Trie(Edit_Kind) {
   Steady_Trie(Edit_Insert),
   Steady_Trie(Edit_Delete),
+  Steady_Trie(Edit_Update),
   Steady_Trie(Edit_Search),
 } Steady_Trie(Edit_Kind);
 
@@ -284,6 +285,7 @@ Steady_Function char *steady_trie(get_edit_kind_name)(
   switch (edit_kind) {
   case Steady_Trie(Edit_Insert): name = "Insert"; break;
   case Steady_Trie(Edit_Delete): name = "Delete"; break;
+  case Steady_Trie(Edit_Update): name = "Update"; break;
   case Steady_Trie(Edit_Search): name = "Search"; break;
   default: Assert(0);
   }
