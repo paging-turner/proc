@@ -317,21 +317,21 @@ function Process *create_ui_element(Context *context) {
 
 
 
-function void add_to_what_is_this(
+function void add_to_process_edit_list(
   Context *context,
   Proc_Trie_Edit_Kind edit_kind,
   Process *process,
   Process new_process
   ) {
   // TODO: Should we use an arena other than temp, just in case we delay gather between frames?
-  NEW_Process_Edit *proc_edit = push_struct(context->temp_arena, NEW_Process_Edit);
+  Process_Edit *proc_edit = push_struct(context->temp_arena, Process_Edit);
 
   if (proc_edit) {
     proc_edit->edit_kind = edit_kind;
     proc_edit->process = process;
     proc_edit->new_process = new_process;
 
-    SLLQueuePush(context->what_is_this.first, context->what_is_this.last, proc_edit);
+    SLLQueuePush(context->process_edit_list.first, context->process_edit_list.last, proc_edit);
   }
 }
 
@@ -340,7 +340,7 @@ function void add_to_what_is_this(
 function void apply_process_edits(Context *context) {
   Arena *arena = context->permanent_arena;
 
-  for (NEW_Process_Edit *proc_edit = context->what_is_this.first;
+  for (Process_Edit *proc_edit = context->process_edit_list.first;
        proc_edit != 0;
        proc_edit = proc_edit->next) {
     char *edit_name = proc_trie_get_edit_kind_name(proc_edit->edit_kind);
@@ -373,7 +373,7 @@ function void gather_processes_from_trie(Context *context) {
   Proc_Trie_Trie *trie = context->proc_trie;
 
   apply_process_edits(context);
-  context->what_is_this = (What_Is_This){0};
+  context->process_edit_list = (Process_Edit_List){0};
 
   proc_trie_commit(trie);
 
@@ -421,7 +421,7 @@ function Process *create_process(Context *context) {
   Process *p = push_permanent_process(context);
 
   if (p) {
-    add_to_what_is_this(context, Proc_Trie_Edit_Insert, p, (Process){0});
+    add_to_process_edit_list(context, Proc_Trie_Edit_Insert, p, (Process){0});
   }
 
   return p;
@@ -436,7 +436,7 @@ function Process *create_processes(Context *context, U32 process_count) {
     for (U32 i = 0; i < process_count; ++i) {
       Process *p = ps + i;
       keys[i] = (Proc_Trie_Key)(p);
-      add_to_what_is_this(context, Proc_Trie_Edit_Insert, p, (Process){0});
+      add_to_process_edit_list(context, Proc_Trie_Edit_Insert, p, (Process){0});
     }
 
     gather_processes_from_trie(context);
@@ -480,10 +480,10 @@ function String_Chunk_List copy_string_chunk_list(Context *context, String_Chunk
 }
 
 
-function B32 what_is_this_contains_process(Context *context, Process *p) {
+function B32 process_edit_list_contains_process(Context *context, Process *p) {
   B32 contains = 0;
 
-  for (NEW_Process_Edit *proc_edit = context->what_is_this.first;
+  for (Process_Edit *proc_edit = context->process_edit_list.first;
        proc_edit != 0;
        proc_edit = proc_edit->next) {
     if (proc_edit->process == p) {
@@ -503,7 +503,7 @@ function Process *replace_process_with(
   ) {
   Process *p = 0;
   // TODO: WE SHOULD PROBABLY RETURN THE FOUND PROCESS, SO THAT WE CAN ASSIGN IT TO `p` AND RETURN IT!!!!!!!
-  B32 proc_is_already_being_edited = what_is_this_contains_process(context, to_replace);
+  B32 proc_is_already_being_edited = process_edit_list_contains_process(context, to_replace);
 
   if (!proc_is_already_being_edited) {
     p = push_permanent_process(context);
@@ -514,7 +514,7 @@ function Process *replace_process_with(
       if (Get_Flag(wire->flags, Process_Flag_Wire)) {
         B32 replace_out = wire->out == to_replace;
         B32 replace_in = wire->in == to_replace;
-        B32 wire_is_already_being_edited = what_is_this_contains_process(context, wire);
+        B32 wire_is_already_being_edited = process_edit_list_contains_process(context, wire);
 
         if ((replace_out || replace_in) && !wire_is_already_being_edited) {
           Process new_wire = (Process){0};
@@ -522,13 +522,13 @@ function Process *replace_process_with(
           new_wire.out = replace_out ? p : new_wire.out;
           new_wire.in = replace_in ? p : new_wire.in;
 
-          add_to_what_is_this(context, Proc_Trie_Edit_Update, wire, new_wire);
+          add_to_process_edit_list(context, Proc_Trie_Edit_Update, wire, new_wire);
         }
       }
     }
 
     if (p) {
-      add_to_what_is_this(context, Proc_Trie_Edit_Update, to_replace, p_lit);
+      add_to_process_edit_list(context, Proc_Trie_Edit_Update, to_replace, p_lit);
     }
   }
 
@@ -1611,16 +1611,16 @@ function void remove_wire_connection(
 
 
 
-function void add_process_to_what_is_this(
+function void add_process_to_process_edit_list(
   Context *context,
   Process *p,
   Proc_Trie_Edit_Kind edit_kind,
   Process *new_p
   ) {
   // TODO: Do we still need to return the delete confirmation?
-  NEW_Process_Edit *found_proc_edit = 0;
+  Process_Edit *found_proc_edit = 0;
 
-  for (NEW_Process_Edit *proc_edit = context->what_is_this.first;
+  for (Process_Edit *proc_edit = context->process_edit_list.first;
        proc_edit != 0;
        proc_edit = proc_edit->next) {
     if (proc_edit->process == p) {
@@ -1629,11 +1629,11 @@ function void add_process_to_what_is_this(
   }
 
   if (found_proc_edit == 0) {
-    found_proc_edit = arena_push(context->temp_arena, sizeof(NEW_Process_Edit));
+    found_proc_edit = arena_push(context->temp_arena, sizeof(Process_Edit));
   }
 
   if (found_proc_edit) {
-    SLLQueuePush(context->what_is_this.first, context->what_is_this.last, found_proc_edit);
+    SLLQueuePush(context->process_edit_list.first, context->process_edit_list.last, found_proc_edit);
     found_proc_edit->process = p;
     found_proc_edit->edit_kind = edit_kind;
   }
@@ -1646,7 +1646,7 @@ function void add_process_to_what_is_this(
 function void delete_process(Context *context, Process *p) {
   Proc_Trie_Trie *trie = context->proc_trie;
 
-  add_process_to_what_is_this(context, p, Proc_Trie_Edit_Delete, 0);
+  add_process_to_process_edit_list(context, p, Proc_Trie_Edit_Delete, 0);
 
   // if deleting a wire, adjust connected processes
   if (Get_Flag(p->flags, Process_Flag_Wire)) {
@@ -1667,14 +1667,14 @@ function void delete_process(Context *context, Process *p) {
             if (test_wire->in == wire->in && test_wire->which_in > wire->which_in) {
               Process edit_p = *test_wire;
               edit_p.which_in -= 1;
-              add_process_to_what_is_this(context, test_wire, Proc_Trie_Edit_Update, &edit_p);
+              add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, &edit_p);
             }
           }
 
           if (wire->in) {
             Process edit_p = *wire->in;
             edit_p.in_count -= 1;
-            add_process_to_what_is_this(context, wire->in, Proc_Trie_Edit_Update, &edit_p);
+            add_process_to_process_edit_list(context, wire->in, Proc_Trie_Edit_Update, &edit_p);
           }
         }
 
@@ -1684,14 +1684,14 @@ function void delete_process(Context *context, Process *p) {
             if (test_wire->out == wire->out && test_wire->which_out > wire->which_out) {
               Process edit_p = *test_wire;
               edit_p.which_out -= 1;
-              add_process_to_what_is_this(context, test_wire, Proc_Trie_Edit_Update, &edit_p);
+              add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, &edit_p);
             }
           }
 
           if (wire->out) {
             Process edit_p = *wire->out;
             edit_p.out_count -= 1;
-            add_process_to_what_is_this(context, wire->out, Proc_Trie_Edit_Update, &edit_p);
+            add_process_to_process_edit_list(context, wire->out, Proc_Trie_Edit_Update, &edit_p);
           }
         }
 
@@ -1699,7 +1699,7 @@ function void delete_process(Context *context, Process *p) {
       }
 
       if (should_delete) {
-        add_process_to_what_is_this(context, wire, Proc_Trie_Edit_Delete, 0);
+        add_process_to_process_edit_list(context, wire, Proc_Trie_Edit_Delete, 0);
       }
       wire = wire->next;
     }

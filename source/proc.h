@@ -108,17 +108,17 @@ typedef struct Process_Selection Process_Selection;
 typedef struct Process_List Process_List;
 typedef struct Process_Ref Process_Ref;
 // TODO: rename
-typedef struct NEW_Process_Edit {
+typedef struct Process_Edit {
   Proc_Trie_Edit_Kind edit_kind;
   Process *process;
   Process new_process;
-  struct NEW_Process_Edit *next;
-} NEW_Process_Edit;
+  struct Process_Edit *next;
+} Process_Edit;
 // TODO: rename
-typedef struct What_Is_This {
-  NEW_Process_Edit *first;
-  NEW_Process_Edit *last;
-} What_Is_This;
+typedef struct Process_Edit_List {
+  Process_Edit *first;
+  Process_Edit *last;
+} Process_Edit_List;
 typedef enum Process_Connection Process_Connection;
 typedef enum Process_Connection_Flag Process_Connection_Flag;
 typedef struct Connection_Result Connection_Result;
@@ -459,7 +459,7 @@ struct Context {
 
   View views[View_Count];
 
-  What_Is_This what_is_this;
+  Process_Edit_List process_edit_list;
 };
 
 
