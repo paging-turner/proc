@@ -337,33 +337,65 @@ function void add_to_process_edit_list(
 
 
 
-function void apply_process_edits(Context *context) {
+
+function void well_isnt_this_awkward(Context *context, B32 handle_wires) {
   Arena *arena = context->permanent_arena;
 
+  // TODO: @Speed
   for (Process_Edit *proc_edit = context->process_edit_list.first;
        proc_edit != 0;
        proc_edit = proc_edit->next) {
-    char *edit_name = proc_trie_get_edit_kind_name(proc_edit->edit_kind);
+    B32 is_wire = Get_Flag(proc_edit->process->flags, Process_Flag_Wire) ? 1 : 0;
+    B32 should_edit = !(handle_wires ^ is_wire);
 
-    switch(proc_edit->edit_kind) {
-    case Proc_Trie_Edit_Insert: {
-      proc_trie_set(arena, context->proc_trie, IntFromPtr(proc_edit->process), proc_edit->process);
-    } break;
-    case Proc_Trie_Edit_Delete: {
-      proc_trie_delete(arena, context->proc_trie, IntFromPtr(proc_edit->process));
-    } break;
-    case Proc_Trie_Edit_Update: {
-      Process *new_p = push_struct(arena, Process);
-      if (new_p) {
-        *new_p = proc_edit->new_process;
-        // TODO: WHEN WE DELETE/SET NEW PROCS, IF THERE ARE WIRES THAT REFERENCE THE OLD PROCS, WE NEED TO UPDATE THOSE IN/OUT CONNECTIONS. THIS IS ALL SCREWED UP SINCE WE HANDLE THOSE CHANGES DURING `connect_processes`. WE NEED TO EITHER HOLD OFF ON SETTING UP THE IN/OUT UNTIL HERE??? OR WHAT????
+    if (should_edit) {
+      switch(proc_edit->edit_kind) {
+      case Proc_Trie_Edit_Insert: {
+        Assert(proc_edit->process);
+        if (is_wire) {
+          // TODO: Check the rest of the edits to see if the wire is connected to any of those processes, if so, replace the pointer with the new edited pointer.
+          for (Process_Edit *test_edit = context->process_edit_list.first;
+               test_edit != 0;
+               test_edit = test_edit->next) {
+            if (proc_edit->process->in == test_edit->process) {
+              proc_edit->process->in = test_edit->new_process_ptr;
+            }
+
+            if (proc_edit->process->out == test_edit->process) {
+              proc_edit->process->out = test_edit->new_process_ptr;
+            }
+          }
+        }
+        proc_trie_set(arena, context->proc_trie, IntFromPtr(proc_edit->process), proc_edit->process);
+      } break;
+      case Proc_Trie_Edit_Delete: {
         proc_trie_delete(arena, context->proc_trie, IntFromPtr(proc_edit->process));
-        proc_trie_set(arena, context->proc_trie, IntFromPtr(new_p), new_p);
+      } break;
+      case Proc_Trie_Edit_Update: {
+        Process *new_p = push_struct(arena, Process);
+        if (new_p) {
+          *new_p = proc_edit->new_process;
+          proc_edit->new_process_ptr = new_p;
+          // TODO: See(replace_process_with) WHEN WE DELETE/SET NEW PROCS, IF THERE ARE WIRES THAT REFERENCE THE OLD PROCS, WE NEED TO UPDATE THOSE IN/OUT CONNECTIONS. THIS IS ALL SCREWED UP SINCE WE HANDLE THOSE CHANGES DURING `connect_processes`. WE NEED TO EITHER HOLD OFF ON SETTING UP THE IN/OUT UNTIL HERE??? OR WHAT????
+          proc_trie_delete(arena, context->proc_trie, IntFromPtr(proc_edit->process));
+          proc_trie_set(arena, context->proc_trie, IntFromPtr(new_p), new_p);
+        }
+      } break;
+      default: Assert(0);
       }
-    } break;
-    default: Assert(0);
     }
   }
+}
+
+
+
+
+function void apply_process_edits(Context *context) {
+  Arena *arena = context->permanent_arena;
+
+  // TODO: @Speed
+  well_isnt_this_awkward(context, 0);
+  well_isnt_this_awkward(context, 1);
 }
 
 
@@ -496,43 +528,19 @@ function B32 process_edit_list_contains_process(Context *context, Process *p) {
 }
 
 
-function Process *replace_process_with(
+
+function void replace_process_with(
   Context *context,
   Process *to_replace,
   Process p_lit
   ) {
-  Process *p = 0;
-  // TODO: WE SHOULD PROBABLY RETURN THE FOUND PROCESS, SO THAT WE CAN ASSIGN IT TO `p` AND RETURN IT!!!!!!!
   B32 proc_is_already_being_edited = process_edit_list_contains_process(context, to_replace);
 
   if (!proc_is_already_being_edited) {
-    p = push_permanent_process(context);
     Proc_Trie_Trie *trie = context->proc_trie;
 
-    // check if we need to replace any wires connected to the process to replace
-    for (Process *wire = context->views[View_Kind_Procs].processes.first; wire != 0; wire = wire->next) {
-      if (Get_Flag(wire->flags, Process_Flag_Wire)) {
-        B32 replace_out = wire->out == to_replace;
-        B32 replace_in = wire->in == to_replace;
-        B32 wire_is_already_being_edited = process_edit_list_contains_process(context, wire);
-
-        if ((replace_out || replace_in) && !wire_is_already_being_edited) {
-          Process new_wire = (Process){0};
-          new_wire = *wire;
-          new_wire.out = replace_out ? p : new_wire.out;
-          new_wire.in = replace_in ? p : new_wire.in;
-
-          add_to_process_edit_list(context, Proc_Trie_Edit_Update, wire, new_wire);
-        }
-      }
-    }
-
-    if (p) {
-      add_to_process_edit_list(context, Proc_Trie_Edit_Update, to_replace, p_lit);
-    }
+    add_to_process_edit_list(context, Proc_Trie_Edit_Update, to_replace, p_lit);
   }
-
-  return p;
 }
 
 
@@ -1262,11 +1270,13 @@ function S32 collect_save_files(Context *context) {
 }
 
 
+
 function void save_file(Context *context, Process *element) {
   if (context->save_file_name.first && context->save_file_name.last) {
     write_save_file(context, context->temp_arena, context->save_file_name);
   }
 }
+
 
 
 function void do_open_file(Context *context, B32 sizing) {
@@ -1302,6 +1312,7 @@ function void do_open_file(Context *context, B32 sizing) {
   }
   ui_box_end(context, &open_file_box, sizing);
 }
+
 
 
 function void do_save_file_as(Context *context, B32 sizing) {
@@ -1355,7 +1366,6 @@ function Vector2 get_process_position(Context *context, View *view, Process *pro
   B32 is_active = is_active_process(context, process);
   B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging);
 
-
   if (is_active && is_dragging) {
     Vector2 delta = Vector2Subtract(context->ui_state.mouse_position, context->active_position);
     position = Vector2Add(position, Vector2Scale(delta, 1.0f/view->camera.zoom));
@@ -1363,6 +1373,7 @@ function Vector2 get_process_position(Context *context, View *view, Process *pro
 
   return position;
 }
+
 
 
 function Vector2 get_process_wire_position(
@@ -1495,6 +1506,7 @@ function void remove_process_from_active_processes(Context *context, Process *p)
 }
 
 
+
 function void exit_add_wire_mode(Context *context) {
   clear_active_processes(context);
   Unset_Flag(context->flags, Context_Flag_NewWire);
@@ -1514,10 +1526,10 @@ function void add_wire_connection(
     Process new_wire_lit = *wire;
 
     new_process_lit.conn_count[conn] += 1;
-    Process *new_process = replace_process_with(context, process, new_process_lit);
+    replace_process_with(context, process, new_process_lit);
 
     // Add wire at the given connection index, moving any wires that come after that index over to the right.
-    new_wire_lit.conn[conn] = new_process;
+    new_wire_lit.conn[conn] = process;
     new_wire_lit.which_conn[conn] = which_conn;
     replace_process_with(context, wire, new_wire_lit);
 
@@ -1740,6 +1752,7 @@ function Connection_Result connect_processes(
   Process *in
   ) {
   Connection_Result result = (Connection_Result){0};
+  // TODO: We should probably check for in/out *before* calling `create_process`... it just feels leaky.
   result.new_wire = create_process(context);
 
   if (result.new_wire && out && in) {
@@ -1749,8 +1762,11 @@ function Connection_Result connect_processes(
     new_out_lit.out_count += 1;
     new_in_lit.in_count += 1;
 
-    result.out = replace_process_with(context, out, new_out_lit);
-    result.in = replace_process_with(context, in, new_in_lit);
+    result.out = out;
+    result.in = in;
+
+    replace_process_with(context, out, new_out_lit);
+    replace_process_with(context, in, new_in_lit);
 
     Set_Flag(result.new_wire->flags, Process_Flag_Wire);
     result.new_wire->out = result.out;

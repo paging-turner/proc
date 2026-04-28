@@ -107,18 +107,20 @@ typedef struct Process_Shape Process_Shape;
 typedef struct Process_Selection Process_Selection;
 typedef struct Process_List Process_List;
 typedef struct Process_Ref Process_Ref;
-// TODO: rename
+
 typedef struct Process_Edit {
   Proc_Trie_Edit_Kind edit_kind;
   Process *process;
   Process new_process;
+  Process *new_process_ptr;
   struct Process_Edit *next;
 } Process_Edit;
-// TODO: rename
+
 typedef struct Process_Edit_List {
   Process_Edit *first;
   Process_Edit *last;
 } Process_Edit_List;
+
 typedef enum Process_Connection Process_Connection;
 typedef enum Process_Connection_Flag Process_Connection_Flag;
 typedef struct Connection_Result Connection_Result;
