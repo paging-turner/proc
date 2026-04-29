@@ -337,6 +337,52 @@ function void add_to_process_edit_list(
 
 
 
+function void this_will_fix_things_no_worries(Context *context, Process_Edit *proc_edit) {
+  for (Process_Edit *test_edit = context->process_edit_list.first;
+       test_edit != 0;
+       test_edit = test_edit->next) {
+    if (proc_edit->process->in == test_edit->process) {
+      proc_edit->process->in = test_edit->new_process_ptr;
+    }
+
+    if (proc_edit->process->out == test_edit->process) {
+      proc_edit->process->out = test_edit->new_process_ptr;
+    }
+  }
+}
+
+
+
+function void this_will_also_fix_things(Context *context, Process_Edit *proc_edit) {
+  Arena *arena = context->permanent_arena;
+
+  for (Process *w = context->views[View_Kind_Procs].processes.first; w != 0; w = w->next) {
+    if (Get_Flag(w->flags, Process_Flag_Wire)) {
+      Process new_wire_lit = *w;
+      B32 in_match = w->in == proc_edit->process;
+      B32 out_match = w->out == proc_edit->process;
+
+      if (in_match) {
+        new_wire_lit.in = proc_edit->new_process_ptr;
+      }
+
+      if (out_match) {
+        new_wire_lit.out = proc_edit->new_process_ptr;
+      }
+
+      if (in_match || out_match) {
+        Process *new_w = push_struct(arena, Process);
+        if (new_w) {
+          *new_w = new_wire_lit;
+          proc_trie_delete(arena, context->proc_trie, IntFromPtr(w));
+          proc_trie_set(arena, context->proc_trie, IntFromPtr(new_w), new_w);
+        }
+      }
+    }
+  }
+}
+
+
 
 function void well_isnt_this_awkward(Context *context, B32 handle_wires) {
   Arena *arena = context->permanent_arena;
@@ -353,18 +399,7 @@ function void well_isnt_this_awkward(Context *context, B32 handle_wires) {
       case Proc_Trie_Edit_Insert: {
         Assert(proc_edit->process);
         if (is_wire) {
-          // TODO: Check the rest of the edits to see if the wire is connected to any of those processes, if so, replace the pointer with the new edited pointer.
-          for (Process_Edit *test_edit = context->process_edit_list.first;
-               test_edit != 0;
-               test_edit = test_edit->next) {
-            if (proc_edit->process->in == test_edit->process) {
-              proc_edit->process->in = test_edit->new_process_ptr;
-            }
-
-            if (proc_edit->process->out == test_edit->process) {
-              proc_edit->process->out = test_edit->new_process_ptr;
-            }
-          }
+          this_will_fix_things_no_worries(context, proc_edit);
         }
         proc_trie_set(arena, context->proc_trie, IntFromPtr(proc_edit->process), proc_edit->process);
       } break;
@@ -377,6 +412,9 @@ function void well_isnt_this_awkward(Context *context, B32 handle_wires) {
           *new_p = proc_edit->new_process;
           proc_edit->new_process_ptr = new_p;
           // TODO: See(replace_process_with) WHEN WE DELETE/SET NEW PROCS, IF THERE ARE WIRES THAT REFERENCE THE OLD PROCS, WE NEED TO UPDATE THOSE IN/OUT CONNECTIONS. THIS IS ALL SCREWED UP SINCE WE HANDLE THOSE CHANGES DURING `connect_processes`. WE NEED TO EITHER HOLD OFF ON SETTING UP THE IN/OUT UNTIL HERE??? OR WHAT????
+          if (!is_wire) {
+            this_will_also_fix_things(context, proc_edit);
+          }
           proc_trie_delete(arena, context->proc_trie, IntFromPtr(proc_edit->process));
           proc_trie_set(arena, context->proc_trie, IntFromPtr(new_p), new_p);
         }
@@ -1752,31 +1790,33 @@ function Connection_Result connect_processes(
   Process *in
   ) {
   Connection_Result result = (Connection_Result){0};
-  // TODO: We should probably check for in/out *before* calling `create_process`... it just feels leaky.
-  result.new_wire = create_process(context);
 
-  if (result.new_wire && out && in) {
-    Process new_out_lit = *out;
-    Process new_in_lit = *in;
+  if (out && in) {
+    result.new_wire = create_process(context);
 
-    new_out_lit.out_count += 1;
-    new_in_lit.in_count += 1;
+    if (result.new_wire) {
+      Process new_out_lit = *out;
+      Process new_in_lit = *in;
 
-    result.out = out;
-    result.in = in;
+      new_out_lit.out_count += 1;
+      new_in_lit.in_count += 1;
 
-    replace_process_with(context, out, new_out_lit);
-    replace_process_with(context, in, new_in_lit);
+      result.out = out;
+      result.in = in;
 
-    Set_Flag(result.new_wire->flags, Process_Flag_Wire);
-    result.new_wire->out = result.out;
-    result.new_wire->in = result.in;
+      replace_process_with(context, out, new_out_lit);
+      replace_process_with(context, in, new_in_lit);
 
-    result.new_wire->which_out = out->out_count;
-    result.new_wire->which_in = in->in_count;
+      Set_Flag(result.new_wire->flags, Process_Flag_Wire);
+      result.new_wire->out = result.out;
+      result.new_wire->in = result.in;
+
+      result.new_wire->which_out = out->out_count;
+      result.new_wire->which_in = in->in_count;
+    }
+
+    gather_processes_from_trie(context);
   }
-
-  gather_processes_from_trie(context);
 
   return result;
 }
