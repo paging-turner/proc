@@ -317,6 +317,27 @@ function Process *create_ui_element(Context *context) {
 
 
 
+function B32 process_edit_list_contains_process(
+  Context *context,
+  Process_Edit_List proc_edit_list,
+  Process *p
+  ) {
+  B32 contains = 0;
+
+  for (Process_Edit *proc_edit = proc_edit_list.first;
+       proc_edit != 0;
+       proc_edit = proc_edit->next) {
+    if (proc_edit->process == p) {
+      contains = 1;
+      break;
+    }
+  }
+
+  return contains;
+}
+
+
+
 function void add_to_process_edit_list(
   Context *context,
   Proc_Trie_Edit_Kind edit_kind,
@@ -337,7 +358,8 @@ function void add_to_process_edit_list(
 
 
 
-function void this_will_fix_things_no_worries(Context *context, Process_Edit *proc_edit) {
+function void what_are_we_doing_here(Context *context, Process_Edit *proc_edit) {
+  // update the pointers of the wire if the connected processes have been updated
   for (Process_Edit *test_edit = context->process_edit_list.first;
        test_edit != 0;
        test_edit = test_edit->next) {
@@ -353,38 +375,8 @@ function void this_will_fix_things_no_worries(Context *context, Process_Edit *pr
 
 
 
-function void this_will_also_fix_things(Context *context, Process_Edit *proc_edit) {
-  Arena *arena = context->permanent_arena;
-
-  for (Process *w = context->views[View_Kind_Procs].processes.first; w != 0; w = w->next) {
-    if (Get_Flag(w->flags, Process_Flag_Wire)) {
-      Process new_wire_lit = *w;
-      B32 in_match = w->in == proc_edit->process;
-      B32 out_match = w->out == proc_edit->process;
-
-      if (in_match) {
-        new_wire_lit.in = proc_edit->new_process_ptr;
-      }
-
-      if (out_match) {
-        new_wire_lit.out = proc_edit->new_process_ptr;
-      }
-
-      if (in_match || out_match) {
-        Process *new_w = push_struct(arena, Process);
-        if (new_w) {
-          *new_w = new_wire_lit;
-          proc_trie_delete(arena, context->proc_trie, IntFromPtr(w));
-          proc_trie_set(arena, context->proc_trie, IntFromPtr(new_w), new_w);
-        }
-      }
-    }
-  }
-}
-
-
-
-function void well_isnt_this_awkward(Context *context, B32 handle_wires) {
+function void apply_process_edits_by_kind(Context *context, B32 handle_wires) {
+  Assert(handle_wires == 0 || handle_wires == 1);
   Arena *arena = context->permanent_arena;
 
   // TODO: @Speed
@@ -398,9 +390,11 @@ function void well_isnt_this_awkward(Context *context, B32 handle_wires) {
       switch(proc_edit->edit_kind) {
       case Proc_Trie_Edit_Insert: {
         Assert(proc_edit->process);
+
         if (is_wire) {
-          this_will_fix_things_no_worries(context, proc_edit);
+          what_are_we_doing_here(context, proc_edit);
         }
+
         proc_trie_set(arena, context->proc_trie, IntFromPtr(proc_edit->process), proc_edit->process);
       } break;
       case Proc_Trie_Edit_Delete: {
@@ -411,12 +405,51 @@ function void well_isnt_this_awkward(Context *context, B32 handle_wires) {
         if (new_p) {
           *new_p = proc_edit->new_process;
           proc_edit->new_process_ptr = new_p;
-          // TODO: See(replace_process_with) WHEN WE DELETE/SET NEW PROCS, IF THERE ARE WIRES THAT REFERENCE THE OLD PROCS, WE NEED TO UPDATE THOSE IN/OUT CONNECTIONS. THIS IS ALL SCREWED UP SINCE WE HANDLE THOSE CHANGES DURING `connect_processes`. WE NEED TO EITHER HOLD OFF ON SETTING UP THE IN/OUT UNTIL HERE??? OR WHAT????
-          if (!is_wire) {
-            this_will_also_fix_things(context, proc_edit);
+
+          if (is_wire) {
+            what_are_we_doing_here(context, proc_edit);
           }
-          proc_trie_delete(arena, context->proc_trie, IntFromPtr(proc_edit->process));
-          proc_trie_set(arena, context->proc_trie, IntFromPtr(new_p), new_p);
+          else {
+            ArenaTemp temp_arena = arena_begin_temp(context->temp_arena);
+            Process_Edit_List wire_edit_list = (Process_Edit_List){0};
+
+            // update any non-edited wires connected to proc being updated
+            // TODO: Just like how we had to build up an edit-list when making edits to processes, we need to build up an edit-list for wires in the following loop. Currently, we end up updated the same wire multiple times. This *almost* feels like a recursive definition problem, but it really is all ok, right?
+            for (Process *w = context->views[View_Kind_Procs].processes.first; w != 0; w = w->next) {
+              if (Get_Flag(w->flags, Process_Flag_Wire)) {
+                B32 wire_in_edit_list = 0;
+                Process new_wire_lit = *w;
+                // find current new-wire lit if it exists, and overwrite `new_wire_lit`
+                for (Process_Edit *proc_edit = wire_edit_list.first;
+                     proc_edit != 0;
+                     proc_edit = proc_edit->next) {
+                  if (proc_edit->process == w) {
+                    wire_in_edit_list = 1;
+                    new_wire_lit = proc_edit->new_process;
+                  }
+                }
+                B32 in_match = w->in == proc_edit->process;
+                B32 out_match = w->out == proc_edit->process;
+
+                if (in_match) {
+                  new_wire_lit.in = proc_edit->new_process_ptr;
+                }
+
+                if (out_match) {
+                  new_wire_lit.out = proc_edit->new_process_ptr;
+                }
+
+                if (!wire_in_edit_list && (in_match || out_match)) {
+                  add_to_process_edit_list(context, Proc_Trie_Edit_Update, w, new_wire_lit);
+                }
+              }
+            }
+
+            proc_trie_delete(arena, context->proc_trie, IntFromPtr(proc_edit->process));
+            proc_trie_set(arena, context->proc_trie, IntFromPtr(new_p), new_p);
+
+            arena_end_temp(&temp_arena);
+          }
         }
       } break;
       default: Assert(0);
@@ -428,13 +461,6 @@ function void well_isnt_this_awkward(Context *context, B32 handle_wires) {
 
 
 
-function void apply_process_edits(Context *context) {
-  Arena *arena = context->permanent_arena;
-
-  // TODO: @Speed
-  well_isnt_this_awkward(context, 0);
-  well_isnt_this_awkward(context, 1);
-}
 
 
 function void gather_processes_from_trie(Context *context) {
@@ -442,7 +468,10 @@ function void gather_processes_from_trie(Context *context) {
   View *view = context->views + View_Kind_Procs;
   Proc_Trie_Trie *trie = context->proc_trie;
 
-  apply_process_edits(context);
+  { // apply process edits
+    apply_process_edits_by_kind(context, 0);
+    apply_process_edits_by_kind(context, 1);
+  }
   context->process_edit_list = (Process_Edit_List){0};
 
   proc_trie_commit(trie);
@@ -535,6 +564,7 @@ function void remove_process_from_process_list(Context *context, Process_List *l
 }
 
 
+
 function String_Chunk_List copy_string_chunk_list(Context *context, String_Chunk_List *scl) {
   String_Chunk_List result = (String_Chunk_List){0};
 
@@ -550,20 +580,6 @@ function String_Chunk_List copy_string_chunk_list(Context *context, String_Chunk
 }
 
 
-function B32 process_edit_list_contains_process(Context *context, Process *p) {
-  B32 contains = 0;
-
-  for (Process_Edit *proc_edit = context->process_edit_list.first;
-       proc_edit != 0;
-       proc_edit = proc_edit->next) {
-    if (proc_edit->process == p) {
-      contains = 1;
-      break;
-    }
-  }
-
-  return contains;
-}
 
 
 
@@ -572,7 +588,7 @@ function void replace_process_with(
   Process *to_replace,
   Process p_lit
   ) {
-  B32 proc_is_already_being_edited = process_edit_list_contains_process(context, to_replace);
+  B32 proc_is_already_being_edited = process_edit_list_contains_process(context, context->process_edit_list, to_replace);
 
   if (!proc_is_already_being_edited) {
     Proc_Trie_Trie *trie = context->proc_trie;

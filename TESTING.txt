@@ -19,6 +19,8 @@ For now, we will have to manually test a bunch of features. This file exists to 
     3. Connect processes
     4. Delete the new wire.
     EXPECT: To only have the two processes, and the wire connecting them should be gone.
+    5. Undo
+    EXPECT: The wire re-appears and is still connected to the two processes.
 
 
 
@@ -29,3 +31,12 @@ For now, we will have to manually test a bunch of features. This file exists to 
     3. Connect the second to the third
     4. Delete the wire from the first connection
     NOTE: The test can be generalized, as long as you don't delete the *last* wire.
+
+
+
+------------------------------------------
+004 Multi-select wire connection
+    1. Create three processes
+    2. Select two of the processes
+    3. Perform a multi-select connection to the non-selected process
+    NOTE: Should have the two selected processes connected to the third process.
