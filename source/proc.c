@@ -358,17 +358,19 @@ function void add_to_process_edit_list(
 
 
 
-function void what_are_we_doing_here(Context *context, Process_Edit *proc_edit) {
+function void update_edited_wire_pointers(Context *context, Process_Edit *proc_edit) {
   // update the pointers of the wire if the connected processes have been updated
   for (Process_Edit *test_edit = context->process_edit_list.first;
        test_edit != 0;
        test_edit = test_edit->next) {
-    if (proc_edit->process->in == test_edit->process) {
-      proc_edit->process->in = test_edit->new_process_ptr;
-    }
+    if (!Get_Flag(test_edit->process->flags, Process_Flag_Wire)) {
+      if (proc_edit->process->in == test_edit->process) {
+        proc_edit->process->in = test_edit->new_process_ptr;
+      }
 
-    if (proc_edit->process->out == test_edit->process) {
-      proc_edit->process->out = test_edit->new_process_ptr;
+      if (proc_edit->process->out == test_edit->process) {
+        proc_edit->process->out = test_edit->new_process_ptr;
+      }
     }
   }
 }
@@ -392,7 +394,7 @@ function void apply_process_edits_by_kind(Context *context, B32 handle_wires) {
         Assert(proc_edit->process);
 
         if (is_wire) {
-          what_are_we_doing_here(context, proc_edit);
+          update_edited_wire_pointers(context, proc_edit);
         }
 
         proc_trie_set(arena, context->proc_trie, IntFromPtr(proc_edit->process), proc_edit->process);
@@ -407,25 +409,22 @@ function void apply_process_edits_by_kind(Context *context, B32 handle_wires) {
           proc_edit->new_process_ptr = new_p;
 
           if (is_wire) {
-            what_are_we_doing_here(context, proc_edit);
+            update_edited_wire_pointers(context, proc_edit);
           }
           else {
-            ArenaTemp temp_arena = arena_begin_temp(context->temp_arena);
-            Process_Edit_List wire_edit_list = (Process_Edit_List){0};
-
             // update any non-edited wires connected to proc being updated
-            // TODO: Just like how we had to build up an edit-list when making edits to processes, we need to build up an edit-list for wires in the following loop. Currently, we end up updated the same wire multiple times. This *almost* feels like a recursive definition problem, but it really is all ok, right?
             for (Process *w = context->views[View_Kind_Procs].processes.first; w != 0; w = w->next) {
               if (Get_Flag(w->flags, Process_Flag_Wire)) {
                 B32 wire_in_edit_list = 0;
                 Process new_wire_lit = *w;
                 // find current new-wire lit if it exists, and overwrite `new_wire_lit`
-                for (Process_Edit *proc_edit = wire_edit_list.first;
+                for (Process_Edit *proc_edit = context->process_edit_list.first;
                      proc_edit != 0;
                      proc_edit = proc_edit->next) {
                   if (proc_edit->process == w) {
                     wire_in_edit_list = 1;
                     new_wire_lit = proc_edit->new_process;
+                    break;
                   }
                 }
                 B32 in_match = w->in == proc_edit->process;
@@ -447,8 +446,6 @@ function void apply_process_edits_by_kind(Context *context, B32 handle_wires) {
 
             proc_trie_delete(arena, context->proc_trie, IntFromPtr(proc_edit->process));
             proc_trie_set(arena, context->proc_trie, IntFromPtr(new_p), new_p);
-
-            arena_end_temp(&temp_arena);
           }
         }
       } break;
@@ -591,8 +588,6 @@ function void replace_process_with(
   B32 proc_is_already_being_edited = process_edit_list_contains_process(context, context->process_edit_list, to_replace);
 
   if (!proc_is_already_being_edited) {
-    Proc_Trie_Trie *trie = context->proc_trie;
-
     add_to_process_edit_list(context, Proc_Trie_Edit_Update, to_replace, p_lit);
   }
 }
@@ -812,6 +807,7 @@ function B32 is_active_process(Context *context, Process *p) {
 
   return is_active;
 }
+
 
 function Process *find_process_connection(
   Context *context,
@@ -1608,7 +1604,7 @@ function void add_wire_connection(
 
 
 
-function void remove_wire_connection(
+function void delete_wire(
   Context *context,
   Process *wire,
   Process_Connection_Flag conn_flags
@@ -1626,8 +1622,9 @@ function void remove_wire_connection(
          test_wire = test_wire->next) {
       B32 should_replace = 0;
       Process new_test_wire_lit = *test_wire;
+      B32 is_wire = Get_Flag(test_wire->flags, Process_Flag_Wire);
 
-      if (test_wire != wire) {
+      if (is_wire && test_wire != wire) {
         // adjust in-connections that come after deleted wire
         if (remove_in && test_wire->in == wire->in) {
           if (test_wire->which_in > wire->which_in) {
@@ -1717,7 +1714,7 @@ function void delete_process(Context *context, Process *p) {
   // if deleting a wire, adjust connected processes
   if (Get_Flag(p->flags, Process_Flag_Wire)) {
     U32 both_conns = Process_Connection_Flag_In | Process_Connection_Flag_Out;
-    remove_wire_connection(context, p, both_conns);
+    delete_wire(context, p, both_conns);
   }
   else {
     // check for wires connected to the deleted process, and delete those also

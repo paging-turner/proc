@@ -183,7 +183,7 @@ Define_Keybind_And_Action(
           // move wire to hovered wire
           U32 which_conn = hot_process->which_conn[env->moved_wire_conn];
           if (env->moved_wire != hot_process) {
-            remove_wire_connection(env->context, env->moved_wire, (1<<env->moved_wire_conn));
+            delete_wire(env->context, env->moved_wire, (1<<env->moved_wire_conn));
             add_wire_connection(env->context, env->moved_wire, connected_process, env->moved_wire_conn, which_conn);
           }
         }
@@ -196,7 +196,7 @@ Define_Keybind_And_Action(
         } else {
           which_conn = connected_process->conn_count[env->moved_wire_conn];
         }
-        remove_wire_connection(env->context, env->moved_wire, (1<<env->moved_wire_conn));
+        delete_wire(env->context, env->moved_wire, (1<<env->moved_wire_conn));
         add_wire_connection(env->context, env->moved_wire, connected_process, env->moved_wire_conn, which_conn);
       }
     }

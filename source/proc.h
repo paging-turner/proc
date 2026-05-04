@@ -155,7 +155,7 @@ function              void gather_processes_from_trie(Context *context);
 function              void remove_process_from_process_list(Context *context, Process_List *list, Process *p);
 function          Process *connect_detached_processes(Context *context, Process *out, Process *in);
 function Connection_Result connect_processes(Context *context, Process *out, Process *in);
-function              void remove_wire_connection(Context *context, Process *wire, Process_Connection_Flag conn_flags);
+function              void delete_wire(Context *context, Process *wire, Process_Connection_Flag conn_flags);
 function              void add_wire_connection(Context *context, Process *wire, Process *process, Process_Connection conn, U32 which_conn);
 function              void handle_label_editing(Context *context, Process_List ps);
 function          Process *find_process_connection(Context *context, Process *p, Process_Connection conn, U32 which_conn);
