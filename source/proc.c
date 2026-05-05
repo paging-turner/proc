@@ -317,23 +317,24 @@ function Process *create_ui_element(Context *context) {
 
 
 
-function B32 process_edit_list_contains_process(
+// TODO: Rename `process_edit_list_contains_process` now that we return the process-edit itself.
+function Process_Edit *process_edit_list_contains_process(
   Context *context,
   Process_Edit_List proc_edit_list,
   Process *p
   ) {
-  B32 contains = 0;
+  Process_Edit *result = 0;
 
   for (Process_Edit *proc_edit = proc_edit_list.first;
        proc_edit != 0;
        proc_edit = proc_edit->next) {
     if (proc_edit->process == p) {
-      contains = 1;
+      result = proc_edit;
       break;
     }
   }
 
-  return contains;
+  return result;
 }
 
 
@@ -596,9 +597,9 @@ function void replace_process_with(
   Process *to_replace,
   Process p_lit
   ) {
-  B32 proc_is_already_being_edited = process_edit_list_contains_process(context, context->process_edit_list, to_replace);
+  Process_Edit *edited_proc = process_edit_list_contains_process(context, context->process_edit_list, to_replace);
 
-  if (!proc_is_already_being_edited) {
+  if (!edited_proc) {
     add_to_process_edit_list(context, Proc_Trie_Edit_Update, to_replace, p_lit);
   }
 }
@@ -1808,7 +1809,7 @@ function Process *connect_detached_processes(
 
 
 
-function Connection_Result connect_processes(
+function Connection_Result connect_processes_no_gather(
   Context *context,
   Process *out,
   Process *in
@@ -1819,33 +1820,55 @@ function Connection_Result connect_processes(
     result.new_wire = create_process(context);
 
     if (result.new_wire) {
-      Process new_out_lit = *out;
-      Process new_in_lit = *in;
+      Process_Edit *out_edit_proc = process_edit_list_contains_process(context, context->process_edit_list, out);
+      Process_Edit *in_edit_proc = process_edit_list_contains_process(context, context->process_edit_list, in);
 
-      new_out_lit.out_count += 1;
-      new_in_lit.in_count += 1;
+      if (out_edit_proc) {
+        result.new_wire->which_out = out_edit_proc->new_process.out_count;
+        out_edit_proc->new_process.out_count += 1;
+      }
+      else {
+        Process new_out_lit = *out;
+        result.new_wire->which_out = new_out_lit.out_count;
+        new_out_lit.out_count += 1;
+        replace_process_with(context, out, new_out_lit);
+      }
+
+      if (in_edit_proc) {
+        result.new_wire->which_in = in_edit_proc->new_process.in_count;
+        in_edit_proc->new_process.in_count += 1;
+      }
+      else {
+        Process new_in_lit = *in;
+        result.new_wire->which_in = new_in_lit.in_count;
+        new_in_lit.in_count += 1;
+        replace_process_with(context, in, new_in_lit);
+      }
 
       result.out = out;
       result.in = in;
 
-      replace_process_with(context, out, new_out_lit);
-      replace_process_with(context, in, new_in_lit);
-
       Set_Flag(result.new_wire->flags, Process_Flag_Wire);
       result.new_wire->out = result.out;
       result.new_wire->in = result.in;
-
-      result.new_wire->which_out = out->out_count;
-      result.new_wire->which_in = in->in_count;
     }
-
-    gather_processes_from_trie(context);
   }
 
   return result;
 }
 
 
+function Connection_Result connect_processes(
+  Context *context,
+  Process *out,
+  Process *in
+  ) {
+  Connection_Result result = connect_processes_no_gather(context, out, in);
+
+  gather_processes_from_trie(context);
+
+  return result;
+}
 
 
 function Half_Circle_Points get_half_circle_points(

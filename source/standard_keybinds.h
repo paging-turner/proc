@@ -71,9 +71,11 @@ Define_Keybind_Action(
       Connection_Result conn_res = (Connection_Result){0};
       conn_res.in = context->hot_process.process;
       for (U32 i = 0; i < active_count; ++i) {
-        conn_res = connect_processes(context, sorted_processes[i], conn_res.in);
+        conn_res = connect_processes_no_gather(context, sorted_processes[i], conn_res.in);
       }
     }
+
+    gather_processes_from_trie(context);
   }
 
   return handled;

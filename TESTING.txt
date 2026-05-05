@@ -39,6 +39,13 @@ For now, we will have to manually test a bunch of features. This file exists to 
     1. Create three processes
     2. Select two of the processes
     3. Perform a multi-select connection to the non-selected process
-    NOTE: Should have the two selected processes connected to the third process.
+    EXPECT: Should have the two selected processes connected to the third process.
 
 
+
+------------------------------------------
+005 Delete connected process
+    1. Create two processes
+    2. Connect the processes
+    3. Delete one of the processes
+    EXPECT: There should only be the non-deleted process present.
