@@ -365,11 +365,11 @@ function void update_edited_wire_pointers(Context *context, Process_Edit *proc_e
        test_edit = test_edit->next) {
     if (!Get_Flag(test_edit->process->flags, Process_Flag_Wire)) {
       if (proc_edit->process->in == test_edit->process) {
-        proc_edit->process->in = test_edit->new_process_ptr;
+        proc_edit->new_process.in = test_edit->new_process_ptr;
       }
 
       if (proc_edit->process->out == test_edit->process) {
-        proc_edit->process->out = test_edit->new_process_ptr;
+        proc_edit->new_process.out = test_edit->new_process_ptr;
       }
     }
   }
@@ -405,7 +405,6 @@ function void apply_process_edits_by_kind(Context *context, B32 handle_wires) {
       case Proc_Trie_Edit_Update: {
         Process *new_p = push_struct(arena, Process);
         if (new_p) {
-          *new_p = proc_edit->new_process;
           proc_edit->new_process_ptr = new_p;
 
           if (is_wire) {
@@ -443,10 +442,11 @@ function void apply_process_edits_by_kind(Context *context, B32 handle_wires) {
                 }
               }
             }
-
-            proc_trie_delete(arena, context->proc_trie, IntFromPtr(proc_edit->process));
-            proc_trie_set(arena, context->proc_trie, IntFromPtr(new_p), new_p);
           }
+
+          *new_p = proc_edit->new_process;
+          proc_trie_delete(arena, context->proc_trie, IntFromPtr(proc_edit->process));
+          proc_trie_set(arena, context->proc_trie, IntFromPtr(new_p), new_p);
         }
       } break;
       default: Assert(0);
