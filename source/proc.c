@@ -358,22 +358,33 @@ function void add_to_process_edit_list(
 
 
 
-function void update_edited_wire_pointers(Context *context, Process_Edit *proc_edit) {
+function void update_edited_wire_pointers(Context *context, Process_Edit *proc_edit, B32 inserting) {
   // update the pointers of the wire if the connected processes have been updated
   for (Process_Edit *test_edit = context->process_edit_list.first;
        test_edit != 0;
        test_edit = test_edit->next) {
     if (!Get_Flag(test_edit->process->flags, Process_Flag_Wire)) {
       if (proc_edit->process->in == test_edit->process) {
-        proc_edit->new_process.in = test_edit->new_process_ptr;
+        if (inserting) {
+          proc_edit->process->in = test_edit->new_process_ptr;
+        }
+        else {
+          proc_edit->new_process.in = test_edit->new_process_ptr;
+        }
       }
 
       if (proc_edit->process->out == test_edit->process) {
-        proc_edit->new_process.out = test_edit->new_process_ptr;
+        if (inserting) {
+          proc_edit->process->out = test_edit->new_process_ptr;
+        }
+        else {
+          proc_edit->new_process.out = test_edit->new_process_ptr;
+        }
       }
     }
   }
 }
+
 
 
 
@@ -394,7 +405,7 @@ function void apply_process_edits_by_kind(Context *context, B32 handle_wires) {
         Assert(proc_edit->process);
 
         if (is_wire) {
-          update_edited_wire_pointers(context, proc_edit);
+          update_edited_wire_pointers(context, proc_edit, 1);
         }
 
         proc_trie_set(arena, context->proc_trie, IntFromPtr(proc_edit->process), proc_edit->process);
@@ -408,7 +419,7 @@ function void apply_process_edits_by_kind(Context *context, B32 handle_wires) {
           proc_edit->new_process_ptr = new_p;
 
           if (is_wire) {
-            update_edited_wire_pointers(context, proc_edit);
+            update_edited_wire_pointers(context, proc_edit, 0);
           }
           else {
             // update any non-edited wires connected to proc being updated
