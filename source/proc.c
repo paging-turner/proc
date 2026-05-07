@@ -343,10 +343,8 @@ function void add_process_to_process_edit_list(
   Context *context,
   Process *p,
   Proc_Trie_Edit_Kind edit_kind,
-  Process *new_process_ptr,
   Process new_process
   ) {
-  // TODO: Do we still need to return the delete confirmation?
   Process_Edit *found_proc_edit = 0;
 
   for (Process_Edit *proc_edit = context->process_edit_list.first;
@@ -365,10 +363,10 @@ function void add_process_to_process_edit_list(
     SLLQueuePush(context->process_edit_list.first, context->process_edit_list.last, found_proc_edit);
     found_proc_edit->process = p;
     found_proc_edit->edit_kind = edit_kind;
-    found_proc_edit->new_process_ptr = new_process_ptr;
     found_proc_edit->new_process = new_process;
   }
 }
+
 
 
 function void update_edited_wire_pointers(Context *context, Process_Edit *proc_edit, B32 inserting) {
@@ -462,7 +460,7 @@ function void apply_process_edits_by_kind(Context *context, B32 handle_wires) {
                 }
 
                 if (!wire_in_edit_list && (in_match || out_match)) {
-                  add_process_to_process_edit_list(context, w, Proc_Trie_Edit_Update, 0, new_wire_lit);
+                  add_process_to_process_edit_list(context, w, Proc_Trie_Edit_Update, new_wire_lit);
                 }
               }
             }
@@ -541,7 +539,7 @@ function Process *create_process(Context *context) {
   Process *p = push_permanent_process(context);
 
   if (p) {
-    add_process_to_process_edit_list(context, p, Proc_Trie_Edit_Insert, 0, (Process){0});
+    add_process_to_process_edit_list(context, p, Proc_Trie_Edit_Insert, (Process){0});
   }
 
   return p;
@@ -556,7 +554,7 @@ function Process *create_processes(Context *context, U32 process_count) {
     for (U32 i = 0; i < process_count; ++i) {
       Process *p = ps + i;
       keys[i] = (Proc_Trie_Key)(p);
-      add_process_to_process_edit_list(context, p, Proc_Trie_Edit_Insert, 0, (Process){0});
+      add_process_to_process_edit_list(context, p, Proc_Trie_Edit_Insert, (Process){0});
     }
 
     gather_processes_from_trie(context);
@@ -612,7 +610,7 @@ function void replace_process_with(
   Process_Edit *edited_proc = process_edit_list_contains_process(context, context->process_edit_list, to_replace);
 
   if (!edited_proc) {
-    add_process_to_process_edit_list(context, to_replace, Proc_Trie_Edit_Update, 0, p_lit);
+    add_process_to_process_edit_list(context, to_replace, Proc_Trie_Edit_Update, p_lit);
   }
 }
 
@@ -1705,7 +1703,7 @@ function void delete_wire(
 function void delete_process(Context *context, Process *p) {
   Proc_Trie_Trie *trie = context->proc_trie;
 
-  add_process_to_process_edit_list(context, p, Proc_Trie_Edit_Delete, 0, (Process){0});
+  add_process_to_process_edit_list(context, p, Proc_Trie_Edit_Delete, (Process){0});
 
   // if deleting a wire, adjust connected processes
   if (Get_Flag(p->flags, Process_Flag_Wire)) {
@@ -1726,14 +1724,14 @@ function void delete_process(Context *context, Process *p) {
             if (test_wire->in == wire->in && test_wire->which_in > wire->which_in) {
               Process edit_p = *test_wire;
               edit_p.which_in -= 1;
-              add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, &edit_p, (Process){0});
+              add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, edit_p);
             }
           }
 
           if (wire->in) {
             Process edit_p = *wire->in;
             edit_p.in_count -= 1;
-            add_process_to_process_edit_list(context, wire->in, Proc_Trie_Edit_Update, &edit_p, (Process){0});
+            add_process_to_process_edit_list(context, wire->in, Proc_Trie_Edit_Update, edit_p);
           }
         }
 
@@ -1743,14 +1741,14 @@ function void delete_process(Context *context, Process *p) {
             if (test_wire->out == wire->out && test_wire->which_out > wire->which_out) {
               Process edit_p = *test_wire;
               edit_p.which_out -= 1;
-              add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, &edit_p, (Process){0});
+              add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, edit_p);
             }
           }
 
           if (wire->out) {
             Process edit_p = *wire->out;
             edit_p.out_count -= 1;
-            add_process_to_process_edit_list(context, wire->out, Proc_Trie_Edit_Update, &edit_p, (Process){0});
+            add_process_to_process_edit_list(context, wire->out, Proc_Trie_Edit_Update, edit_p);
           }
         }
 
@@ -1758,7 +1756,7 @@ function void delete_process(Context *context, Process *p) {
       }
 
       if (should_delete) {
-        add_process_to_process_edit_list(context, wire, Proc_Trie_Edit_Delete, 0, (Process){0});
+        add_process_to_process_edit_list(context, wire, Proc_Trie_Edit_Delete, (Process){0});
       }
       wire = wire->next;
     }
