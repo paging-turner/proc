@@ -515,9 +515,7 @@ function void gather_processes_from_trie(Context *context) {
                          context);
 
     clear_ds_view_process_list(context);
-
     context->proc_trie->ref = 0;
-    clear_ds_view_process_list(context);
 
     proc_trie_crawl_trie(context->per_frame_arena,
                          context->proc_trie,
@@ -535,6 +533,7 @@ function void gather_processes_from_trie(Context *context) {
 }
 
 
+
 function Process *create_process(Context *context) {
   Process *p = push_permanent_process(context);
 
@@ -544,6 +543,7 @@ function Process *create_process(Context *context) {
 
   return p;
 }
+
 
 
 function Process *create_processes(Context *context, U32 process_count) {
@@ -625,6 +625,7 @@ function void remove_copy_process_list(Context *context, Process_List *list) {
     p = next_process;
   }
 }
+
 
 function void clear_ds_view_process_list(Context *context) {
   // TODO: @Speed can probably do some fancy stuff with just the ends of the list?
@@ -1318,6 +1319,7 @@ function void ui_box_end(Context *context, Ui_Box *box, B32 sizing) {
 function void clear_save_files(Context *context) {
 }
 
+
 function S32 collect_save_files(Context *context) {
   Arena *uia = context->ui_arena;
   S32 save_file_count = 0;
@@ -1410,9 +1412,11 @@ function void do_save_file_as(Context *context, B32 sizing) {
   ui_box_end(context, &save_file_as_box, sizing);
 }
 
+
 function void handle_copy(Context *context, Process *element) {
   copy_active_processes(context);
 }
+
 
 function void handle_paste(Context *context, Process *element) {
   paste_processes(context);
@@ -1764,6 +1768,7 @@ function void delete_process(Context *context, Process *p) {
 
   gather_processes_from_trie(context);
 }
+
 
 
 function Process *connect_detached_processes(

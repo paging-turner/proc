@@ -706,6 +706,95 @@ Steady_Function void steady_trie(commit)(Steady_Trie(Trie) *trie) {
 }
 
 
+Steady_Function void steady_trie(crawl_trie)(
+  Arena *arena,
+  Steady_Trie(Trie) *trie,
+  void (*root_handler)(void *caller_data, Steady_Trie(Iterator) *iter, Steady_Trie(Root) *root),
+  void (*node_handler)(void *caller_data, Steady_Trie(Iterator) *iter, Steady_Trie(Node) *node),
+  void *caller_data
+  ) {
+  Steady_Trie(Root_Stack) *root_stack = arena_push(arena, sizeof(Steady_Trie(Root_Stack)));
+  if (root_stack) {
+    root_stack->root = trie->root;
+  }
+
+  for (; root_stack != 0 && root_stack->root;) {
+    // Handle the root
+    Steady_Trie(Iterator) *iter = arena_push(arena, sizeof(Steady_Trie(Iterator)));
+    Steady_Trie(Stack_Node) *stack = arena_push(arena, sizeof(Steady_Trie(Stack_Node)));
+    if (iter && stack && root_stack && root_stack->root) {
+      iter->arena = arena;
+      iter->stack = stack;
+      iter->stack->node = root_stack->root->node;
+
+      root_handler(caller_data, iter, root_stack->root);
+
+      if (iter && iter->stack && iter->stack->node) {
+        node_handler(caller_data, iter, iter->stack->node);
+      }
+
+      for (;;) {
+        if (iter && iter->stack && iter->stack->node) {
+          if (iter->stack->index < Steady_Trie_Slot_Count) {
+            B32 not_visited = ((iter->stack->visited_plus_one == 0) ||
+                               (iter->stack->visited_plus_one-1 < iter->stack->index));
+            B32 occupied = iter->stack->node->occupied[iter->stack->index];
+
+            if (occupied && not_visited) {
+              iter->stack->visited_plus_one = iter->stack->index+1;
+            }
+            else if (iter->stack->node->slots[iter->stack->index]) {
+              // Child slot is present, so descend.
+              // TODO: Recycle free stack-nodes!!!!!
+              Steady_Trie(Node) *next_node = iter->stack->node->slots[iter->stack->index];
+              Steady_Trie(Stack_Node) *new_stack_node = arena_push(iter->arena, sizeof(Steady_Trie(Stack_Node)));
+              iter->stack->index += 1;
+              new_stack_node->node = next_node;
+              SLLStackPush(iter->stack, new_stack_node);
+              node_handler(caller_data, iter, next_node);
+            }
+            else {
+              iter->stack->index += 1;
+            }
+          }
+          else {
+            // Reached the end of the current node's slots, so go back up.
+            SLLStackPop(iter->stack); // TODO: Recycle stack-nodes!!!!!!!!
+          }
+        }
+        else {
+          // The iter-stack or the stack's node is empty, so bail.
+          break;
+        }
+      }
+    }
+
+    // On to the next root.
+    if (root_stack->root->next_edit) {
+      if (arena_has_space_for(arena, sizeof(Steady_Trie(Root_Stack)))) {
+        Steady_Trie(Root_Stack) *new_stack = arena_push(arena, sizeof(Steady_Trie(Root_Stack)));
+        new_stack->root = root_stack->root->next_edit;
+        SLLStackPush(root_stack, new_stack);
+      }
+      else {
+        Steady_Trie_Debug_Print("[ ERROR ] Pushing Steady_Trie(Root_Stack) in steady_trie(crawl_roots)\n");
+        break;
+      }
+    }
+    else if (root_stack->root->next_branch) {
+      root_stack->root = root_stack->root->next_branch;
+    }
+    else {
+      SLLStackPop(root_stack);
+
+      if (root_stack) {
+        root_stack->root = root_stack->root->next_branch;
+      }
+    }
+  }
+}
+
+
 
 
 
@@ -764,95 +853,6 @@ Steady_Function B32 steady_trie(ensure_key_has_occupation)(
 
 #define Steady_Trie_Print_Leaf(a, b, stack_index)\
   printf("\"%llx\"->\"%llx_%d\";\n", (U64)(a), (U64)(b), stack_index)
-
-
-
-Steady_Function void steady_trie(crawl_trie)(
-  Arena *arena,
-  Steady_Trie(Trie) *trie,
-  void (*root_handler)(void *caller_data, Steady_Trie(Iterator) *iter, Steady_Trie(Root) *root),
-  void (*node_handler)(void *caller_data, Steady_Trie(Iterator) *iter, Steady_Trie(Node) *node),
-  void *caller_data
-  ) {
-  Steady_Trie(Root_Stack) *root_stack = arena_push(arena, sizeof(Steady_Trie(Root_Stack)));
-  if (root_stack) {
-    root_stack->root = trie->root;
-  }
-
-  for (; root_stack != 0 && root_stack->root;) {
-    if (root_stack->root->next_edit) {
-      if (arena_has_space_for(arena, sizeof(Steady_Trie(Root_Stack)))) {
-        Steady_Trie(Root_Stack) *new_stack = arena_push(arena, sizeof(Steady_Trie(Root_Stack)));
-        new_stack->root = root_stack->root->next_edit;
-        SLLStackPush(root_stack, new_stack);
-      }
-      else {
-        Steady_Trie_Debug_Print("[ ERROR ] Pushing Steady_Trie(Root_Stack) in steady_trie(crawl_roots)\n");
-        break;
-      }
-    }
-    else if (root_stack->root->next_branch) {
-      root_stack->root = root_stack->root->next_branch;
-    }
-    else {
-      SLLStackPop(root_stack);
-
-      if (root_stack) {
-        root_stack->root = root_stack->root->next_branch;
-      }
-    }
-
-    // Init iterator
-    Steady_Trie(Iterator) *iter = arena_push(arena, sizeof(Steady_Trie(Iterator)));
-    Steady_Trie(Stack_Node) *stack = arena_push(arena, sizeof(Steady_Trie(Stack_Node)));
-    if (iter && stack && root_stack && root_stack->root) {
-      iter->arena = arena;
-      iter->stack = stack;
-      iter->stack->node = root_stack->root->node;
-
-      root_handler(caller_data, iter, root_stack->root);
-
-      if (iter && iter->stack && iter->stack->node) {
-        node_handler(caller_data, iter, iter->stack->node);
-      }
-
-      for (;;) {
-        if (iter && iter->stack && iter->stack->node) {
-          if (iter->stack->index < Steady_Trie_Slot_Count) {
-            B32 not_visited = ((iter->stack->visited_plus_one == 0) ||
-                               (iter->stack->visited_plus_one-1 < iter->stack->index));
-            B32 occupied = iter->stack->node->occupied[iter->stack->index];
-
-            if (occupied && not_visited) {
-              iter->stack->visited_plus_one = iter->stack->index+1;
-            }
-            else if (iter->stack->node->slots[iter->stack->index]) {
-              // Child slot is present, so descend.
-              // TODO: Recycle free stack-nodes!!!!!
-              Steady_Trie(Node) *next_node = iter->stack->node->slots[iter->stack->index];
-              Steady_Trie(Stack_Node) *new_stack_node = arena_push(iter->arena, sizeof(Steady_Trie(Stack_Node)));
-              iter->stack->index += 1;
-              new_stack_node->node = next_node;
-              SLLStackPush(iter->stack, new_stack_node);
-              node_handler(caller_data, iter, next_node);
-            }
-            else {
-              iter->stack->index += 1;
-            }
-          }
-          else {
-            // Reached the end of the current node's slots, so go back up.
-            SLLStackPop(iter->stack); // TODO: Recycle stack-nodes!!!!!!!!
-          }
-        }
-        else {
-          // The iter-stack or the stack's node is empty, so bail.
-          break;
-        }
-      }
-    }
-  }
-}
 
 
 
@@ -1097,7 +1097,6 @@ Steady_Function U32 steady_trie(run_tests)(Arena *arena) {
 
   return error_count;
 }
-
 
 
 
