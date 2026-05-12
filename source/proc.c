@@ -375,20 +375,21 @@ function void update_edited_wire_pointers(Context *context, Process_Edit *proc_e
        test_edit != 0;
        test_edit = test_edit->next) {
     if (!Get_Flag(test_edit->process->flags, Process_Flag_Wire)) {
-      if (proc_edit->process->in == test_edit->process) {
-        if (inserting) {
+      if (inserting) {
+        if (proc_edit->process->in == test_edit->process) {
           proc_edit->process->in = test_edit->new_process_ptr;
         }
-        else {
-          proc_edit->new_process.in = test_edit->new_process_ptr;
-        }
-      }
 
-      if (proc_edit->process->out == test_edit->process) {
-        if (inserting) {
+        if (proc_edit->process->out == test_edit->process) {
           proc_edit->process->out = test_edit->new_process_ptr;
         }
-        else {
+      }
+      else {
+        if (proc_edit->new_process.in == test_edit->process) {
+          proc_edit->new_process.in = test_edit->new_process_ptr;
+        }
+
+        if (proc_edit->new_process.out == test_edit->process) {
           proc_edit->new_process.out = test_edit->new_process_ptr;
         }
       }

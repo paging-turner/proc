@@ -49,3 +49,22 @@ For now, we will have to manually test a bunch of features. This file exists to 
     2. Connect the processes
     3. Delete one of the processes
     EXPECT: There should only be the non-deleted process present.
+
+
+
+------------------------------------------
+006 Delete two wires
+    1. Create three processes
+    2. Connect the first to processes to the third
+    3, Select both wires
+    4. Delete both wires at once
+    EXPECT: Both wires should be deleted
+
+
+
+------------------------------------------
+007 Move a wire
+    1. Create three processes
+    2. Connect the first process to the second
+    3. Move the end of the wire connected to the second process to the third process
+    EXPECT: The wire should connect the first process to the third

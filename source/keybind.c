@@ -185,6 +185,7 @@ Define_Keybind_And_Action(
           if (env->moved_wire != hot_process) {
             delete_wire(env->context, env->moved_wire, (1<<env->moved_wire_conn));
             add_wire_connection(env->context, env->moved_wire, connected_process, env->moved_wire_conn, which_conn);
+            gather_processes_from_trie(env->context);
           }
         }
       } else {
@@ -198,6 +199,7 @@ Define_Keybind_And_Action(
         }
         delete_wire(env->context, env->moved_wire, (1<<env->moved_wire_conn));
         add_wire_connection(env->context, env->moved_wire, connected_process, env->moved_wire_conn, which_conn);
+        gather_processes_from_trie(env->context);
       }
     }
   }
