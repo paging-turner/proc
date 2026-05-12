@@ -352,15 +352,17 @@ function void add_process_to_process_edit_list(
        proc_edit = proc_edit->next) {
     if (proc_edit->process == p) {
       found_proc_edit = proc_edit;
+      break;
     }
   }
 
   if (found_proc_edit == 0) {
     found_proc_edit = arena_push(context->temp_arena, sizeof(Process_Edit));
+    SLLQueuePush(context->process_edit_list.first, context->process_edit_list.last, found_proc_edit);
   }
 
+  // TODO: Overwrite if we are deleting, if we are updating again... then we need to consider that an error or figure out a better way to merge updates.
   if (found_proc_edit) {
-    SLLQueuePush(context->process_edit_list.first, context->process_edit_list.last, found_proc_edit);
     found_proc_edit->process = p;
     found_proc_edit->edit_kind = edit_kind;
     found_proc_edit->new_process = new_process;
@@ -602,18 +604,6 @@ function String_Chunk_List copy_string_chunk_list(Context *context, String_Chunk
 
 
 
-
-function void replace_process_with(
-  Context *context,
-  Process *to_replace,
-  Process p_lit
-  ) {
-  Process_Edit *edited_proc = process_edit_list_contains_process(context, context->process_edit_list, to_replace);
-
-  if (!edited_proc) {
-    add_process_to_process_edit_list(context, to_replace, Proc_Trie_Edit_Update, p_lit);
-  }
-}
 
 
 
@@ -1603,12 +1593,12 @@ function void add_wire_connection(
     Process new_wire_lit = *wire;
 
     new_process_lit.conn_count[conn] += 1;
-    replace_process_with(context, process, new_process_lit);
+    add_process_to_process_edit_list(context, process, Proc_Trie_Edit_Update, new_process_lit);
 
     // Add wire at the given connection index, moving any wires that come after that index over to the right.
     new_wire_lit.conn[conn] = process;
     new_wire_lit.which_conn[conn] = which_conn;
-    replace_process_with(context, wire, new_wire_lit);
+    add_process_to_process_edit_list(context, wire, Proc_Trie_Edit_Update, new_wire_lit);
 
     for (Process *test_wire = context->views[View_Kind_Procs].processes.first;
          test_wire != 0;
@@ -1621,7 +1611,7 @@ function void add_wire_connection(
         Process new_test_wire_lit = *test_wire;
         /* test_wire->which_conn[conn] += 1; */
         new_test_wire_lit.which_conn[conn] += 1;
-        replace_process_with(context, test_wire, new_test_wire_lit);
+        add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, new_test_wire_lit);
       }
     }
   }
@@ -1641,9 +1631,6 @@ function void delete_wire(
     B32 in_matched = 0;
     B32 out_matched = 0;
 
-    B32 remove_in = Get_Flag(conn_flags, Process_Connection_Flag_In);
-    B32 remove_out = Get_Flag(conn_flags, Process_Connection_Flag_Out);
-
     for (Process *test_wire = context->views[View_Kind_Procs].processes.first;
          test_wire != 0;
          test_wire = test_wire->next) {
@@ -1653,7 +1640,7 @@ function void delete_wire(
 
       if (is_wire && test_wire != wire) {
         // adjust in-connections that come after deleted wire
-        if (remove_in && test_wire->in == wire->in) {
+        if (test_wire->in == wire->in) {
           if (test_wire->which_in > wire->which_in) {
             new_test_wire_lit.which_in -= 1;
             should_replace = 1;
@@ -1662,7 +1649,7 @@ function void delete_wire(
         }
 
         // adjust out-connections that come after deleted wire
-        if (remove_out && test_wire->out == wire->out) {
+        if (test_wire->out == wire->out) {
           if (test_wire->which_out > wire->which_out) {
             new_test_wire_lit.which_out -= 1;
             should_replace = 1;
@@ -1671,7 +1658,7 @@ function void delete_wire(
         }
 
         if (should_replace) {
-          replace_process_with(context, test_wire, new_test_wire_lit);
+          add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, new_test_wire_lit);
         }
       }
     }
@@ -1679,21 +1666,38 @@ function void delete_wire(
     B32 only_in_conn = wire->in != 0 && wire->which_in == 0;
     B32 only_out_conn = wire->out != 0 && wire->which_out == 0;
 
+
     // decrement process' in-count
-    if (remove_in && (in_matched || only_in_conn)) {
+    if (in_matched || only_in_conn) {
       if (wire->in) {
         Process new_in_lit = *wire->in;
+        for (Process_Edit *proc_edit = context->process_edit_list.first;
+             proc_edit != 0;
+             proc_edit = proc_edit->next) {
+          if (proc_edit->process == wire->in) {
+            new_in_lit = proc_edit->new_process;
+            break;
+          }
+        }
         new_in_lit.in_count -= 1;
-        replace_process_with(context, wire->in, new_in_lit);
+        add_process_to_process_edit_list(context, wire->in, Proc_Trie_Edit_Update, new_in_lit);
       }
     }
 
     // decrement process' out-count
-    if (remove_out && (out_matched || only_out_conn)) {
+    if (out_matched || only_out_conn) {
       if (wire->out) {
         Process new_out_lit = *wire->out;
+        for (Process_Edit *proc_edit = context->process_edit_list.first;
+             proc_edit != 0;
+             proc_edit = proc_edit->next) {
+          if (proc_edit->process == wire->out) {
+            new_out_lit = proc_edit->new_process;
+            break;
+          }
+        }
         new_out_lit.out_count -= 1;
-        replace_process_with(context, wire->out, new_out_lit);
+        add_process_to_process_edit_list(context, wire->out, Proc_Trie_Edit_Update, new_out_lit);
       }
     }
   }
@@ -1766,8 +1770,6 @@ function void delete_process(Context *context, Process *p) {
       wire = wire->next;
     }
   }
-
-  gather_processes_from_trie(context);
 }
 
 
@@ -1819,7 +1821,7 @@ function Connection_Result connect_processes_no_gather(
         Process new_out_lit = *out;
         result.new_wire->which_out = new_out_lit.out_count;
         new_out_lit.out_count += 1;
-        replace_process_with(context, out, new_out_lit);
+        add_process_to_process_edit_list(context, out, Proc_Trie_Edit_Update, new_out_lit);
       }
 
       if (in_edit_proc) {
@@ -1830,7 +1832,7 @@ function Connection_Result connect_processes_no_gather(
         Process new_in_lit = *in;
         result.new_wire->which_in = new_in_lit.in_count;
         new_in_lit.in_count += 1;
-        replace_process_with(context, in, new_in_lit);
+        add_process_to_process_edit_list(context, in, Proc_Trie_Edit_Update, new_in_lit);
       }
 
       result.out = out;
