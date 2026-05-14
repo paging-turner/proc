@@ -63,15 +63,24 @@ For now, we will have to manually test a bunch of features. This file exists to 
 
 
 ------------------------------------------
-007 Move a wire
+007 Move a wire's "in" connection
     1. Create three processes
     2. Connect the first process to the second
-    3. Move the end of the wire connected to the second process to the third process
+    3. Move the "in" end of the wire connected to the second process to the third process
     EXPECT: The wire should connect the first process to the third
 
 
 ------------------------------------------
-008 Move a wire in front of wire
+008 Move a wire's "in" connection
+    1. Create three processes
+    2. Connect the first process to the second
+    3. Move the "out" end of the wire connected to the second process to the third process
+    EXPECT: The wire should connect the first process to the third
+
+
+
+------------------------------------------
+009 Move a wire in front of wire
     1. Create two processes and connect them
     2. Create two more processes and connect them
     3. Move the "in" of one wire on top of the "in" of the other wire
