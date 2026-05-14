@@ -147,7 +147,7 @@ function               B32 is_active_process(Context *context, Process *p);
 function              void remove_process_from_active_processes(Context *context, Process *p);
 function    Keybind_Result check_keybind(Context *context, Keybind *keybind, Process_Selection selection);
 function              void exit_add_wire_mode(Context *context);
-function              void delete_process(Context *context, Process *p);
+function              void delete_process(Context *context, Process *p, Process_Connection_Flag which_conn_flags);
 function              void copy_active_processes(Context *context);
 function              void paste_processes(Context *context);
 function              void gather_processes_from_trie(Context *context);

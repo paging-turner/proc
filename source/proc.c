@@ -1631,6 +1631,10 @@ function void delete_wire(
     B32 in_matched = 0;
     B32 out_matched = 0;
 
+    // TODO: Now that we set both remove_in/remove_out as true, we should clean up some code below.
+    B32 remove_in = Get_Flag(conn_flags, Process_Connection_Flag_In);
+    B32 remove_out = Get_Flag(conn_flags, Process_Connection_Flag_Out);
+
     for (Process *test_wire = context->views[View_Kind_Procs].processes.first;
          test_wire != 0;
          test_wire = test_wire->next) {
@@ -1640,7 +1644,7 @@ function void delete_wire(
 
       if (is_wire && test_wire != wire) {
         // adjust in-connections that come after deleted wire
-        if (test_wire->in == wire->in) {
+        if (remove_in && test_wire->in == wire->in) {
           if (test_wire->which_in > wire->which_in) {
             new_test_wire_lit.which_in -= 1;
             should_replace = 1;
@@ -1649,7 +1653,7 @@ function void delete_wire(
         }
 
         // adjust out-connections that come after deleted wire
-        if (test_wire->out == wire->out) {
+        if (remove_out && test_wire->out == wire->out) {
           if (test_wire->which_out > wire->which_out) {
             new_test_wire_lit.which_out -= 1;
             should_replace = 1;
@@ -1666,11 +1670,13 @@ function void delete_wire(
     B32 only_in_conn = wire->in != 0 && wire->which_in == 0;
     B32 only_out_conn = wire->out != 0 && wire->which_out == 0;
 
+#define Should_We_Set_The_Lits_This_Way 1
 
     // decrement process' in-count
-    if (in_matched || only_in_conn) {
+    if (remove_in && (in_matched || only_in_conn)) {
       if (wire->in) {
         Process new_in_lit = *wire->in;
+#if Should_We_Set_The_Lits_This_Way
         for (Process_Edit *proc_edit = context->process_edit_list.first;
              proc_edit != 0;
              proc_edit = proc_edit->next) {
@@ -1679,15 +1685,17 @@ function void delete_wire(
             break;
           }
         }
+#endif
         new_in_lit.in_count -= 1;
         add_process_to_process_edit_list(context, wire->in, Proc_Trie_Edit_Update, new_in_lit);
       }
     }
 
     // decrement process' out-count
-    if (out_matched || only_out_conn) {
+    if (remove_out && (out_matched || only_out_conn)) {
       if (wire->out) {
         Process new_out_lit = *wire->out;
+#if Should_We_Set_The_Lits_This_Way
         for (Process_Edit *proc_edit = context->process_edit_list.first;
              proc_edit != 0;
              proc_edit = proc_edit->next) {
@@ -1696,6 +1704,7 @@ function void delete_wire(
             break;
           }
         }
+#endif
         new_out_lit.out_count -= 1;
         add_process_to_process_edit_list(context, wire->out, Proc_Trie_Edit_Update, new_out_lit);
       }
@@ -1709,15 +1718,18 @@ function void delete_wire(
 
 
 
-function void delete_process(Context *context, Process *p) {
+function void delete_process(Context *context, Process *p, U32 which_conn_flags) {
   Proc_Trie_Trie *trie = context->proc_trie;
 
   add_process_to_process_edit_list(context, p, Proc_Trie_Edit_Delete, (Process){0});
 
   // if deleting a wire, adjust connected processes
   if (Get_Flag(p->flags, Process_Flag_Wire)) {
-    U32 both_conns = Process_Connection_Flag_In | Process_Connection_Flag_Out;
-    delete_wire(context, p, both_conns);
+    /* U32 both_conns = Process_Connection_Flag_In | Process_Connection_Flag_Out; */
+    Process_Connection_Flag which_conn_flags_resolved = which_conn_flags
+      ? which_conn_flags
+      : (Process_Connection_Flag_In | Process_Connection_Flag_Out);
+    delete_wire(context, p, which_conn_flags_resolved);
   }
   else {
     // check for wires connected to the deleted process, and delete those also
