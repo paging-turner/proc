@@ -108,6 +108,11 @@ typedef struct Process_Selection Process_Selection;
 typedef struct Process_List Process_List;
 typedef struct Process_Ref Process_Ref;
 
+typedef struct Editable_Process {
+  B32 is_being_edited;
+  Process process;
+} Editable_Process;
+
 typedef struct Process_Edit {
   Proc_Trie_Edit_Kind edit_kind;
   Process *process;

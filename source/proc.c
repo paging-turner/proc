@@ -402,6 +402,7 @@ function void update_edited_wire_pointers(Context *context, Process_Edit *proc_e
 
 
 
+
 function void apply_process_edits_by_kind(Context *context, B32 handle_wires) {
   Assert(handle_wires == 0 || handle_wires == 1);
   Arena *arena = context->permanent_arena;
@@ -440,6 +441,7 @@ function void apply_process_edits_by_kind(Context *context, B32 handle_wires) {
             for (Process *w = context->views[View_Kind_Procs].processes.first; w != 0; w = w->next) {
               if (Get_Flag(w->flags, Process_Flag_Wire)) {
                 B32 wire_in_edit_list = 0;
+                // TODO: We should be able to call the new `get_editable_process` here, right?
                 Process new_wire_lit = *w;
                 // find current new-wire lit if it exists, and overwrite `new_wire_lit`
                 for (Process_Edit *proc_edit = context->process_edit_list.first;
@@ -463,6 +465,7 @@ function void apply_process_edits_by_kind(Context *context, B32 handle_wires) {
                 }
 
                 if (!wire_in_edit_list && (in_match || out_match)) {
+                  // TODO: Use `get_editable_process` for new_wire_lit
                   add_process_to_process_edit_list(context, w, Proc_Trie_Edit_Update, new_wire_lit);
                 }
               }
@@ -1553,6 +1556,32 @@ function Process *get_process_wire_by_selection(Context *context, Process_Select
 
 
 
+function Editable_Process get_editable_process(
+  Process_Edit_List edit_list,
+  Process *p
+  ) {
+  Editable_Process editable_proc = (Editable_Process){0};
+
+  for (Process_Edit *proc_edit = edit_list.first;
+       proc_edit != 0;
+       proc_edit = proc_edit->next) {
+    if (proc_edit->process == p) {
+      editable_proc.is_being_edited = 1;
+      if (proc_edit->edit_kind == Proc_Trie_Edit_Update) {
+        editable_proc.process = proc_edit->new_process;
+      }
+      else {
+        editable_proc.process = *proc_edit->process;
+      }
+    }
+  }
+
+  if (!editable_proc.is_being_edited) {
+    editable_proc.process = *p;
+  }
+
+  return editable_proc;
+}
 
 
 
@@ -1589,16 +1618,16 @@ function void add_wire_connection(
   U32 which_conn
   ) {
   if (wire && process) {
-    Process new_process_lit = *process;
-    Process new_wire_lit = *wire;
+    Editable_Process new_process = get_editable_process(context->process_edit_list, process);
+    Editable_Process new_wire = get_editable_process(context->process_edit_list, wire);
 
-    new_process_lit.conn_count[conn] += 1;
-    add_process_to_process_edit_list(context, process, Proc_Trie_Edit_Update, new_process_lit);
+    new_process.process.conn_count[conn] += 1;
+    add_process_to_process_edit_list(context, process, Proc_Trie_Edit_Update, new_process.process);
 
     // Add wire at the given connection index, moving any wires that come after that index over to the right.
-    new_wire_lit.conn[conn] = process;
-    new_wire_lit.which_conn[conn] = which_conn;
-    add_process_to_process_edit_list(context, wire, Proc_Trie_Edit_Update, new_wire_lit);
+    new_wire.process.conn[conn] = process;
+    new_wire.process.which_conn[conn] = which_conn;
+    add_process_to_process_edit_list(context, wire, Proc_Trie_Edit_Update, new_wire.process);
 
     for (Process *test_wire = context->views[View_Kind_Procs].processes.first;
          test_wire != 0;
@@ -1608,10 +1637,9 @@ function void add_wire_connection(
           test_wire->conn[conn] == process &&
           test_wire->which_conn[conn] >= which_conn) {
         // increment the wire's which_conn if it comes at or after the added wire's which_conn
-        Process new_test_wire_lit = *test_wire;
-        /* test_wire->which_conn[conn] += 1; */
-        new_test_wire_lit.which_conn[conn] += 1;
-        add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, new_test_wire_lit);
+        Editable_Process new_test_wire = get_editable_process(context->process_edit_list, test_wire);
+        new_test_wire.process.which_conn[conn] += 1;
+        add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
       }
     }
   }
@@ -1621,6 +1649,7 @@ function void add_wire_connection(
 
 
 
+// TODO: inline this function since it's only used in `delete_process`
 function void delete_wire(
   Context *context,
   Process *wire,
@@ -1639,14 +1668,15 @@ function void delete_wire(
          test_wire != 0;
          test_wire = test_wire->next) {
       B32 should_replace = 0;
-      Process new_test_wire_lit = *test_wire;
       B32 is_wire = Get_Flag(test_wire->flags, Process_Flag_Wire);
 
       if (is_wire && test_wire != wire) {
+        Editable_Process new_test_wire = get_editable_process(context->process_edit_list, test_wire);
+
         // adjust in-connections that come after deleted wire
         if (remove_in && test_wire->in == wire->in) {
           if (test_wire->which_in > wire->which_in) {
-            new_test_wire_lit.which_in -= 1;
+            new_test_wire.process.which_in -= 1;
             should_replace = 1;
           }
           in_matched = 1;
@@ -1655,14 +1685,14 @@ function void delete_wire(
         // adjust out-connections that come after deleted wire
         if (remove_out && test_wire->out == wire->out) {
           if (test_wire->which_out > wire->which_out) {
-            new_test_wire_lit.which_out -= 1;
+            new_test_wire.process.which_out -= 1;
             should_replace = 1;
           }
           out_matched = 1;
         }
 
         if (should_replace) {
-          add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, new_test_wire_lit);
+          add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
         }
       }
     }
@@ -1670,43 +1700,21 @@ function void delete_wire(
     B32 only_in_conn = wire->in != 0 && wire->which_in == 0;
     B32 only_out_conn = wire->out != 0 && wire->which_out == 0;
 
-#define Should_We_Set_The_Lits_This_Way 1
-
     // decrement process' in-count
     if (remove_in && (in_matched || only_in_conn)) {
       if (wire->in) {
-        Process new_in_lit = *wire->in;
-#if Should_We_Set_The_Lits_This_Way
-        for (Process_Edit *proc_edit = context->process_edit_list.first;
-             proc_edit != 0;
-             proc_edit = proc_edit->next) {
-          if (proc_edit->process == wire->in) {
-            new_in_lit = proc_edit->new_process;
-            break;
-          }
-        }
-#endif
-        new_in_lit.in_count -= 1;
-        add_process_to_process_edit_list(context, wire->in, Proc_Trie_Edit_Update, new_in_lit);
+        Editable_Process new_in = get_editable_process(context->process_edit_list, wire->in);
+        new_in.process.in_count -= 1;
+        add_process_to_process_edit_list(context, wire->in, Proc_Trie_Edit_Update, new_in.process);
       }
     }
 
     // decrement process' out-count
     if (remove_out && (out_matched || only_out_conn)) {
       if (wire->out) {
-        Process new_out_lit = *wire->out;
-#if Should_We_Set_The_Lits_This_Way
-        for (Process_Edit *proc_edit = context->process_edit_list.first;
-             proc_edit != 0;
-             proc_edit = proc_edit->next) {
-          if (proc_edit->process == wire->out) {
-            new_out_lit = proc_edit->new_process;
-            break;
-          }
-        }
-#endif
-        new_out_lit.out_count -= 1;
-        add_process_to_process_edit_list(context, wire->out, Proc_Trie_Edit_Update, new_out_lit);
+        Editable_Process new_out = get_editable_process(context->process_edit_list, wire->out);
+        new_out.process.out_count -= 1;
+        add_process_to_process_edit_list(context, wire->out, Proc_Trie_Edit_Update, new_out.process);
       }
     }
   }
@@ -1725,11 +1733,10 @@ function void delete_process(Context *context, Process *p, U32 which_conn_flags)
 
   // if deleting a wire, adjust connected processes
   if (Get_Flag(p->flags, Process_Flag_Wire)) {
-    /* U32 both_conns = Process_Connection_Flag_In | Process_Connection_Flag_Out; */
     Process_Connection_Flag which_conn_flags_resolved = which_conn_flags
       ? which_conn_flags
       : (Process_Connection_Flag_In | Process_Connection_Flag_Out);
-    delete_wire(context, p, which_conn_flags_resolved);
+    delete_wire(context, p, which_conn_flags_resolved); // TODO: inline this function since it's only used in `delete_process`
   }
   else {
     // check for wires connected to the deleted process, and delete those also
@@ -1743,16 +1750,17 @@ function void delete_process(Context *context, Process *p, U32 which_conn_flags)
           // adjust in-connections to deleted wire
           for (Process *test_wire = context->views[View_Kind_Procs].processes.first; test_wire != 0; test_wire = test_wire->next) {
             if (test_wire->in == wire->in && test_wire->which_in > wire->which_in) {
-              Process edit_p = *test_wire;
-              edit_p.which_in -= 1;
-              add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, edit_p);
+              Editable_Process new_wire = get_editable_process(context->process_edit_list, test_wire);
+              new_wire.process.which_in -= 1;
+              add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, new_wire.process);
             }
           }
 
           if (wire->in) {
-            Process edit_p = *wire->in;
-            edit_p.in_count -= 1;
-            add_process_to_process_edit_list(context, wire->in, Proc_Trie_Edit_Update, edit_p);
+            Editable_Process new_wire = get_editable_process(context->process_edit_list, wire->in);
+            /* Process edit_p = *wire->in; */
+            new_wire.process.in_count -= 1;
+            add_process_to_process_edit_list(context, wire->in, Proc_Trie_Edit_Update, new_wire.process);
           }
         }
 
@@ -1760,16 +1768,16 @@ function void delete_process(Context *context, Process *p, U32 which_conn_flags)
           // adjust out-connections to deleted wire
           for (Process *test_wire = context->views[View_Kind_Procs].processes.first; test_wire != 0; test_wire = test_wire->next) {
             if (test_wire->out == wire->out && test_wire->which_out > wire->which_out) {
-              Process edit_p = *test_wire;
-              edit_p.which_out -= 1;
-              add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, edit_p);
+              Editable_Process new_wire = get_editable_process(context->process_edit_list, test_wire);
+              new_wire.process.which_out -= 1;
+              add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, new_wire.process);
             }
           }
 
           if (wire->out) {
-            Process edit_p = *wire->out;
-            edit_p.out_count -= 1;
-            add_process_to_process_edit_list(context, wire->out, Proc_Trie_Edit_Update, edit_p);
+            Editable_Process new_wire = get_editable_process(context->process_edit_list, wire->out);
+            new_wire.process.out_count -= 1;
+            add_process_to_process_edit_list(context, wire->out, Proc_Trie_Edit_Update, new_wire.process);
           }
         }
 
@@ -1830,10 +1838,10 @@ function Connection_Result connect_processes_no_gather(
         out_edit_proc->new_process.out_count += 1;
       }
       else {
-        Process new_out_lit = *out;
-        result.new_wire->which_out = new_out_lit.out_count;
-        new_out_lit.out_count += 1;
-        add_process_to_process_edit_list(context, out, Proc_Trie_Edit_Update, new_out_lit);
+        Editable_Process new_out = get_editable_process(context->process_edit_list, out);
+        result.new_wire->which_out = new_out.process.out_count;
+        new_out.process.out_count += 1;
+        add_process_to_process_edit_list(context, out, Proc_Trie_Edit_Update, new_out.process);
       }
 
       if (in_edit_proc) {
@@ -1841,10 +1849,10 @@ function Connection_Result connect_processes_no_gather(
         in_edit_proc->new_process.in_count += 1;
       }
       else {
-        Process new_in_lit = *in;
-        result.new_wire->which_in = new_in_lit.in_count;
-        new_in_lit.in_count += 1;
-        add_process_to_process_edit_list(context, in, Proc_Trie_Edit_Update, new_in_lit);
+        Editable_Process new_in = get_editable_process(context->process_edit_list, in);
+        result.new_wire->which_in = new_in.process.in_count;
+        new_in.process.in_count += 1;
+        add_process_to_process_edit_list(context, in, Proc_Trie_Edit_Update, new_in.process);
       }
 
       result.out = out;
