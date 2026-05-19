@@ -13,7 +13,7 @@ For now, we will have to manually test a bunch of features. This file exists to 
 
 
 ------------------------------------------
-002 Connect and delete write
+002 Connect and delete wire
     1. Create process
     2. Create another process
     3. Connect processes
@@ -71,7 +71,7 @@ For now, we will have to manually test a bunch of features. This file exists to 
 
 
 ------------------------------------------
-008 Move a wire's "in" connection
+008 Move a wire's "out" connection
     1. Create three processes
     2. Connect the first process to the second
     3. Move the "out" end of the wire connected to the second process to the third process
@@ -85,3 +85,21 @@ For now, we will have to manually test a bunch of features. This file exists to 
     2. Create two more processes and connect them
     3. Move the "in" of one wire on top of the "in" of the other wire
     EXPECT: The wire be moved to the other process and be *in front* of the existing wire
+
+
+
+
+------------------------------------------
+010 Delete two-out-of-three wires
+    1. Create four processes
+    2. Connect three processes to the fourth
+    3. Delete the *first* two wires
+    EXPECT: There should only be one wire remaining
+
+
+
+------------------------------------------
+011 Move wire on top of wire in same process
+    1. Connect two processes to another process
+    2. Move the wire on the right to the wire on the left ("in" connections)
+    EXPECT: The "in" wires should now be swapped
