@@ -1645,11 +1645,19 @@ function void add_wire_connection(
     for (Process *test_wire = context->views[View_Kind_Procs].processes.first;
          test_wire != 0;
          test_wire = test_wire->next) {
-      // `test_wire` should NEVER be the same as either `wire` or `process`, because then we would end up adding multiple versions of the same process into the trie.
+      // decrement the wires' which_conn if it comes at or after the removed wire conn
+      if (wire != test_wire &&
+          test_wire->conn[conn] == wire->conn[conn] &&
+          test_wire->which_conn[conn] >= wire->which_conn[conn]) {
+        Editable_Process new_test_wire = get_editable_process(context->process_edit_list, test_wire);
+        new_test_wire.process.which_conn[conn] -= 1;
+        add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
+      }
+
+      // increment the wires' which_conn if it comes at or after the added wire's which_conn
       if (wire != test_wire &&
           test_wire->conn[conn] == process &&
           test_wire->which_conn[conn] >= which_conn) {
-        // increment the wire's which_conn if it comes at or after the added wire's which_conn
         Editable_Process new_test_wire = get_editable_process(context->process_edit_list, test_wire);
         new_test_wire.process.which_conn[conn] += 1;
         add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);

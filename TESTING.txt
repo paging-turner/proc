@@ -106,3 +106,12 @@ For now, we will have to manually test a bunch of features. This file exists to 
     EXPECT: The "in" wires should now be swapped
     VARIATION: Move the left wire to the wire on the right
     VARIATION: Do this with the "out" connections
+
+
+
+------------------------------------------
+012 Move first wire away from process
+    1. Create four processes
+    2. Connect two processes to one of the other processes
+    3. Move the first wire "in" connection to the remaining empty process
+    VARIATION: Use "out" connection
