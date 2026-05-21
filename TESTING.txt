@@ -95,7 +95,7 @@ For now, we will have to manually test a bunch of features. This file exists to 
     2. Connect three processes to the fourth
     3. Delete the *first* two wires
     EXPECT: There should only be one wire remaining
-    VARIATIONS: Select the two wires in different orders
+    VARIATION: Select the two wires in different orders
 
 
 
@@ -104,3 +104,5 @@ For now, we will have to manually test a bunch of features. This file exists to 
     1. Connect two processes to another process
     2. Move the wire on the right to the wire on the left ("in" connections)
     EXPECT: The "in" wires should now be swapped
+    VARIATION: Move the left wire to the wire on the right
+    VARIATION: Do this with the "out" connections

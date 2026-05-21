@@ -3,7 +3,6 @@
 */
 
 
-
 #include <stdio.h> // printf
 
 #include "../source/_include_mr4th.h"
@@ -361,11 +360,14 @@ function void add_process_to_process_edit_list(
     SLLQueuePush(context->process_edit_list.first, context->process_edit_list.last, found_proc_edit);
   }
 
+
   // TODO: Overwrite if we are deleting, if we are updating again... then we need to consider that an error or figure out a better way to merge updates.
   if (found_proc_edit) {
-    found_proc_edit->process = p;
-    found_proc_edit->edit_kind = edit_kind;
-    found_proc_edit->new_process = new_process;
+    if (found_proc_edit->edit_kind != Proc_Trie_Edit_Delete) {
+      found_proc_edit->process = p;
+      found_proc_edit->edit_kind = edit_kind;
+      found_proc_edit->new_process = new_process;
+    }
   }
 }
 
@@ -1618,11 +1620,22 @@ function void add_wire_connection(
   U32 which_conn
   ) {
   if (wire && process) {
-    Editable_Process new_process = get_editable_process(context->process_edit_list, process);
     Editable_Process new_wire = get_editable_process(context->process_edit_list, wire);
 
-    new_process.process.conn_count[conn] += 1;
-    add_process_to_process_edit_list(context, process, Proc_Trie_Edit_Update, new_process.process);
+    // decrement currently connected process' conn-count
+    {
+      Editable_Process new_process = get_editable_process(context->process_edit_list, wire->conn[conn]);
+      new_process.process.conn_count[conn] -= 1;
+      add_process_to_process_edit_list(context, wire->conn[conn], Proc_Trie_Edit_Update, new_process.process);
+    }
+
+
+    // increment newly connected process' conn-count
+    {
+      Editable_Process new_process = get_editable_process(context->process_edit_list, process);
+      new_process.process.conn_count[conn] += 1;
+      add_process_to_process_edit_list(context, process, Proc_Trie_Edit_Update, new_process.process);
+    }
 
     // Add wire at the given connection index, moving any wires that come after that index over to the right.
     new_wire.process.conn[conn] = process;

@@ -184,7 +184,6 @@ Define_Keybind_And_Action(
           U32 which_conn = hot_process->which_conn[env->moved_wire_conn];
           if (env->moved_wire != hot_process) {
             Process_Connection_Flag which_conn_flags = 1 << env->moved_wire_conn;
-            delete_process(env->context, env->moved_wire, which_conn_flags);
             add_wire_connection(env->context, env->moved_wire, connected_process, env->moved_wire_conn, which_conn);
             gather_processes_from_trie(env->context);
           }
@@ -199,7 +198,6 @@ Define_Keybind_And_Action(
           which_conn = connected_process->conn_count[env->moved_wire_conn];
         }
         Process_Connection_Flag which_conn_flags = 1 << env->moved_wire_conn;
-        delete_process(env->context, env->moved_wire, which_conn_flags);
         add_wire_connection(env->context, env->moved_wire, connected_process, env->moved_wire_conn, which_conn);
         gather_processes_from_trie(env->context);
       }

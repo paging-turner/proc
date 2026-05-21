@@ -262,6 +262,7 @@ typedef struct Steady_Trie(Iterator) {
 
 
 typedef enum Steady_Trie(Edit_Kind) {
+  Steady_Trie(_NULL),
   Steady_Trie(Edit_Insert),
   Steady_Trie(Edit_Delete),
   Steady_Trie(Edit_Update),
