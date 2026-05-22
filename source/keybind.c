@@ -175,7 +175,6 @@ Define_Keybind_And_Action(
   ) {
   if (env->moved_wire && env->context) {
     Process *hot_process = env->context->hot_process.process;
-
     if (hot_process) {
       if (Get_Flag(hot_process->flags, Process_Flag_Wire)) {
         Process *connected_process = hot_process->conn[env->moved_wire_conn];
@@ -183,23 +182,23 @@ Define_Keybind_And_Action(
           // move wire to hovered wire
           U32 which_conn = hot_process->which_conn[env->moved_wire_conn];
           if (env->moved_wire != hot_process) {
-            Process_Connection_Flag which_conn_flags = 1 << env->moved_wire_conn;
-            add_wire_connection(env->context, env->moved_wire, connected_process, env->moved_wire_conn, which_conn);
-            gather_processes_from_trie(env->context);
+            B32 wire_moved_to_new_process = env->moved_wire->conn[env->moved_wire_conn] != connected_process;
+            B32 wire_moved_to_same_place = env->moved_wire->which_conn[env->moved_wire_conn] == (which_conn - 1);
+            if (wire_moved_to_new_process || !wire_moved_to_same_place) {
+              add_wire_connection(env->context, env->moved_wire, connected_process, env->moved_wire_conn, which_conn);
+              gather_processes_from_trie(env->context);
+            }
           }
         }
       } else {
         Process *connected_process = hot_process;
         // move wire to last wire of process
-        U32 which_conn;
-        if (env->moved_wire->conn[env->moved_wire_conn] == connected_process) {
-          which_conn = connected_process->conn_count[env->moved_wire_conn] - 1;
-        } else {
-          which_conn = connected_process->conn_count[env->moved_wire_conn];
+        U32 which_conn = connected_process->conn_count[env->moved_wire_conn];
+        if (env->moved_wire->conn[env->moved_wire_conn] != connected_process ||
+            env->moved_wire->which_conn[env->moved_wire_conn] != which_conn) {
+          add_wire_connection(env->context, env->moved_wire, connected_process, env->moved_wire_conn, which_conn);
+          gather_processes_from_trie(env->context);
         }
-        Process_Connection_Flag which_conn_flags = 1 << env->moved_wire_conn;
-        add_wire_connection(env->context, env->moved_wire, connected_process, env->moved_wire_conn, which_conn);
-        gather_processes_from_trie(env->context);
       }
     }
   }

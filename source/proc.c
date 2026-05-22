@@ -1620,7 +1620,20 @@ function void add_wire_connection(
   U32 which_conn
   ) {
   if (wire && process) {
-    Editable_Process new_wire = get_editable_process(context->process_edit_list, wire);
+    {
+      B32 wire_moved_to_same_process = wire->conn[conn] == process;
+      B32 wire_is_to_the_left_of_itself = which_conn > wire->which_conn[conn];
+
+      Editable_Process new_wire = get_editable_process(context->process_edit_list, wire);
+      new_wire.process.conn[conn] = process;
+      if (wire_moved_to_same_process && wire_is_to_the_left_of_itself) {
+        new_wire.process.which_conn[conn] = which_conn - 1;
+      }
+      else {
+        new_wire.process.which_conn[conn] = which_conn;
+      }
+      add_process_to_process_edit_list(context, wire, Proc_Trie_Edit_Update, new_wire.process);
+    }
 
     // decrement currently connected process' conn-count
     {
@@ -1629,7 +1642,6 @@ function void add_wire_connection(
       add_process_to_process_edit_list(context, wire->conn[conn], Proc_Trie_Edit_Update, new_process.process);
     }
 
-
     // increment newly connected process' conn-count
     {
       Editable_Process new_process = get_editable_process(context->process_edit_list, process);
@@ -1637,30 +1649,34 @@ function void add_wire_connection(
       add_process_to_process_edit_list(context, process, Proc_Trie_Edit_Update, new_process.process);
     }
 
-    // Add wire at the given connection index, moving any wires that come after that index over to the right.
-    new_wire.process.conn[conn] = process;
-    new_wire.process.which_conn[conn] = which_conn;
-    add_process_to_process_edit_list(context, wire, Proc_Trie_Edit_Update, new_wire.process);
-
     for (Process *test_wire = context->views[View_Kind_Procs].processes.first;
          test_wire != 0;
          test_wire = test_wire->next) {
-      // decrement the wires' which_conn if it comes at or after the removed wire conn
-      if (wire != test_wire &&
-          test_wire->conn[conn] == wire->conn[conn] &&
-          test_wire->which_conn[conn] >= wire->which_conn[conn]) {
-        Editable_Process new_test_wire = get_editable_process(context->process_edit_list, test_wire);
-        new_test_wire.process.which_conn[conn] -= 1;
-        add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
-      }
+      if (Get_Flag(test_wire->flags, Process_Flag_Wire)) {
+        B32 not_the_moved_wire = wire != test_wire;
+        B32 test_wire_to_the_right_of_old_process = test_wire->which_conn[conn] >= wire->which_conn[conn];
+        B32 test_wire_to_the_right_of_new_process = test_wire->which_conn[conn] >= which_conn;
+        B32 wire_moved_to_same_process = wire->conn[conn] == process;
+        B32 test_wire_connected_to_old_process = test_wire->conn[conn] == wire->conn[conn];
+        B32 test_wire_connected_to_new_process = test_wire->conn[conn] == process;
 
-      // increment the wires' which_conn if it comes at or after the added wire's which_conn
-      if (wire != test_wire &&
-          test_wire->conn[conn] == process &&
-          test_wire->which_conn[conn] >= which_conn) {
-        Editable_Process new_test_wire = get_editable_process(context->process_edit_list, test_wire);
-        new_test_wire.process.which_conn[conn] += 1;
-        add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
+        if (not_the_moved_wire) {
+          // decrement which_conn
+          if (test_wire_connected_to_old_process &&
+              test_wire_to_the_right_of_old_process) {
+            Editable_Process new_test_wire = get_editable_process(context->process_edit_list, test_wire);
+            new_test_wire.process.which_conn[conn] -= 1;
+            add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
+          }
+
+          // increment which_conn
+          if (test_wire_connected_to_new_process &&
+              test_wire_to_the_right_of_new_process) {
+            Editable_Process new_test_wire = get_editable_process(context->process_edit_list, test_wire);
+            new_test_wire.process.which_conn[conn] += 1;
+            add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
+          }
+        }
       }
     }
   }
