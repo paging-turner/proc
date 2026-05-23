@@ -1,24 +1,10 @@
 #ifndef PROC_KEYBIND_INCLUDE_H
 # define PROC_KEYBIND_INCLUDE_H
+
+
 //////////////////////////////////
 // Keybind Declarations
 //////////////////////////////////
-
-
-/*
- *
- * TODO: Split up the idea of keybind and keybind-action. Many keybinds can map to one action...
- *
- *
- *
- *
- *
- *
- *
- *
- *
- */
-
 
 typedef enum {
   Keybind_Behavior_Overwrite,
@@ -102,16 +88,7 @@ struct Keybind {
 function B32 keybind_zoom_handler(Keybind_Environment *env);
 
 
-function void print_keybind(Keybind *keybind) {
-  printf("keybind %s\n"      , keybind->name.str);
-  printf("  behavior %d\n"   , keybind->behavior);
-  printf("  timing %d\n"     , keybind->timing);
-  printf("  bind %d\n"       , keybind->bind);
-  printf("  key_kind %d\n"   , keybind->key_kind);
-  printf("  modifiers %d\n"  , keybind->modifiers);
-  printf("  constraint %d\n" , keybind->constraint);
-  printf("  handle %p\n"     , keybind->handle);
-}
+
 
 
 
@@ -147,7 +124,9 @@ function void print_keybind(Keybind *keybind) {
 #define Is_Keybind_Custom(keybind)\
   ((keybind) && (keybind)->bind > 0 && (keybind)->handle)
 
-#define Define_Keybind_Action(action_name, d)\
+
+
+#define Define_Keybind_Action(action_name, desc)\
   static Keybind_Action_Sym_DECL(action_name);\
   function B32 handle_keybind_##action_name(Keybind_Environment *env);\
   MR4TH_BEFORE_MAIN(proc_keybind_action##action_name){\
@@ -160,36 +139,38 @@ function void print_keybind(Keybind *keybind) {
 
 
 #define Define_Keybind(\
-  action_name, keybind_name,\
+  action_name,\
   behavior_name, bind_value, timing_name,\
   k, m, c)\
   static Keybind_Action_Sym_DECL(action_name);\
-  static Keybind_Sym_DECL(action_name##keybind_name);\
+  static Keybind_Sym_DECL(action_name);\
   function B32 handle_keybind_##action_name(Keybind_Environment *env);\
   MR4TH_BEFORE_MAIN(proc_keybind_##action_name##_##bind_value){\
-    Keybind_Sym_Type *keybind = Keybind_Sym_REF(action_name##keybind_name);\
+    Keybind_Sym_Type *keybind = Keybind_Sym_REF(action_name);\
     B32 both_zero = (U32)(bind_value) == 0 && keybind->bind == 0;\
     B32 stronger_bind = (U32)(bind_value) >= keybind->bind;\
-    if (both_zero || stronger_bind/*keybind->handle == 0*/) {\
+    printf("action: '%s'   bind: %d\n", #action_name, bind_value);\
+    if (both_zero || stronger_bind) {\
+      printf("    bind\n");\
       keybind->behavior = (behavior_name);\
       keybind->bind = (bind_value);\
       Set_Flag(keybind->timing, Keybind_Timing_##timing_name);\
       keybind->key_kind = (k);\
       keybind->modifiers = (m);\
       keybind->constraint = (c);\
-      keybind->name = str8_lit(Stringify(action_name##keybind_name));\
+      keybind->name = str8_lit(Stringify(action_name));\
       keybind->handle = handle_keybind_##action_name;\
     }\
-    print_keybind(keybind);\
-    printf("\n");\
   }
 
+
+
 #define Define_Keybind_And_Action(\
-  action_name, keybind_name,\
+  action_name,\
   behavior_name, bind_value, timing_name,\
-  k, m, c, d)\
-  Define_Keybind(action_name, keybind_name, behavior_name, bind_value, timing_name, k, m, c);\
-  Define_Keybind_Action(action_name, d)
+  k, m, c, desc)\
+  Define_Keybind(action_name, behavior_name, bind_value, timing_name, k, m, c);\
+  Define_Keybind_Action(action_name, desc)
 
 
 

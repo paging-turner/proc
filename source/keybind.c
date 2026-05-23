@@ -9,7 +9,7 @@ function B32 handle_keybind_DeleteProcess(Keybind_Environment *env);
 
 
 Define_Keybind_And_Action(
-  HandleActiveProcess, ,
+  HandleActiveProcess,
   Keybind_Behavior_Alternate, 0, AtTheStart,
   0, 0, 0,
   "handle active-process"
@@ -48,7 +48,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  Bound, ,
+  Bound,
   Keybind_Behavior_Alternate, 0, AtTheStart,
   Key_Kind_Mouse0, 0,
   Ui_Constraint_NoHotProcess|Ui_Constraint_ExitOnKeyup,
@@ -88,7 +88,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  PerProcessBounding, ,
+  PerProcessBounding,
   Keybind_Behavior_Alternate, 0, ForAllProcesses,
   0, 0, 0,
   "Per-process bounding."
@@ -125,7 +125,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  ZeroOutSelection, ,
+  ZeroOutSelection,
   Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0,
   ""
   ) {
@@ -145,7 +145,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  MoreRectangleSelectionHandling, ,
+  MoreRectangleSelectionHandling,
   Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0,
   "more rectangle selection handling"
   ) {
@@ -169,7 +169,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  HandleMovedWire, ,
+  HandleMovedWire,
   Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0,
   "handle moved wire"
   ) {
@@ -214,7 +214,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  Pan, ,
+  Pan,
   Keybind_Behavior_Alternate, 0, _Null,
   Key_Kind_Mouse1, 0,
   Ui_Constraint_ExitOnKeyup,
@@ -263,7 +263,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  ZoomIn, ,
+  ZoomIn,
   Keybind_Behavior_Alternate, 0, _Null,
   Key_Kind_MouseWheelUp, 0,
   Ui_Constraint_ActionNotOccured,
@@ -277,7 +277,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  ZoomOut, ,
+  ZoomOut,
   Keybind_Behavior_Alternate, 0, _Null,
   Key_Kind_MouseWheelDown, 0,
   Ui_Constraint_ActionNotOccured,
@@ -333,7 +333,7 @@ Define_Keybind_Action(
 
 
 Define_Keybind_And_Action(
-  CheckIfWeNeedToStopDraggingTheWire, ,
+  CheckIfWeNeedToStopDraggingTheWire,
   Keybind_Behavior_Alternate, 0, ForAllProcesses, 0, 0, 0,
   ""
   ) {
@@ -358,7 +358,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  SelectSingleProcess, ,
+  SelectSingleProcess,
   Keybind_Behavior_Alternate, 0, ForAllProcesses,
   Key_Kind_Mouse0, 0,
   Ui_Constraint_HotProcess|Ui_Constraint_ExitOnKeyup|Ui_Constraint_ActionNotOccured,
@@ -424,7 +424,7 @@ function B32 handle_keybind_SelectAnotherProcess(Keybind_Environment *env);
 
 
 Define_Keybind_And_Action(
-  MaybeSetHotProcess, ,
+  MaybeSetHotProcess,
   Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0,
   "Maybe select another process, or maybe set the context's hot-process to the keybind-environment's process."
   ) {
@@ -445,7 +445,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  SelectAnotherProcess, ,
+  SelectAnotherProcess,
   Keybind_Behavior_Alternate, 0, _Null,
   Key_Kind_Mouse0, Modifier_Key_Control,
   Ui_Constraint_HoverProcess,
@@ -481,7 +481,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  CancelSelection, ,
+  CancelSelection,
   Keybind_Behavior_Alternate, 0, _Null,
   Key_Kind_Mouse0, 0,
   Ui_Constraint_NoHotProcess,
@@ -503,7 +503,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  CreateProcess, ,
+  CreateProcess,
   Keybind_Behavior_Alternate, 0, _Null,
   Key_Kind_Mouse0, Modifier_Key_Control,
   Ui_Constraint_NoHotProcess,
@@ -538,7 +538,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  DeleteProcess, ,
+  DeleteProcess,
   Keybind_Behavior_Alternate, 0, _Null,
   KEY_D, Modifier_Key_Control, 0,
   "Delete the selected processes."
@@ -567,7 +567,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  CycleProcessDisplay, ,
+  CycleProcessDisplay,
   Keybind_Behavior_Alternate, 0, _Null,
   KEY_TAB, 0, 0,
   "Cycle through special displays for selected processes."
@@ -608,7 +608,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  ToggleDisplayMode, ,
+  ToggleDisplayMode,
   Keybind_Behavior_Alternate, 0, _Null,
   KEY_M, Modifier_Key_Control, 0,
   "Toggle between 'classic' and 'rounded' display modes."
@@ -630,7 +630,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  CopyProcess, ,
+  CopyProcess,
   Keybind_Behavior_Alternate, 0, _Null,
   KEY_C, Modifier_Key_Control, 0,
   "Copy selected processes."
@@ -651,7 +651,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  PasteProcess, ,
+  PasteProcess,
   Keybind_Behavior_Alternate, 0, _Null,
   KEY_V, Modifier_Key_Control, 0,
   "Paste copied processes, centered at the mouse."
@@ -673,7 +673,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  Undo, ,
+  Undo,
   Keybind_Behavior_Alternate, 0, _Null,
   KEY_Z, Modifier_Key_Control, 0,
   "Performs undo on the proc-trie."
@@ -694,7 +694,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  Redo, ,
+  Redo,
   Keybind_Behavior_Alternate, 0, _Null,
   KEY_Z, Modifier_Key_Control|Modifier_Key_Shift, 0,
   "Performs redo on the proc-trie."
@@ -725,7 +725,7 @@ Define_Keybind_And_Action(
 ///////////////////////////
 // TODO: Find a way to merge some of these stack-related keybind-definitions together.
 Define_Keybind_Action(
-  BoundDesiredKbResStack_Enter, _HACK
+  BoundDesiredKbResStack_Enter, 
   ""
   ) {
   env->old_kb_res = env->desired_kb_res;
@@ -738,11 +738,11 @@ Define_Keybind_Action(
 }
 
 Define_Keybind(
-  BoundDesiredKbResStack_Enter, _HACKY,
+  BoundDesiredKbResStack_Enter,
   Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0);
 
 Define_Keybind_Action(
-  BoundDesiredKbResStack_Exit, _HACK
+  BoundDesiredKbResStack_Exit, 
   ""
   ) {
   env->old_kb_res = env->desired_kb_res;
@@ -755,11 +755,11 @@ Define_Keybind_Action(
 }
 
 Define_Keybind(
-  BoundDesiredKbResStack_Exit, _HACKY,
+  BoundDesiredKbResStack_Exit,
   Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0);
 
 Define_Keybind_Action(
-  MaybeSetHotProcessDesiredKbResStack, _HACK
+  MaybeSetHotProcessDesiredKbResStack, 
   ""
   ) {
   env->old_kb_res = env->desired_kb_res;
@@ -772,6 +772,6 @@ Define_Keybind_Action(
 }
 
 Define_Keybind(
-  MaybeSetHotProcessDesiredKbResStack, _HACKY,
+  MaybeSetHotProcessDesiredKbResStack,
   Keybind_Behavior_Alternate, 0, ForAllProcesses, 0, 0,
   Ui_Constraint_ActionNotOccured);
