@@ -1436,7 +1436,8 @@ function Vector2 get_percentage_between_points(Vector2 p0, Vector2 p1, F32 perce
 function Vector2 get_process_position(Context *context, View *view, Process *process) {
   Vector2 position = process->position;
   B32 is_active = is_active_process(context, process);
-  B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging);
+  B32 is_proc_view = view == context->views + View_Kind_Procs;
+  B32 is_dragging = is_proc_view && Get_Flag(context->flags, Context_Flag_Dragging);
 
   if (is_active && is_dragging) {
     Vector2 delta = Vector2Subtract(context->ui_state.mouse_position, context->active_position);
@@ -2415,16 +2416,19 @@ Define_Keybind_Action(
 
     U32 some_count = SymbolCount(Keybind_Sym);
 
-    // custom keybinds at-the-start
+    // at-the-start
     for (U32 i = 0; i < some_count; ++i) {
       Keybind *keybind = SymbolMetadataFromID(Keybind_Sym, i+1);
 
-      if (Is_Keybind_Custom(keybind) &&
-          keybind->timing == Keybind_Timing_AtTheStart) {
+      if (keybind->timing == Keybind_Timing_AtTheStart) {
         keybind->handle(env);
       }
     }
 
+    // for-each-process
+    Handle_Keybind_Action(env, ForAllProcessInteractions);
+
+#if 0
     Handle_Keybind_Action(env, BoundDesiredKbResStack_Exit);
     Handle_Keybind_Action(env, Undo);
     Handle_Keybind_Action(env, Redo);
@@ -2442,16 +2446,13 @@ Define_Keybind_Action(
     Handle_Keybind_Action(env, PasteProcess);
     Handle_Keybind_Action(env, HandleMovedWire);
     Handle_Keybind_Action(env, HandleActiveProcess);
+#endif
 
-    // custom keybinds at-the-end
+    // at-the-end
     for (U32 i = 0; i < some_count; ++i) {
       Keybind *keybind = SymbolMetadataFromID(Keybind_Sym, i+1);
 
-      if (Is_Keybind_Custom(keybind) &&
-          keybind->timing == Keybind_Timing_AtTheEnd) {
-        if (keybind->handle == handle_keybind_AutoAlignOneInOneOut) {
-          B32 hmmmmm = 0;
-        }
+      if (keybind->timing == Keybind_Timing_AtTheEnd) {
         keybind->handle(env);
       }
     }

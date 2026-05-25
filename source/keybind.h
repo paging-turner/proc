@@ -20,12 +20,12 @@ typedef enum {
 
 typedef enum {
   Ui_Constraint__Null            = 0,
-  Ui_Constraint_HoverProcess     = (1 << 1),
-  Ui_Constraint_HotProcess       = (1 << 2),
-  Ui_Constraint_NoHotProcess     = (1 << 3),
-  Ui_Constraint_ExitOnKeyup      = (1 << 4),
-  Ui_Constraint_ActionNotOccured = (1 << 5),
-  Ui_Constraint_ActiveProcesses  = (1 << 6),
+  Ui_Constraint_HoverProcess     = (1 << 0),
+  Ui_Constraint_HotProcess       = (1 << 1),
+  Ui_Constraint_NoHotProcess     = (1 << 2),
+  Ui_Constraint_ExitOnKeyup      = (1 << 3),
+  Ui_Constraint_ActionNotOccured = (1 << 4),
+  Ui_Constraint_ActiveProcesses  = (1 << 5),
 } Ui_Constraint;
 
 // NOTE: These enum values start with values higher than raylib's highest KEY_* value, which is in the 300s
@@ -120,10 +120,6 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
 #include "../libraries/mr4th/src/mr4th_symbol_set.define.h"
 
 
-// TODO: There should be a better way to determine custom keybinds than just non-zero bind-value....
-#define Is_Keybind_Custom(keybind)\
-  ((keybind) && (keybind)->bind > 0 && (keybind)->handle)
-
 
 
 #define Define_Keybind_Action(action_name, desc)\
@@ -148,10 +144,8 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
   MR4TH_BEFORE_MAIN(proc_keybind_##action_name##_##bind_value){\
     Keybind_Sym_Type *keybind = Keybind_Sym_REF(action_name);\
     B32 both_zero = (U32)(bind_value) == 0 && keybind->bind == 0;\
-    B32 stronger_bind = (U32)(bind_value) >= keybind->bind;\
-    printf("action: '%s'   bind: %d\n", #action_name, bind_value);\
+    B32 stronger_bind = (U32)(bind_value) > keybind->bind;\
     if (both_zero || stronger_bind) {\
-      printf("    bind\n");\
       keybind->behavior = (behavior_name);\
       keybind->bind = (bind_value);\
       Set_Flag(keybind->timing, Keybind_Timing_##timing_name);\
