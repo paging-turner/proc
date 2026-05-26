@@ -132,7 +132,7 @@ typedef struct Connection_Result Connection_Result;
 typedef enum Keybind_Result Keybind_Result;
 typedef struct Keybind Keybind;
 typedef struct View View;
-function              void clear_processes(View *view);
+function              void clear_process_list(Context *context, Process_List *list);
 function              void clear_active_processes(Context *context);
 function              void clear_ds_view_process_list(Context *context);
 function          Process *create_detached_process(Context *context);
@@ -184,12 +184,12 @@ function          Process *find_process_connection(Context *context, Process *p,
   X( Invisible       ,  7      )\
   X( AsBox           ,  8      )\
   X( RefIsActive     ,  9      )\
-  /**/\
   X( TextEdit        , 10      )\
   X( CanBeActive     , 11      )\
   X( Clickable       , 12      )\
   X( FitToText       , 13      )\
-  X( UseLabelCString , 14      )
+  X( UseLabelCString , 14      )\
+  X( IsDetached      , 15      )
 
 
 typedef enum {

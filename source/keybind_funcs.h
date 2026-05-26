@@ -18,11 +18,16 @@ function void remove_string_chunk_list(Context *context, String_Chunk_List *scl)
   }
 }
 
-function void clear_process_list(Process_List *list) {
+function void clear_process_list(Context *context, Process_List *list) {
   if (list && list->first) {
     for (Process *p = list->first; p != 0;) {
       Process *next = p->next;
-      p->next = 0;
+      if (Get_Flag(p->flags, Process_Flag_IsDetached)) {
+        SLLQueuePush(context->free_processes.first, context->free_processes.last, p);
+      }
+      else {
+        p->next = 0;
+      }
       p = next;
     }
 
@@ -50,9 +55,7 @@ function void clear_active_processes(Context *context) {
   clear_active_process_list(&context->active_processes);
 }
 
-function void clear_processes(View *view) {
-  clear_process_list(&view->processes);
-}
+
 
 function Process *push_permanent_process(Context *context) {
   Process *p = push_struct(context->permanent_arena, Process);
@@ -63,7 +66,6 @@ function Process *push_permanent_process(Context *context) {
 
 // TODO: At this point, this is just `push_permanent_process`
 function Process *create_detached_process(Context *context) {
-#if 0
   Process *p = context->free_processes.first;
 
   if (p) {
@@ -71,12 +73,10 @@ function Process *create_detached_process(Context *context) {
   } else {
     p = push_permanent_process(context);
   }
-#else
-  Process *p = push_permanent_process(context);
-#endif
 
   if (p) {
     *p = (Process){0};
+    Set_Flag(p->flags, Process_Flag_IsDetached);
   } else {
     p = The_Null_Process();
   }

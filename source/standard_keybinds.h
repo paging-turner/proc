@@ -122,7 +122,8 @@ function void proc_ds_view_root_clear_handler(
   Context *context = (Context *)maybe_context;
   Proc_Trie_Trie *trie = context->proc_trie;
 
-  if (root) {
+  if (root && root->ref) {
+    SLLQueuePush(context->free_processes.first, context->free_processes.last, root->ref);
     root->ref = 0;
   }
 }
@@ -136,7 +137,8 @@ function void proc_ds_view_node_clear_handler(
   Context *context = (Context *)maybe_context;
   Proc_Trie_Trie *trie = context->proc_trie;
 
-  if (node) {
+  if (node && node->ref) {
+    SLLQueuePush(context->free_processes.first, context->free_processes.last, node->ref);
     node->ref = 0;
   }
 }
@@ -196,10 +198,6 @@ function void proc_ds_view_root_handler(
     }
   }
 
-#if 0
-  Process *proc_before_root = root->prev_branch ? root->prev_branch->ref : trie->ref;
-  Process *to_root_wire = connect_detached_processes(context, proc_before_root, root->ref);
-#else
   if (root->prev_branch) {
     Process *new_wire = connect_detached_processes(context, root->prev_branch->ref, root->ref);
     Push_Ds_View_Process(new_wire);
@@ -214,7 +212,7 @@ function void proc_ds_view_root_handler(
     Process *new_wire = connect_detached_processes(context, trie->ref, root->ref);
     Push_Ds_View_Process(new_wire);
   }
-#endif
+
   Process *root_to_first_node_wire = connect_detached_processes(context, root->ref, root->node->ref);
 
   if (null_trie_ref) {
@@ -222,8 +220,6 @@ function void proc_ds_view_root_handler(
   }
   Push_Ds_View_Process(root->ref);
   Push_Ds_View_Process(root->node->ref);
-  /* Assert(to_root_wire); */
-  /* Push_Ds_View_Process(to_root_wire); */
   Push_Ds_View_Process(root_to_first_node_wire);
 }
 

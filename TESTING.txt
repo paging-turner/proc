@@ -115,3 +115,10 @@ For now, we will have to manually test a bunch of features. This file exists to 
     2. Connect two processes to one of the other processes
     3. Move the first wire "in" connection to the remaining empty process
     VARIATION: Use "out" connection
+
+
+------------------------------------------
+013 Undo with selected processes
+    1. Create some processes and select some of them
+    2. Undo and redo a few times
+    EXPECT: The processes undo/redo and do *NOT* type the bound key in the selected processes.

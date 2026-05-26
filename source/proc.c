@@ -503,7 +503,7 @@ function void gather_processes_from_trie(Context *context) {
 
   proc_trie_commit(trie);
 
-  clear_processes(context->views + View_Kind_Procs);
+  clear_process_list(context, &context->views[View_Kind_Procs].processes);
 
   for (Proc_Trie_Iterator *iter = proc_trie_iter_init(arena, trie->current_root->node);
        proc_trie_iter_test(iter);
