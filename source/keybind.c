@@ -10,7 +10,7 @@ function B32 handle_keybind_DeleteProcess(Keybind_Environment *env);
 
 Define_Keybind_And_Action(
   HandleActiveProcess,
-  Keybind_Behavior_Alternate, 0, AtTheStart,
+  Keybind_Behavior_Alternate, 0, AtTheEnd,
   0, 0, 0,
   "handle active-process"
   ) {
@@ -678,6 +678,7 @@ Define_Keybind_And_Action(
 
   if (check_keybind(context, Keybind_Sym_REF(Undo), selection) == Keybind_Result_Enter) {
     handled = 1;
+    Set_Flag(env->context->ui_state.flags, Ui_State_Flag_action_occured);
     proc_trie_undo(context->proc_trie);
     gather_processes_from_trie(context);
   }

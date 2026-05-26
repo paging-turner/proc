@@ -3,12 +3,13 @@
 ==================
   [x] Write some code to help auto-layout the trie ds-view.
   [ ] Consider writing generic helpers that allow you to autolayout sets of processes.
+  [ ] Introduce directionality of procs (Top-to-bottom, Bottom-to-top, Left-to-right, Right-to-left)
 
 
 =================
 === Undo/redo ===
 =================
-  [ ] BUG: When undoing/redoing with procs selected, the hotkey ends up getting typed into the selected procs.
+  [x] BUG: When undoing/redoing with procs selected, the hotkey ends up getting typed into the selected procs.
 
 
 =================
@@ -18,10 +19,20 @@
     [ ] Allow clicking roots to view the procs at that point
 
 
+================
+=== Keybinds ===
+================
+  [ ] Allow building proc object with custom object file to modify keybinds
+        ^----- Is it possible to have an object-file that is executable, but also can be built with custom object-files?
+  ================
+  === Ordering ===
+  ================
+    ** Figure out a way to order when keybinds are checked, like defining a partial order.
+
+
 ==========================
 === File Save and Load ===
 ==========================
-  [ ] Maybe first we should implement undo/redo
   [ ] Save and Load
 
 
@@ -31,6 +42,11 @@
   [x] Allow reordering of connected wires
   [x] BUG: While making a new wire-connection, if you click on another wire-box, the new-wire jumps to a place off the screen. Clicking on a process while in this busted state makes a new wire that leads to some invisible process.
   [ ] Preview wire movement while dragging wire.
+  ====================
+  === Wire shaping ===
+  ====================
+    ** It would be nice to be able to "shape" wires in ways that the auto-layout cannot reasonably do.
+    [ ] Drag a part of a wire in order to "stretch" it in certain ways??
 
 
 ====================
@@ -102,6 +118,7 @@
 === UI / Process-Interaction ===
 ================================
   [x] Merge structs for ui-element and process. It will make memory management easier and give more use-cases of processes with different properties than what's covered in PQP.
+  [ ] Consider using something like Clay for UI layout to get a head-start.
 
 
 =============
