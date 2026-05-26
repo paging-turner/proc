@@ -8,7 +8,14 @@
 =================
 === Undo/redo ===
 =================
-  [ ]
+  [ ] BUG: When undoing/redoing with procs selected, the hotkey ends up getting typed into the selected procs.
+
+
+=================
+=== Trie View ===
+=================
+  [ ] Create root-only view that can be toggled as visible/invisible
+    [ ] Allow clicking roots to view the procs at that point
 
 
 ==========================
@@ -59,7 +66,7 @@
 === Keybind Config ===
 ======================
   [X] Allow for multiple keybind definitions.
-  [ ] Add ability to define bindings for mouse buttons and mouse-wheels
+  [x] Add ability to define bindings for mouse buttons and mouse-wheels
   [x] Create symbol-set to replace Proc_Keybind_Def_Kind enum
   [x] Make a way to create keybind aliases, so you can define a new keybind for an existing handler-function.
 
@@ -67,7 +74,7 @@
 ===============
 === Testing ===
 ===============
-  [ ] Enumerate some test cases, to at least be able to manually check that things are working.
+  [x] Enumerate some test cases, to at least be able to manually check that things are working.
   === Automated Tests ===
     [ ] Define a way to save user-inputs and compare resulting process-lists. Will probably need to id/sort the processes if we end up implementing hash-like structures for storing processes.
 
@@ -117,4 +124,4 @@
 [ ] Use a font other than the raylib default
 [ ] Expand base-layer and let it consume core.h and ryn_memory.h
 [ ] Make some sliders/fields for global settings like process-size and font-size.
-[ ] Processes should expand to contain their label
+[x] Processes should expand to contain their label
