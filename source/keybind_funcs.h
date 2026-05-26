@@ -64,7 +64,7 @@ function Process *push_permanent_process(Context *context) {
 }
 
 
-// TODO: At this point, this is just `push_permanent_process`
+
 function Process *create_detached_process(Context *context) {
   Process *p = context->free_processes.first;
 

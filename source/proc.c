@@ -516,14 +516,23 @@ function void gather_processes_from_trie(Context *context) {
 
   // Update data-structure view processes
   {
+    // TODO: Update DS-view procs without clearing all of the refs every time
+#if 0
     proc_trie_crawl_trie(context->per_frame_arena,
                          context->proc_trie,
                          proc_ds_view_root_clear_handler,
                          proc_ds_view_node_clear_handler,
                          context);
 
+
     clear_ds_view_process_list(context);
-    context->proc_trie->ref = 0;
+    {
+      Process *p = context->proc_trie->ref;
+      if (context->proc_trie->ref && Get_Flag(p->flags, Process_Flag_IsDetached)) {
+        SLLQueuePush(context->free_processes.first, context->free_processes.last, p);
+        context->proc_trie->ref = 0;
+      }
+    }
 
     proc_trie_crawl_trie(context->per_frame_arena,
                          context->proc_trie,
@@ -537,6 +546,7 @@ function void gather_processes_from_trie(Context *context) {
       Process *trie_to_root_wire = connect_detached_processes(context, trie->ref, trie->root->ref);
       Push_Ds_View_Process(trie_to_root_wire);
     }
+#endif
   }
 }
 
@@ -1837,19 +1847,23 @@ function Process *connect_detached_processes(
   Process *out,
   Process *in
   ) {
-  Process *new_wire = create_detached_process(context);
+  Process *new_wire = 0;
 
-  if (new_wire && out && in) {
-    Set_Flag(new_wire->flags, Process_Flag_Wire);
+  if (out && in) {
+    new_wire = create_detached_process(context);
 
-    new_wire->out = out;
-    new_wire->in = in;
+    if (new_wire) {
+      Set_Flag(new_wire->flags, Process_Flag_Wire);
 
-    new_wire->which_out = out->out_count;
-    new_wire->which_in = in->in_count;
+      new_wire->out = out;
+      new_wire->in = in;
 
-    out->out_count += 1;
-    in->in_count += 1;
+      new_wire->which_out = out->out_count;
+      new_wire->which_in = in->in_count;
+
+      out->out_count += 1;
+      in->in_count += 1;
+    }
   }
 
   return new_wire;
@@ -2598,6 +2612,8 @@ int main(void) {
     SetExitKey(0);
     SetWindowState(FLAG_WINDOW_RESIZABLE);
     SetTargetFPS(60);
+
+    printf("sizeof(Process) %zu\n", sizeof(Process));
 
     // init context
     {
