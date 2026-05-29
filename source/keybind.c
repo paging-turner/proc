@@ -362,48 +362,50 @@ Define_Keybind_And_Action(
   Context *context = env->context;
   Process_Selection selection = env->selection;
 
-  if (check_keybind(context, Keybind_Sym_REF(SelectSingleProcess), selection) == Keybind_Result_Enter) {
-    handled = 1;
-    B32 in_selection = selection.type == Process_Selection_In;
-    B32 out_selection = selection.type == Process_Selection_Out;
-    if (in_selection || out_selection) {
-      // select wire
-      Process *wire = get_process_wire_by_selection(context, selection);
-      B32 is_active_wire = is_active_process(context, wire);
+  if (Test_Keybind(env, SelectSingleProcess, Enter)) {
+    if (selection.view == context->views + View_Kind_Procs) {
+      handled = 1;
+      B32 in_selection = selection.type == Process_Selection_In;
+      B32 out_selection = selection.type == Process_Selection_Out;
+      if (in_selection || out_selection) {
+        // select wire
+        Process *wire = get_process_wire_by_selection(context, selection);
+        B32 is_active_wire = is_active_process(context, wire);
 
-      if (wire) {
-        U32 drag_flag = in_selection ? Process_Flag_Drag_In : Process_Flag_Drag_Out;
-        Unset_Flag(context->flags, Context_Flag_NewWire);
-        Set_Flag(wire->flags, drag_flag);
-        context->active_position = context->ui_state.mouse_position;
-        if (!is_active_wire) {
-          clear_active_processes(context);
-          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, wire, next_active, 0);
+        if (wire) {
+          U32 drag_flag = in_selection ? Process_Flag_Drag_In : Process_Flag_Drag_Out;
+          Unset_Flag(context->flags, Context_Flag_NewWire);
+          Set_Flag(wire->flags, drag_flag);
+          context->active_position = context->ui_state.mouse_position;
+          if (!is_active_wire) {
+            clear_active_processes(context);
+            SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, wire, next_active, 0);
+          }
         }
-      }
-    } else if ((env->is_active || context->hot_process.process == env->p) &&
-               selection.type == Process_Selection_NewWire) {
-      // begin new-wire
-      Set_Flag(context->flags, Context_Flag_NewWire);
-      if (!env->is_active) {
-        clear_active_processes(context);
-        SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, env->p, next_active, 0);
-      }
-    } else if (selection.type == Process_Selection_Process) {
-      if (Get_Flag(context->flags, Context_Flag_NewWire)) {
-        // connect processes
-        connect_processes(context, context->active_processes.first, env->p);
-        exit_add_wire_mode(context);
-      } else {
-        // select process
-        context->hot_process.process = env->p;
+      } else if ((env->is_active || context->hot_process.process == env->p) &&
+                 selection.type == Process_Selection_NewWire) {
+        // begin new-wire
+        Set_Flag(context->flags, Context_Flag_NewWire);
         if (!env->is_active) {
           clear_active_processes(context);
           SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, env->p, next_active, 0);
         }
-        Unset_Flag(context->flags, Context_Flag_NewWire);
-        Set_Flag(context->flags, Context_Flag_Dragging);
-        context->active_position = context->ui_state.mouse_position;
+      } else if (selection.type == Process_Selection_Process) {
+        if (Get_Flag(context->flags, Context_Flag_NewWire)) {
+          // connect processes
+          connect_processes(context, context->active_processes.first, env->p);
+          exit_add_wire_mode(context);
+        } else {
+          // select process
+          context->hot_process.process = env->p;
+          if (!env->is_active) {
+            clear_active_processes(context);
+            SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, env->p, next_active, 0);
+          }
+          Unset_Flag(context->flags, Context_Flag_NewWire);
+          Set_Flag(context->flags, Context_Flag_Dragging);
+          context->active_position = context->ui_state.mouse_position;
+        }
       }
     }
   }

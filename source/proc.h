@@ -237,6 +237,7 @@ struct Process_Selection {
   Process_Selection_Type type;
   S32 index;
   B32 hot_id_assigned;
+  View *view;
 };
 
 struct Process_List {

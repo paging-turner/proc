@@ -293,3 +293,34 @@ Define_Keybind_Action(
 
 
 
+
+
+Define_Keybind_And_Action(
+  SelectRootFromUndoTrie,
+  Keybind_Behavior_Alternate, 1, ForAllProcesses,
+  Key_Kind_Mouse0, 0,
+  Ui_Constraint_HotProcess|Ui_Constraint_ExitOnKeyup|Ui_Constraint_ActionNotOccured,
+  "Select root from undo trie."
+  ) {
+  B32 handled = 0;
+  Context *context = env->context;
+  Process_Selection selection = env->selection;
+
+  if (Test_Keybind(env, SelectRootFromUndoTrie, Enter)) {
+    if (selection.view == context->views + View_Kind_Trie) {
+      B32 in_selection = selection.type == Process_Selection_In;
+      B32 out_selection = selection.type == Process_Selection_Out;
+
+      if (selection.type == Process_Selection_Process) {
+        if (selection.process->ref) {
+          handled = 1;
+
+          context->proc_trie->current_root = selection.process->ref;
+          gather_processes_from_trie(context);
+        }
+      }
+    }
+  }
+
+  return handled;
+}

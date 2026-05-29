@@ -516,7 +516,6 @@ function void gather_processes_from_trie(Context *context) {
 
   // Update data-structure view processes
   {
-    // TODO: Update DS-view procs without clearing all of the refs every time
     Process_List *ds_proc_list = &context->views[View_Kind_Trie].processes;
     clear_process_list(context, ds_proc_list);
 
@@ -530,39 +529,9 @@ function void gather_processes_from_trie(Context *context) {
       if (iter->stack->root == context->proc_trie->current_root) {
         Set_Flag(p->flags, Process_Flag_RefIsActive);
       }
+      p->ref = iter->stack->root;
       SLLQueuePush(ds_proc_list->first, ds_proc_list->last, p);
     }
-
-#if 0
-    proc_trie_crawl_trie(context->per_frame_arena,
-                         context->proc_trie,
-                         proc_ds_view_root_clear_handler,
-                         proc_ds_view_node_clear_handler,
-                         context);
-
-
-    clear_ds_view_process_list(context);
-    {
-      Process *p = context->proc_trie->ref;
-      if (context->proc_trie->ref && Get_Flag(p->flags, Process_Flag_IsDetached)) {
-        SLLQueuePush(context->free_processes.first, context->free_processes.last, p);
-        context->proc_trie->ref = 0;
-      }
-    }
-
-    proc_trie_crawl_trie(context->per_frame_arena,
-                         context->proc_trie,
-                         proc_ds_view_root_handler,
-                         proc_ds_view_node_handler,
-                         context);
-
-    // connect the trie to the first root
-    Ensure_Process_Reference_Exists_No_Label(trie);
-    if (trie->ref && trie->root && trie->root->ref) {
-      Process *trie_to_root_wire = connect_detached_processes(context, trie->ref, trie->root->ref);
-      Push_Ds_View_Process(trie_to_root_wire);
-    }
-#endif
   }
 }
 
@@ -2288,6 +2257,7 @@ get_process_selection(Context *context, View *view, Process *p) {
   Process_Selection selection = {0};
   selection.index = -1;
   selection.process = p;
+  selection.view = view;
 
   Process_Shape shape = get_process_shape(context, view, p);
   Rectangle new_wire_box = get_new_wire_box(context, view, p, shape);
@@ -2847,8 +2817,7 @@ int main(void) {
 
         for (U32 v = 0; v < View_Kind__Count; ++v) {
           View *view = context.views + v;
-          B32 is_trie_view = v == View_Kind_Trie;
-          B32 should_draw = (is_trie_view
+          B32 should_draw = (v == View_Kind_Trie
                              ? Get_Flag(context.flags, Context_Flag_DataStructureView) != 0
                              : 1);
           Process *processes_to_draw = should_draw ? view->processes.first : 0;
@@ -2969,7 +2938,7 @@ int main(void) {
               }
 
               // draw new-wire-box
-              if (is_active || is_hot) {
+              if (v == View_Kind_Procs && (is_active || is_hot)) {
                 Rectangle new_wire_box = get_new_wire_box(&context, view, p, shape);
                 B32 new_wire_box_is_active = (
                   (is_active && Get_Flag(context.flags, Context_Flag_NewWire)) ||
