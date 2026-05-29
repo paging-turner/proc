@@ -218,11 +218,6 @@ typedef struct Steady_Trie(Root) {
 } Steady_Trie(Root);
 
 
-typedef struct Steady_Trie(Root_Stack) {
-  Steady_Trie(Root) *root;
-  struct Steady_Trie(Root_Stack) *next;
-} Steady_Trie(Root_Stack);
-
 
 typedef struct Steady_Trie(Settings) {
   U32 key_bits;
@@ -247,8 +242,11 @@ typedef struct Steady_Trie(Trie) {
 typedef struct Steady_Trie(Stack_Node) {
   struct Steady_Trie(Stack_Node) *next;
   Steady_Trie(Node) *node;
+  Steady_Trie(Root) *root;
   U32 index;
   U32 visited_plus_one;
+  S32 depth;
+  S32 indent;
 } Steady_Trie(Stack_Node);
 
 
@@ -258,6 +256,7 @@ typedef struct Steady_Trie(Iterator) {
   Steady_Trie(Stack_Node) *free_stack; // TODO: Use free stack-nodes!
 
   Steady_Trie(Key) key;
+  S32 indent;
 } Steady_Trie(Iterator);
 
 
@@ -336,6 +335,12 @@ Steady_Function S32 steady_trie(get_depth_from_iterator)(Steady_Trie(Iterator) *
 }
 
 
+
+
+/////////////////////////
+// Trie Node Iterator  //
+/////////////////////////
+
 Steady_Function void steady_trie(iter_next)(Steady_Trie(Iterator) *iter) {
   // Do a depth-first search until we find the next occupied key.
   for (;;) {
@@ -410,6 +415,75 @@ Steady_Function Steady_Trie(Iterator) *steady_trie(iter_init)(
 Steady_Function B32 steady_trie(iter_test)(Steady_Trie(Iterator) *iter) {
   return iter && iter->stack;
 }
+
+
+
+
+
+
+/////////////////////////
+// Trie Root Iterator  //
+/////////////////////////
+Steady_Function Steady_Trie(Iterator) *steady_trie(iter_root_init)(
+  Arena *arena,
+  Steady_Trie(Trie) *trie
+  ) {
+  Steady_Trie(Iterator) *iter = arena_push(arena, sizeof(Steady_Trie(Iterator)));
+  Steady_Trie(Stack_Node) *stack = arena_push(arena, sizeof(Steady_Trie(Stack_Node)));
+
+  if (iter && stack && trie) {
+    iter->arena = arena;
+    iter->stack = stack;
+    iter->stack->root = trie->root;
+  }
+
+  return iter;
+}
+
+
+Steady_Function B32 steady_trie(iter_root_test)(Steady_Trie(Iterator) *iter) {
+  return iter && iter->stack && iter->stack->root;
+}
+
+
+Steady_Function void steady_trie(iter_root_next)(Steady_Trie(Iterator) *iter) {
+  Arena *arena = iter->arena;
+
+  // pop and push
+  if (steady_trie(iter_root_test)(iter)) {
+    Steady_Trie(Stack_Node) *current_node = iter->stack;
+    SLLStackPop(iter->stack);
+
+    if (current_node->root) {
+      // push next branch
+      if (current_node->root->next_branch) {
+        Steady_Trie(Stack_Node) *new_stack = arena_push(arena, sizeof(Steady_Trie(Stack_Node)));
+        new_stack->root = current_node->root->next_branch;
+        new_stack->indent = current_node->indent;
+        new_stack->depth = current_node->depth;
+        SLLStackPush(iter->stack, new_stack);
+      }
+
+      // push next edit
+      if (current_node->root->next_edit) {
+        Steady_Trie(Stack_Node) *new_stack = arena_push(arena, sizeof(Steady_Trie(Stack_Node)));
+        new_stack->root = current_node->root->next_edit;
+        new_stack->indent = current_node->indent;
+        new_stack->depth = current_node->depth + 1;
+        SLLStackPush(iter->stack, new_stack);
+      }
+    }
+  }
+
+  // set indent
+  if (steady_trie(iter_root_test)(iter)) {
+    if (iter->stack->root->prev_branch) {
+      iter->indent += 1;
+      iter->stack->indent = iter->indent;
+    }
+  }
+}
+
 
 
 
@@ -692,9 +766,6 @@ Steady_Function void steady_trie(redo)(Steady_Trie(Trie) *trie) {
 
 
 
-Steady_Function void steady_trie(handle_root_crawl)(Steady_Trie(Root) *root) {
-  Steady_Trie_Debug_Print("  root = %p\n", root);
-}
 
 Steady_Function void steady_trie(commit)(Steady_Trie(Trie) *trie) {
   Steady_Trie_Debug_Print("commit\n");
@@ -707,93 +778,8 @@ Steady_Function void steady_trie(commit)(Steady_Trie(Trie) *trie) {
 }
 
 
-Steady_Function void steady_trie(crawl_trie)(
-  Arena *arena,
-  Steady_Trie(Trie) *trie,
-  void (*root_handler)(void *caller_data, Steady_Trie(Iterator) *iter, Steady_Trie(Root) *root),
-  void (*node_handler)(void *caller_data, Steady_Trie(Iterator) *iter, Steady_Trie(Node) *node),
-  void *caller_data
-  ) {
-  Steady_Trie(Root_Stack) *root_stack = arena_push(arena, sizeof(Steady_Trie(Root_Stack)));
-  if (root_stack) {
-    root_stack->root = trie->root;
-  }
 
-  for (; root_stack != 0 && root_stack->root;) {
-    // Handle the root
-    Steady_Trie(Iterator) *iter = arena_push(arena, sizeof(Steady_Trie(Iterator)));
-    Steady_Trie(Stack_Node) *stack = arena_push(arena, sizeof(Steady_Trie(Stack_Node)));
-    if (iter && stack && root_stack && root_stack->root) {
-      iter->arena = arena;
-      iter->stack = stack;
-      iter->stack->node = root_stack->root->node;
 
-      root_handler(caller_data, iter, root_stack->root);
-
-      if (iter && iter->stack && iter->stack->node) {
-        node_handler(caller_data, iter, iter->stack->node);
-      }
-
-      for (;;) {
-        if (iter && iter->stack && iter->stack->node) {
-          if (iter->stack->index < Steady_Trie_Slot_Count) {
-            B32 not_visited = ((iter->stack->visited_plus_one == 0) ||
-                               (iter->stack->visited_plus_one-1 < iter->stack->index));
-            B32 occupied = iter->stack->node->occupied[iter->stack->index];
-
-            if (occupied && not_visited) {
-              iter->stack->visited_plus_one = iter->stack->index+1;
-            }
-            else if (iter->stack->node->slots[iter->stack->index]) {
-              // Child slot is present, so descend.
-              // TODO: Recycle free stack-nodes!!!!!
-              Steady_Trie(Node) *next_node = iter->stack->node->slots[iter->stack->index];
-              Steady_Trie(Stack_Node) *new_stack_node = arena_push(iter->arena, sizeof(Steady_Trie(Stack_Node)));
-              iter->stack->index += 1;
-              new_stack_node->node = next_node;
-              SLLStackPush(iter->stack, new_stack_node);
-              node_handler(caller_data, iter, next_node);
-            }
-            else {
-              iter->stack->index += 1;
-            }
-          }
-          else {
-            // Reached the end of the current node's slots, so go back up.
-            SLLStackPop(iter->stack); // TODO: Recycle stack-nodes!!!!!!!!
-          }
-        }
-        else {
-          // The iter-stack or the stack's node is empty, so bail.
-          break;
-        }
-      }
-    }
-
-    // On to the next root.
-    if (root_stack->root->next_edit) {
-      if (arena_has_space_for(arena, sizeof(Steady_Trie(Root_Stack)))) {
-        Steady_Trie(Root_Stack) *new_stack = arena_push(arena, sizeof(Steady_Trie(Root_Stack)));
-        new_stack->root = root_stack->root->next_edit;
-        SLLStackPush(root_stack, new_stack);
-      }
-      else {
-        Steady_Trie_Debug_Print("[ ERROR ] Pushing Steady_Trie(Root_Stack) in steady_trie(crawl_roots)\n");
-        break;
-      }
-    }
-    else if (root_stack->root->next_branch) {
-      root_stack->root = root_stack->root->next_branch;
-    }
-    else {
-      SLLStackPop(root_stack);
-
-      if (root_stack) {
-        root_stack->root = root_stack->root->next_branch;
-      }
-    }
-  }
-}
 
 
 

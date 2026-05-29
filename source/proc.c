@@ -517,6 +517,22 @@ function void gather_processes_from_trie(Context *context) {
   // Update data-structure view processes
   {
     // TODO: Update DS-view procs without clearing all of the refs every time
+    Process_List *ds_proc_list = &context->views[View_Kind_Trie].processes;
+    clear_process_list(context, ds_proc_list);
+
+    for (Proc_Trie_Iterator *iter = proc_trie_iter_root_init(context->per_frame_arena, context->proc_trie);
+         proc_trie_iter_root_test(iter);
+         proc_trie_iter_root_next(iter)) {
+      // TODO: create proc and set position
+      Process *p = create_detached_process(context);
+      p->position.x = (F32)iter->stack->indent * 40.0f;
+      p->position.y = (F32)iter->stack->depth * 40.0f;
+      if (iter->stack->root == context->proc_trie->current_root) {
+        Set_Flag(p->flags, Process_Flag_RefIsActive);
+      }
+      SLLQueuePush(ds_proc_list->first, ds_proc_list->last, p);
+    }
+
 #if 0
     proc_trie_crawl_trie(context->per_frame_arena,
                          context->proc_trie,
@@ -633,13 +649,6 @@ function void remove_copy_process_list(Context *context, Process_List *list) {
 }
 
 
-function void clear_ds_view_process_list(Context *context) {
-  // TODO: @Speed can probably do some fancy stuff with just the ends of the list?
-  for (Process *p = context->views[View_Kind_Trie].processes.first; p != 0; p = p->next) {
-    remove_string_chunk_list(context, &p->label);
-    remove_process_from_process_list(context, &context->views[View_Kind_Trie].processes, p);
-  }
-}
 
 
 function Process *add_process_to_copy_list(
