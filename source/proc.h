@@ -189,7 +189,8 @@ function          Process *find_process_connection(Context *context, Process *p,
   X( Clickable       , 12      )\
   X( FitToText       , 13      )\
   X( UseLabelCString , 14      )\
-  X( IsDetached      , 15      )
+  X( IsDetached      , 15      )\
+  X( Line            , 16      )
 
 
 typedef enum {

@@ -522,15 +522,34 @@ function void gather_processes_from_trie(Context *context) {
     for (Proc_Trie_Iterator *iter = proc_trie_iter_root_init(context->per_frame_arena, context->proc_trie);
          proc_trie_iter_root_test(iter);
          proc_trie_iter_root_next(iter)) {
-      // TODO: create proc and set position
       Process *p = create_detached_process(context);
-      p->position.x = (F32)iter->stack->indent * 40.0f;
-      p->position.y = (F32)iter->stack->depth * 40.0f;
+      p->position.x = (F32)iter->stack->indent * 60.0f;
+      p->position.y = (F32)iter->stack->depth * 60.0f;
       if (iter->stack->root == context->proc_trie->current_root) {
         Set_Flag(p->flags, Process_Flag_RefIsActive);
       }
       p->ref = iter->stack->root;
+      iter->stack->root->ref = p;
       SLLQueuePush(ds_proc_list->first, ds_proc_list->last, p);
+
+      // add line to prev_edit
+      if (iter->stack->root->prev_edit) {
+        Process *l = create_detached_process(context);
+        Set_Flag(l->flags, Process_Flag_Line);
+        l->in = iter->stack->root->prev_edit->ref;
+        l->out = iter->stack->root->ref;
+        SLLQueuePush(ds_proc_list->first, ds_proc_list->last, l);
+      }
+
+      // add line to prev_branch
+      if (iter->stack->root->prev_branch) {
+        Process *l = create_detached_process(context);
+        Set_Flag(l->flags, Process_Flag_Line);
+        l->in = iter->stack->root->prev_branch->ref;
+        l->out = iter->stack->root->ref;
+        SLLQueuePush(ds_proc_list->first, ds_proc_list->last, l);
+      }
+
     }
   }
 }
@@ -1422,6 +1441,7 @@ function Vector2 get_percentage_between_points(Vector2 p0, Vector2 p1, F32 perce
 
 
 function Vector2 get_process_position(Context *context, View *view, Process *process) {
+  // TODO: we probably want to just call world-to-screen inside here...
   Vector2 position = process->position;
   B32 is_active = is_active_process(context, process);
   B32 is_proc_view = view == context->views + View_Kind_Procs;
@@ -2822,6 +2842,21 @@ int main(void) {
                              : 1);
           Process *processes_to_draw = should_draw ? view->processes.first : 0;
           F32 font_size = view->camera.zoom * global_process_font_size;
+
+          // @Speed
+          // draw lines
+          for (Process *p = processes_to_draw; p != 0; p = p->next) {
+            if (Get_Flag(p->flags, Process_Flag_Line)) {
+              if (p->in && p->out) {
+                Vector2 in_pos = get_process_position(&context, view, p->in);
+                in_pos = GetWorldToScreen2D(in_pos, view->camera);
+                Vector2 out_pos = get_process_position(&context, view, p->out);
+                out_pos = GetWorldToScreen2D(out_pos, view->camera);
+                Color c = (Color){0, 0, 0, 255}; // TODO: use some existing color
+                render_DrawLine(rc, in_pos.x, in_pos.y, out_pos.x, out_pos.y, 2.0f, c);
+              }
+            }
+          }
 
           // draw processes
           for (Process *p = processes_to_draw; p != 0; p = p->next) {
