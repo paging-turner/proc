@@ -26,7 +26,7 @@ function S32 process_compare_pos_x(void *a, void *b, void *udata) {
 // Process-Connection By Clicking
 ////////////////////////////////////////
 Define_Keybind(
-  ProcessConnectionByModClick,
+  ProcessConnectionByModClick, Standard,
   Keybind_Behavior_Alternate, 34, AtTheStart,
   Key_Kind_Mouse0, Modifier_Key_Super,
   (Ui_Constraint_ActionNotOccured |
@@ -39,9 +39,9 @@ Define_Keybind_Action(
   ) {
   B32 handled = 0;
   Context *context = env->context;
-  Process_Selection selection = env->selection;
+  /* Process_Selection selection = env->selection; */
 
-  if (Test_Keybind(env, ProcessConnectionByModClick, Enter)) {
+  if (Test_Keybind(env, Enter)) {
     handled = 1;
 
     Assert(context->active_processes.first);
@@ -90,7 +90,7 @@ Define_Keybind_Action(
 //////////////////////////////////
 
 Define_Keybind(
-  ToggleDataStructureView,
+  ToggleDataStructureView, Standard,
   Keybind_Behavior_Overwrite, 274, AtTheStart,
   KEY_D, Modifier_Key_Control|Modifier_Key_Shift,
   Ui_Constraint_ActionNotOccured);
@@ -102,9 +102,9 @@ Define_Keybind_Action(
   ) {
   B32 handled = 0;
   Context *context = env->context;
-  Process_Selection selection = env->selection;
+  /* Process_Selection selection = env->selection; */
 
-  if (Test_Keybind(env, ToggleDataStructureView, Enter)) {
+  if (Test_Keybind(env, Enter)) {
     // TODO: Map the proc-trie to processes with the same referential structure.
     Toggle_Flag(context->flags, Context_Flag_DataStructureView);
   }
@@ -117,7 +117,7 @@ Define_Keybind_Action(
 
 
 Define_Keybind_And_Action(
-  SelectRootFromUndoTrie,
+  SelectRootFromUndoTrie, Standard,
   Keybind_Behavior_Alternate, 1, ForAllProcesses,
   Key_Kind_Mouse0, 0,
   Ui_Constraint_HotProcess|Ui_Constraint_ExitOnKeyup|Ui_Constraint_ActionNotOccured,
@@ -127,7 +127,7 @@ Define_Keybind_And_Action(
   Context *context = env->context;
   Process_Selection selection = env->selection;
 
-  if (Test_Keybind(env, SelectRootFromUndoTrie, Enter)) {
+  if (Test_Keybind(env, Enter)) {
     if (selection.view == context->views + View_Kind_Trie) {
       B32 in_selection = selection.type == Process_Selection_In;
       B32 out_selection = selection.type == Process_Selection_Out;

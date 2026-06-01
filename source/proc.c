@@ -2417,7 +2417,7 @@ function void do_menu_ui(Context *context, B32 sizing) {
 
 
 Define_Keybind(
-  process_interaction,
+  process_interaction, Default,
   Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0);
 
 Define_Keybind_Action(
@@ -2429,9 +2429,14 @@ Define_Keybind_Action(
 
     U32 some_count = SymbolCount(Keybind_Sym);
 
+    Keybind *keybind = Keybind_Sym_REF(Bound_Default);
+    env->keybind = keybind;
+    keybind->handle(env);
+
     // at-the-start
     for (U32 i = 0; i < some_count; ++i) {
       Keybind *keybind = SymbolMetadataFromID(Keybind_Sym, i+1);
+      env->keybind = keybind;
 
       if (keybind->timing == Keybind_Timing_AtTheStart) {
         keybind->handle(env);
@@ -2464,6 +2469,7 @@ Define_Keybind_Action(
     // at-the-end
     for (U32 i = 0; i < some_count; ++i) {
       Keybind *keybind = SymbolMetadataFromID(Keybind_Sym, i+1);
+      env->keybind = keybind;
 
       if (keybind->timing == Keybind_Timing_AtTheEnd) {
         keybind->handle(env);
@@ -2589,6 +2595,13 @@ function void set_global_window_render_size(void) {
 
 
 
+Define_Keybind(
+  CreateProcess, Custom,
+  Keybind_Behavior_Alternate, 345, AtTheStart,
+  KEY_J, Modifier_Key_Shift,
+  Ui_Constraint_NoHotProcess
+  );
+
 
 
 
@@ -2611,8 +2624,6 @@ int main(void) {
     SetExitKey(0);
     SetWindowState(FLAG_WINDOW_RESIZABLE);
     SetTargetFPS(60);
-
-    printf("sizeof(Process) %zu\n", sizeof(Process));
 
     // init context
     {
@@ -2797,7 +2808,7 @@ int main(void) {
         Process_Selection selection = (Process_Selection){0};
         Keybind_Environment env_raw = create_keybind_environment(&context, selection);
         Keybind_Environment *env = &env_raw;
-        env->should_stop_dragging = check_keybind(&context, Keybind_Sym_REF(SelectSingleProcess), selection) == Keybind_Result_Exit;
+        /* env->should_stop_dragging = check_keybind(env) == Keybind_Result_Exit; */
         env->moved_wire = 0;
         env->moved_wire_conn = 0;
 
@@ -3136,7 +3147,6 @@ int main(void) {
 
     EndDrawing();
   }
-
 
   CloseWindow();
   return 0;

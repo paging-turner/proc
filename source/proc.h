@@ -103,6 +103,24 @@ struct Process {
        proc_trie_iter_test(iter_name);\
        proc_trie_iter_next(iter_name))
 
+typedef struct View View;
+
+typedef enum {
+  Process_Selection__Null,
+  Process_Selection_In,
+  Process_Selection_Out,
+  Process_Selection_NewWire,
+  Process_Selection_Process,
+} Process_Selection_Type;
+
+struct Process_Selection {
+  Process *process;
+  Process_Selection_Type type;
+  S32 index;
+  B32 hot_id_assigned;
+  View *view;
+};
+
 typedef struct Process_Shape Process_Shape;
 typedef struct Process_Selection Process_Selection;
 typedef struct Process_List Process_List;
@@ -126,12 +144,19 @@ typedef struct Process_Edit_List {
   Process_Edit *last;
 } Process_Edit_List;
 
+enum Keybind_Result {
+  Keybind_Result__Null,
+  Keybind_Result_Enter,
+  Keybind_Result_Exit,
+};
+
+typedef struct Keybind_Environment Keybind_Environment;
+
 typedef enum Process_Connection Process_Connection;
 typedef enum Process_Connection_Flag Process_Connection_Flag;
 typedef struct Connection_Result Connection_Result;
 typedef enum Keybind_Result Keybind_Result;
 typedef struct Keybind Keybind;
-typedef struct View View;
 function              void clear_process_list(Context *context, Process_List *list);
 function              void clear_active_processes(Context *context);
 function              void clear_ds_view_process_list(Context *context);
@@ -150,7 +175,9 @@ function           Vector2 get_process_position(Context *context, View *view, Pr
 function Process_Selection get_process_selection(Context *context, View *view, Process *p);
 function               B32 is_active_process(Context *context, Process *p);
 function              void remove_process_from_active_processes(Context *context, Process *p);
-function    Keybind_Result check_keybind(Context *context, Keybind *keybind, Process_Selection selection);
+/* function    Keybind_Result check_keybind(Context *context, Keybind *keybind, Process_Selection selection); */
+/* function    Keybind_Result check_keybind(Context *context, Keybind_Environment *keybind_env, Process_Selection selection); */
+function    Keybind_Result check_keybind(Keybind_Environment *keybind_env);
 function              void exit_add_wire_mode(Context *context);
 function              void delete_process(Context *context, Process *p, Process_Connection_Flag which_conn_flags);
 function              void copy_active_processes(Context *context);
@@ -224,22 +251,6 @@ struct Process_Ref {
 
 
 
-
-typedef enum {
-  Process_Selection__Null,
-  Process_Selection_In,
-  Process_Selection_Out,
-  Process_Selection_NewWire,
-  Process_Selection_Process,
-} Process_Selection_Type;
-
-struct Process_Selection {
-  Process *process;
-  Process_Selection_Type type;
-  S32 index;
-  B32 hot_id_assigned;
-  View *view;
-};
 
 struct Process_List {
   Process *first;

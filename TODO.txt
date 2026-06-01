@@ -10,6 +10,8 @@
 === Undo/redo ===
 =================
   [x] BUG: When undoing/redoing with procs selected, the hotkey ends up getting typed into the selected procs.
+  [ ] Update trie when changing position of procs
+  [ ] Update trie when editing text
 
 
 =================

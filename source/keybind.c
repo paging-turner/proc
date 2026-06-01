@@ -9,30 +9,14 @@ function B32 handle_keybind_DeleteProcess(Keybind_Environment *env);
 
 
 Define_Keybind_And_Action(
-  HandleActiveProcess,
+  HandleActiveProcess, Default,
   Keybind_Behavior_Alternate, 0, AtTheEnd,
   0, 0, 0,
   "handle active-process"
   ) {
   if (env->context) {
     if (env->context->active_processes.first) {
-      B32 is_dragging = Get_Flag(env->context->flags, Context_Flag_Dragging);
-      if (is_dragging && env->should_stop_dragging) {
-        // update positions of active processes
-        for (Process *a = env->context->active_processes.first; a != 0; a = a->next_active) {
-          Vector2 new_position = get_process_position(env->context, &env->context->views[View_Kind_Procs], a);
-          a->position = new_position;
-        }
-        // stop dragging
-        Unset_Flag(env->context->flags, Context_Flag_Dragging);
-      }
-      else if (Handle_Keybind_Action(env, CycleProcessDisplay)) {
-        // handled
-      }
-      else if (Handle_Keybind_Action(env, DeleteProcess)) {
-        // handled
-      }
-      else if (!Get_Flag(env->context->ui_state.flags, Ui_State_Flag_action_occured)) {
+      if (!Get_Flag(env->context->ui_state.flags, Ui_State_Flag_action_occured)) {
         // process label editing
         handle_label_editing(env->context, env->context->active_processes);
       }
@@ -48,18 +32,18 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  Bound,
+  Bound, Default,
   Keybind_Behavior_Alternate, 0, AtTheStart,
   Key_Kind_Mouse0, 0,
   Ui_Constraint_NoHotProcess|Ui_Constraint_ExitOnKeyup,
   "Select multiple processes by drawing a rectangle with your mouse."
   ) {
   B32 handled = 0;
-  Keybind_Result kb_res = Check_Keybind(env, Bound);
   Context *context = env->context;
   Process_Selection selection = env->selection;
+  Keybind_Result kb_res = Check_Keybind(env);
 
-  if (env->desired_kb_res == Keybind_Result_Exit) {
+  if (kb_res == Keybind_Result_Exit) {
     if (Get_Flag(context->flags, Context_Flag_Bounding)) {
       // exit
       if (kb_res == Keybind_Result_Exit) {
@@ -71,13 +55,11 @@ Define_Keybind_And_Action(
       }
     }
   }
-  else if (env->desired_kb_res == Keybind_Result_Enter) {
+  else if (kb_res == Keybind_Result_Enter) {
     // enter
-    if (kb_res == Keybind_Result_Enter) {
-      Set_Flag(context->flags, Context_Flag_Bounding);
-      context->active_position = context->ui_state.mouse_position;
-      handled = 1;
-    }
+    Set_Flag(context->flags, Context_Flag_Bounding);
+    context->active_position = context->ui_state.mouse_position;
+    handled = 1;
   }
 
   return handled;
@@ -88,7 +70,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  PerProcessBounding,
+  PerProcessBounding, Default,
   Keybind_Behavior_Alternate, 0, ForAllProcesses,
   0, 0, 0,
   "Per-process bounding."
@@ -125,7 +107,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  ZeroOutSelection,
+  ZeroOutSelection, Default,
   Keybind_Behavior_Alternate, 0, AtTheEnd, 0, 0, 0,
   ""
   ) {
@@ -145,7 +127,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  MoreRectangleSelectionHandling,
+  MoreRectangleSelectionHandling, Default,
   Keybind_Behavior_Alternate, 0, AtTheStart, 0, 0, 0,
   "more rectangle selection handling"
   ) {
@@ -169,7 +151,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  HandleMovedWire,
+  HandleMovedWire, Default,
   Keybind_Behavior_Alternate, 0, AtTheEnd, 0, 0, 0,
   "handle moved wire"
   ) {
@@ -214,7 +196,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  Pan,
+  Pan, Default,
   Keybind_Behavior_Alternate, 0, AtTheStart,
   Key_Kind_Mouse1, 0,
   Ui_Constraint_ExitOnKeyup,
@@ -222,10 +204,8 @@ Define_Keybind_And_Action(
   ) {
   B32 handled = 1;
   Context *context = env->context;
-  Process_Selection selection = env->selection;
-  Assert(env->desired_kb_res == 0);
 
-  Keybind_Result kb_res = Check_Keybind(env, Pan);
+  Keybind_Result kb_res = Check_Keybind(env);
 
   for (S32 v = 0; v < View_Count; ++v) {
     View *view = context->views + v;
@@ -263,7 +243,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  ZoomIn,
+  ZoomIn, Default,
   Keybind_Behavior_Alternate, 0, AtTheStart,
   Key_Kind_MouseWheelUp, 0,
   Ui_Constraint_ActionNotOccured,
@@ -274,7 +254,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  ZoomOut,
+  ZoomOut, Default,
   Keybind_Behavior_Alternate, 0, AtTheStart,
   Key_Kind_MouseWheelDown, 0,
   Ui_Constraint_ActionNotOccured,
@@ -308,6 +288,7 @@ Define_Keybind_Action(
           // per-process keybinds
           for (U32 i = 0; i < SymbolCount(Keybind_Sym); ++i) {
             Keybind *keybind = SymbolMetadataFromID(Keybind_Sym, i+1);
+            env->keybind = keybind;
 
             if (Get_Flag(keybind->timing, Keybind_Timing_ForAllProcesses)) {
               keybind->handle(env);
@@ -326,33 +307,9 @@ Define_Keybind_Action(
 
 
 
-Define_Keybind_And_Action(
-  CheckIfWeNeedToStopDraggingTheWire,
-  Keybind_Behavior_Alternate, 0, ForAllProcesses, 0, 0, 0,
-  ""
-  ) {
-  B32 handled = 0;
-
-  if (env->p) {
-    if (env->should_stop_dragging) {
-      // unset drag flag
-      B32 wire_drag_flag = Process_Flag_Drag_In | Process_Flag_Drag_Out;
-      if (Get_Flag(env->p->flags, wire_drag_flag)) {
-        B32 is_in = Get_Flag(env->p->flags, Process_Flag_Drag_In);
-        Unset_Flag(env->p->flags, wire_drag_flag);
-        env->moved_wire = env->p;
-        env->moved_wire_conn = is_in ? Process_Connection_In : Process_Connection_Out;
-      }
-    }
-  }
-
-  return handled;
-}
-
-
 
 Define_Keybind_And_Action(
-  SelectSingleProcess,
+  SelectSingleProcess, Default,
   Keybind_Behavior_Alternate, 0, ForAllProcesses,
   Key_Kind_Mouse0, 0,
   Ui_Constraint_HotProcess|Ui_Constraint_ExitOnKeyup|Ui_Constraint_ActionNotOccured,
@@ -361,8 +318,9 @@ Define_Keybind_And_Action(
   B32 handled = 0;
   Context *context = env->context;
   Process_Selection selection = env->selection;
+  Keybind_Result kb_res = Check_Keybind(env);
 
-  if (Test_Keybind(env, SelectSingleProcess, Enter)) {
+  if (kb_res == Keybind_Result_Enter) {
     if (selection.view == context->views + View_Kind_Procs) {
       handled = 1;
       B32 in_selection = selection.type == Process_Selection_In;
@@ -409,6 +367,26 @@ Define_Keybind_And_Action(
       }
     }
   }
+  else if (kb_res == Keybind_Result_Exit) {
+    // stop dragging proc
+    if (Get_Flag(env->context->flags, Context_Flag_Dragging)) {
+      // update positions of active processes
+      for (Process *a = env->context->active_processes.first; a != 0; a = a->next_active) {
+        Vector2 new_position = get_process_position(env->context, &env->context->views[View_Kind_Procs], a);
+        a->position = new_position;
+      }
+      Unset_Flag(env->context->flags, Context_Flag_Dragging);
+    }
+
+    // stop dragging wire
+    B32 wire_drag_flag = Process_Flag_Drag_In | Process_Flag_Drag_Out;
+    if (Get_Flag(env->p->flags, wire_drag_flag)) {
+      B32 is_in = Get_Flag(env->p->flags, Process_Flag_Drag_In);
+      Unset_Flag(env->p->flags, wire_drag_flag);
+      env->moved_wire = env->p;
+      env->moved_wire_conn = is_in ? Process_Connection_In : Process_Connection_Out;
+    }
+  }
 
   return handled;
 }
@@ -420,13 +398,11 @@ function B32 handle_keybind_SelectAnotherProcess(Keybind_Environment *env);
 
 
 Define_Keybind_And_Action(
-  MaybeSetHotProcess,
+  MaybeSetHotProcess, Default,
   Keybind_Behavior_Alternate, 0, AtTheStart, 0, 0, 0,
   "Maybe select another process, or maybe set the context's hot-process to the keybind-environment's process."
   ) {
-  if (Handle_Keybind_Action(env, SelectAnotherProcess)) {
-    // handled
-  } else if (env->selection.type == Process_Selection_Process) {
+  if (env->selection.type == Process_Selection_Process) {
     // process hover
     if (env->context) {
       env->context->hot_process.process = env->p;
@@ -441,8 +417,8 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  SelectAnotherProcess,
-  Keybind_Behavior_Alternate, 0, AtTheStart,
+  SelectAnotherProcess, Default,
+  Keybind_Behavior_Alternate, 0, ForAllProcesses,
   Key_Kind_Mouse0, Modifier_Key_Control,
   Ui_Constraint_HoverProcess,
   "Add a process to the selected processes."
@@ -451,7 +427,7 @@ Define_Keybind_And_Action(
   Context *context = env->context;
   Process_Selection selection = env->selection;
 
-  if (env->desired_kb_res == check_keybind(context, Keybind_Sym_REF(SelectAnotherProcess), selection)) {
+  if (Test_Keybind(env, Enter)) {
     handled = 1;
     if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
       Process *wire = get_process_wire_by_selection(context, selection);
@@ -477,7 +453,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  CancelSelection,
+  CancelSelection, Default,
   Keybind_Behavior_Alternate, 0, AtTheEnd,
   Key_Kind_Mouse0, 0,
   Ui_Constraint_NoHotProcess,
@@ -485,10 +461,8 @@ Define_Keybind_And_Action(
   ) {
   B32 handled = 0;
   Context *context = env->context;
-  Process_Selection selection = env->selection;
 
-
-  if (check_keybind(context, Keybind_Sym_REF(CancelSelection), selection)) {
+  if (check_keybind(env)) {
     handled = 1;
     exit_add_wire_mode(context);
   }
@@ -499,7 +473,7 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  CreateProcess,
+  CreateProcess, Default,
   Keybind_Behavior_Alternate, 0, AtTheStart,
   Key_Kind_Mouse0, Modifier_Key_Control,
   Ui_Constraint_NoHotProcess,
@@ -507,9 +481,8 @@ Define_Keybind_And_Action(
   ) {
   B32 handled = 0;
   Context *context = env->context;
-  Process_Selection selection = env->selection;
 
-  if (check_keybind(context, Keybind_Sym_REF(CreateProcess), selection)) {
+  if (check_keybind(env)) {
     handled = 1;
     View *view = context->views + View_Kind_Procs;
 
@@ -534,17 +507,15 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  DeleteProcess,
+  DeleteProcess, Default,
   Keybind_Behavior_Alternate, 0, AtTheStart,
   KEY_D, Modifier_Key_Control, 0,
   "Delete the selected processes."
   ) {
   B32 handled = 0;
   Context *context = env->context;
-  Process_Selection selection = env->selection;
 
-
-  if (check_keybind(context, Keybind_Sym_REF(DeleteProcess), selection)) {
+  if (check_keybind(env)) {
     handled = 1;
     // delete processes
     for (Process *a = context->active_processes.first; a != 0;) {
@@ -563,17 +534,15 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  CycleProcessDisplay,
+  CycleProcessDisplay, Default,
   Keybind_Behavior_Alternate, 0, AtTheStart,
   KEY_TAB, 0, 0,
   "Cycle through special displays for selected processes."
   ) {
   B32 handled = 0;
   Context *context = env->context;
-  Process_Selection selection = env->selection;
 
-
-  if (check_keybind(context, Keybind_Sym_REF(CycleProcessDisplay), selection)) {
+  if (check_keybind(env)) {
     handled = 1;
     // cycle through special process types (cups/caps/empty)
     for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
@@ -604,17 +573,15 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  ToggleDisplayMode,
+  ToggleDisplayMode, Default,
   Keybind_Behavior_Alternate, 0, AtTheStart,
   KEY_M, Modifier_Key_Control, 0,
   "Toggle between 'classic' and 'rounded' display modes."
   ) {
   B32 handler = 0;
   Context *context = env->context;
-  Process_Selection selection = env->selection;
 
-
-  if (check_keybind(context, Keybind_Sym_REF(ToggleDisplayMode), selection) == Keybind_Result_Enter) {
+  if (check_keybind(env) == Keybind_Result_Enter) {
     handler = 1;
     Toggle_Flag(context->flags, Context_Flag_RoundedShapes);
   }
@@ -626,17 +593,15 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  CopyProcess,
+  CopyProcess, Default,
   Keybind_Behavior_Alternate, 0, AtTheStart,
   KEY_C, Modifier_Key_Control, 0,
   "Copy selected processes."
   ) {
   B32 handled = 0;
   Context *context = env->context;
-  Process_Selection selection = env->selection;
 
-
-  if (check_keybind(context, Keybind_Sym_REF(CopyProcess), selection) == Keybind_Result_Enter) {
+  if (check_keybind(env) == Keybind_Result_Enter) {
     handled = 1;
     copy_active_processes(context);
   }
@@ -647,17 +612,15 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  PasteProcess,
+  PasteProcess, Default,
   Keybind_Behavior_Alternate, 0, AtTheStart,
   KEY_V, Modifier_Key_Control, 0,
   "Paste copied processes, centered at the mouse."
   ) {
   B32 handled = 0;
   Context *context = env->context;
-  Process_Selection selection = env->selection;
 
-
-  if (check_keybind(context, Keybind_Sym_REF(PasteProcess), selection) == Keybind_Result_Enter) {
+  if (check_keybind(env) == Keybind_Result_Enter) {
     handled = 1;
     paste_processes(context);
   }
@@ -669,16 +632,15 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  Undo,
+  Undo, Default,
   Keybind_Behavior_Alternate, 0, AtTheStart,
   KEY_Z, Modifier_Key_Control, 0,
   "Performs undo on the proc-trie."
   ) {
   B32 handled = 0;
   Context *context = env->context;
-  Process_Selection selection = env->selection;
 
-  if (check_keybind(context, Keybind_Sym_REF(Undo), selection) == Keybind_Result_Enter) {
+  if (check_keybind(env) == Keybind_Result_Enter) {
     handled = 1;
     Set_Flag(env->context->ui_state.flags, Ui_State_Flag_action_occured);
     proc_trie_undo(context->proc_trie);
@@ -691,16 +653,15 @@ Define_Keybind_And_Action(
 
 
 Define_Keybind_And_Action(
-  Redo,
+  Redo, Default,
   Keybind_Behavior_Alternate, 0, AtTheStart,
   KEY_Z, Modifier_Key_Control|Modifier_Key_Shift, 0,
   "Performs redo on the proc-trie."
   ) {
   B32 handled = 0;
   Context *context = env->context;
-  Process_Selection selection = env->selection;
 
-  if (check_keybind(context, Keybind_Sym_REF(Redo), selection) == Keybind_Result_Enter) {
+  if (check_keybind(env) == Keybind_Result_Enter) {
     handled = 1;
     proc_trie_redo(context->proc_trie);
     gather_processes_from_trie(context);
@@ -709,66 +670,3 @@ Define_Keybind_And_Action(
   return handled;
 }
 
-
-
-
-
-
-
-
-
-///////////////////////////
-// Stack Handling Funcs (Hacky stuff at the moment...)
-///////////////////////////
-// TODO: Find a way to merge some of these stack-related keybind-definitions together.
-Define_Keybind_Action(
-  BoundDesiredKbResStack_Enter, 
-  ""
-  ) {
-  env->old_kb_res = env->desired_kb_res;
-  env->desired_kb_res = Keybind_Result_Enter;
-  {
-    Handle_Keybind_Action(env, Bound);
-  }
-  env->desired_kb_res = env->old_kb_res;
-  return 0;
-}
-
-Define_Keybind(
-  BoundDesiredKbResStack_Enter,
-  Keybind_Behavior_Alternate, 0, AtTheStart, 0, 0, 0);
-
-Define_Keybind_Action(
-  BoundDesiredKbResStack_Exit, 
-  ""
-  ) {
-  env->old_kb_res = env->desired_kb_res;
-  env->desired_kb_res = Keybind_Result_Exit;
-  {
-    Handle_Keybind_Action(env, Bound);
-  }
-  env->desired_kb_res = env->old_kb_res;
-  return 0;
-}
-
-Define_Keybind(
-  BoundDesiredKbResStack_Exit,
-  Keybind_Behavior_Alternate, 0, AtTheStart, 0, 0, 0);
-
-Define_Keybind_Action(
-  MaybeSetHotProcessDesiredKbResStack, 
-  ""
-  ) {
-  env->old_kb_res = env->desired_kb_res;
-  env->desired_kb_res = Keybind_Result_Enter;
-  {
-    Handle_Keybind_Action(env, MaybeSetHotProcess);
-  }
-  env->desired_kb_res = env->old_kb_res;
-  return 0;
-}
-
-Define_Keybind(
-  MaybeSetHotProcessDesiredKbResStack,
-  Keybind_Behavior_Alternate, 0, ForAllProcesses, 0, 0,
-  Ui_Constraint_ActionNotOccured);

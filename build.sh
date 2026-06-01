@@ -4,7 +4,7 @@
 Compiler="clang"
 
 GO_FAST=0
-DO_NOT_Compile_With_Custom_Keybinds=0
+DO_NOT_Compile_With_Custom_Keybinds=1
 Debug=1
 
 if [ $GO_FAST -eq 1 ]; then
@@ -107,7 +107,7 @@ $Compiler $Base_Args
 
 if [ $Should_Compile_With_Custom_Keybinds == 1 ]; then
     App_Objects_To_Link="$Base_Object_File $Custom_Object_File"
-    Custom_Args="$Custom_File -o $Custom_Object_File $Target $Debug $Base_Settings"
+    Custom_Args="$Custom_File -o $App_Objects_To_Link $Target $Debug $Base_Settings"
     echo
     echo "Compiling $Custom_File"
     echo "    $Custom_Args"
