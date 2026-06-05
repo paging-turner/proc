@@ -213,42 +213,33 @@ Define_Keybind_And_Action(
 
 
 
-function B32 keybind_zoom_handler(Keybind_Environment *env) {
+Define_Keybind_Action(
+  Zoom,
+  "Zoom your field of view in to make objects appear closer or further."
+  ) {
   B32 handled = 0;
   Context *context = env->context;
 
-  B32 zoom_in = Test_Keybind(env, Enter);
-  B32 zoom_out = Test_Keybind(env, Enter);
+  if (Test_Keybind(env, Enter)) {
+    for (S32 v = 0; v < View_Count; ++v) {
+      View *view = context->views + v;
+      Camera2D *camera = &view->camera;
+      Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position,
+                                                        *camera);
 
-  for (S32 v = 0; v < View_Count; ++v) {
-    View *view = context->views + v;
-    Camera2D *camera = &view->camera;
-    Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position,
-                                                      *camera);
-
-    camera->offset = context->ui_state.mouse_position;
-    camera->target = mouse_world_position;
-
-    if (zoom_in) {
+      camera->offset = context->ui_state.mouse_position;
+      camera->target = mouse_world_position;
       handled = 1;
+
       if (Keybind_Has_Mouse_Wheel_Movement(env->keybind)) {
         camera->zoom += -0.1f*context->ui_state.mouse_wheel_movement.y;
       }
       else {
         camera->zoom *= 1.4f;
       }
-    }
-    else if (zoom_out) {
-      handled = 1;
-      if (Keybind_Has_Mouse_Wheel_Movement(env->keybind)) {
-        camera->zoom += -0.1f*context->ui_state.mouse_wheel_movement.y;
-      }
-      else {
-        camera->zoom *= (1.0f/1.4f);
-      }
-    }
 
-    camera->zoom = Max(0.1f, camera->zoom);
+      camera->zoom = Max(0.1f, camera->zoom);
+    }
   }
 
   return handled;
@@ -257,26 +248,18 @@ function B32 keybind_zoom_handler(Keybind_Environment *env) {
 
 
 
-Define_Keybind_And_Action(
-  ZoomIn, Default,
+Define_Keybind(
+  Zoom, DefaultIn,
   Keybind_Behavior_Alternate, 0, AtTheStart,
   Key_Kind_MouseWheelUp, 0,
-  Ui_Constraint_ActionNotOccured,
-  "Zoom your field of view in to make objects appear closer."
-  ) {
-  return keybind_zoom_handler(env);
-}
+  Ui_Constraint_ActionNotOccured);
 
 
-Define_Keybind_And_Action(
-  ZoomOut, Default,
+Define_Keybind(
+  Zoom, DefaultOut,
   Keybind_Behavior_Alternate, 0, AtTheStart,
   Key_Kind_MouseWheelDown, 0,
-  Ui_Constraint_ActionNotOccured,
-  "Zoom your field of view out to make objects appear further."
-  ) {
-  return keybind_zoom_handler(env);
-}
+  Ui_Constraint_ActionNotOccured);
 
 
 
