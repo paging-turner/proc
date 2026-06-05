@@ -60,7 +60,6 @@ struct Keybind_Environment {
   // temp members
   B32 is_active;
   Process *p;
-  B32 should_stop_dragging;
   Process *moved_wire;
   Process_Connection moved_wire_conn;
 };
@@ -69,7 +68,6 @@ struct Keybind_Environment {
 struct Keybind {
   Keybind_Behavior behavior;
   Keybind_Timing timing;
-  U32 bind;
   U32 key_kind; // Uses raylib's KEY_* enum and some special ones for mouse-keys
   U32 modifiers;
   Ui_Constraint constraint;
@@ -89,8 +87,8 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
 // Keybind Action
 ///////////////////////////
 #define SYMBOL_SET_DEFINE Keybind_Action_Sym
-#define Keybind_Action_Sym_Type      Keybind
-#define Keybind_Action_Sym_section   "_prckbac"
+#define Keybind_Action_Sym_Type     Keybind
+#define Keybind_Action_Sym_section  "_prckbac"
 #define Keybind_Action_Sym_ID(  N)  SymbolID(      Keybind_Action_Sym, N)
 #define Keybind_Action_Sym_RAW( N)  SymbolRaw(     Keybind_Action_Sym, N)
 #define Keybind_Action_Sym_DECL(N)  SymbolDeclare( Keybind_Action_Sym, N)
@@ -106,10 +104,10 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
 #define SYMBOL_SET_DEFINE Keybind_Sym
 #define Keybind_Sym_Type      Keybind
 #define Keybind_Sym_section   "_prckbnd"
-#define Keybind_Sym_ID(N)    SymbolID(Keybind_Sym, N)
-#define Keybind_Sym_RAW(N)   SymbolRaw(Keybind_Sym, N)
-#define Keybind_Sym_DECL(N)  SymbolDeclare(Keybind_Sym, N)
-#define Keybind_Sym_REF(N)   SymbolMetadata(Keybind_Sym, N)
+#define Keybind_Sym_ID(  N)  SymbolID(      Keybind_Sym, N)
+#define Keybind_Sym_RAW( N)  SymbolRaw(     Keybind_Sym, N)
+#define Keybind_Sym_DECL(N)  SymbolDeclare( Keybind_Sym, N)
+#define Keybind_Sym_REF( N)  SymbolMetadata(Keybind_Sym, N)
 #include "../libraries/mr4th/src/mr4th_symbol_set.define.h"
 
 
@@ -129,34 +127,29 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
 
 #define Define_Keybind(\
   action_name, keybind_name,\
-  behavior_name, bind_value, timing_name,\
+  behavior_name, timing_name,\
   k, m, c)\
   static Keybind_Action_Sym_DECL(action_name);\
   static Keybind_Sym_DECL(action_name##_##keybind_name);\
   function B32 handle_keybind_##action_name(Keybind_Environment *env);\
   MR4TH_BEFORE_MAIN(proc_keybind_##action_name##_##keybind_name){\
     Keybind_Sym_Type *keybind = Keybind_Sym_REF(action_name##_##keybind_name);\
-    B32 both_zero = (U32)(bind_value) == 0 && keybind->bind == 0;\
-    B32 stronger_bind = (U32)(bind_value) > keybind->bind;\
-    if (both_zero || stronger_bind) {\
-      keybind->behavior = (behavior_name);\
-      keybind->bind = (bind_value);\
-      Set_Flag(keybind->timing, Keybind_Timing_##timing_name);\
-      keybind->key_kind = (k);\
-      keybind->modifiers = (m);\
-      keybind->constraint = (c);\
-      keybind->name = str8_lit(Stringify(action_name##_##keybind_name));\
-      keybind->handle = handle_keybind_##action_name;\
-    }\
+    keybind->behavior = (behavior_name);\
+    Set_Flag(keybind->timing, Keybind_Timing_##timing_name);\
+    keybind->key_kind = (k);\
+    keybind->modifiers = (m);\
+    keybind->constraint = (c);\
+    keybind->name = str8_lit(Stringify(action_name##_##keybind_name));\
+    keybind->handle = handle_keybind_##action_name;\
   }
 
 
 
 #define Define_Keybind_And_Action(\
   action_name, keybind_name,\
-  behavior_name, bind_value, timing_name,\
+  behavior_name, timing_name,\
   k, m, c, desc)\
-  Define_Keybind(action_name, keybind_name, behavior_name, bind_value, timing_name, k, m, c);\
+  Define_Keybind(action_name, keybind_name, behavior_name, timing_name, k, m, c);\
   Define_Keybind_Action(action_name, desc)
 
 

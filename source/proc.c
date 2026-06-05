@@ -2418,7 +2418,7 @@ function void do_menu_ui(Context *context, B32 sizing) {
 
 Define_Keybind(
   process_interaction, Default,
-  Keybind_Behavior_Alternate, 0, _Null, 0, 0, 0);
+  Keybind_Behavior_Alternate, _Null, 0, 0, 0);
 
 Define_Keybind_Action(
   process_interaction,
@@ -2577,7 +2577,7 @@ function void set_global_window_render_size(void) {
 
 Define_Keybind(
   CreateProcess, Custom,
-  Keybind_Behavior_Alternate, 345, AtTheStart,
+  Keybind_Behavior_Alternate, AtTheStart,
   KEY_J, Modifier_Key_Shift,
   Ui_Constraint_NoHotProcess
   );

@@ -27,7 +27,7 @@ function S32 process_compare_pos_x(void *a, void *b, void *udata) {
 ////////////////////////////////////////
 Define_Keybind(
   ProcessConnectionByModClick, Standard,
-  Keybind_Behavior_Alternate, 34, AtTheStart,
+  Keybind_Behavior_Alternate, AtTheStart,
   Key_Kind_Mouse0, Modifier_Key_Super,
   (Ui_Constraint_ActionNotOccured |
    Ui_Constraint_HotProcess |
@@ -91,7 +91,7 @@ Define_Keybind_Action(
 
 Define_Keybind(
   ToggleDataStructureView, Standard,
-  Keybind_Behavior_Overwrite, 274, AtTheStart,
+  Keybind_Behavior_Overwrite, AtTheStart,
   KEY_D, Modifier_Key_Control|Modifier_Key_Shift,
   Ui_Constraint_ActionNotOccured);
 
@@ -118,7 +118,7 @@ Define_Keybind_Action(
 
 Define_Keybind_And_Action(
   SelectRootFromUndoTrie, Standard,
-  Keybind_Behavior_Alternate, 1, ForAllProcesses,
+  Keybind_Behavior_Alternate, ForAllProcesses,
   Key_Kind_Mouse0, 0,
   Ui_Constraint_HotProcess|Ui_Constraint_ExitOnKeyup|Ui_Constraint_ActionNotOccured,
   "Select root from undo trie."
