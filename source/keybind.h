@@ -58,8 +58,6 @@ struct Keybind_Environment {
   Keybind *keybind;
 
   // temp members
-  /* Keybind_Result desired_kb_res; */
-  /* Keybind_Result old_kb_res; */
   B32 is_active;
   Process *p;
   B32 should_stop_dragging;
@@ -303,47 +301,6 @@ function Keybind_Result check_keybind(Keybind_Environment *keybind_env) {
 }
 
 
-
-function B32 keybind_zoom_handler(Keybind_Environment *env) {
-  B32 handled = 0;
-  Context *context = env->context;
-
-  B32 zoom_in = Test_Keybind(env, Enter);
-  B32 zoom_out = Test_Keybind(env, Enter);
-
-  for (S32 v = 0; v < View_Count; ++v) {
-    View *view = context->views + v;
-    Camera2D *camera = &view->camera;
-    Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position,
-                                                      *camera);
-
-    camera->offset = context->ui_state.mouse_position;
-    camera->target = mouse_world_position;
-
-    if (zoom_in) {
-      handled = 1;
-      if (Keybind_Has_Mouse_Wheel_Movement(env->keybind)) {
-        camera->zoom += -0.1f*context->ui_state.mouse_wheel_movement.y;
-      }
-      else {
-        camera->zoom *= 1.4f;
-      }
-    }
-    else if (zoom_out) {
-      handled = 1;
-      if (Keybind_Has_Mouse_Wheel_Movement(env->keybind)) {
-        camera->zoom += -0.1f*context->ui_state.mouse_wheel_movement.y;
-      }
-      else {
-        camera->zoom *= (1.0f/1.4f);
-      }
-    }
-
-    camera->zoom = Max(0.1f, camera->zoom);
-  }
-
-  return handled;
-}
 
 
 

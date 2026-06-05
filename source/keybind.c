@@ -43,23 +43,18 @@ Define_Keybind_And_Action(
   Process_Selection selection = env->selection;
   Keybind_Result kb_res = Check_Keybind(env);
 
-  if (kb_res == Keybind_Result_Exit) {
-    if (Get_Flag(context->flags, Context_Flag_Bounding)) {
-      // exit
-      if (kb_res == Keybind_Result_Exit) {
-        Unset_Flag(context->flags, Context_Flag_Bounding);
-        handled = 1;
-      }
-      else {
-        clear_active_processes(context);
-      }
-    }
-  }
-  else if (kb_res == Keybind_Result_Enter) {
+  if (kb_res == Keybind_Result_Enter) {
     // enter
     Set_Flag(context->flags, Context_Flag_Bounding);
     context->active_position = context->ui_state.mouse_position;
     handled = 1;
+  }
+  else if (kb_res == Keybind_Result_Exit) {
+    if (Get_Flag(context->flags, Context_Flag_Bounding)) {
+      // exit
+      Unset_Flag(context->flags, Context_Flag_Bounding);
+      handled = 1;
+    }
   }
 
   return handled;
@@ -125,27 +120,6 @@ Define_Keybind_And_Action(
 
 
 
-
-Define_Keybind_And_Action(
-  MoreRectangleSelectionHandling, Default,
-  Keybind_Behavior_Alternate, 0, AtTheStart, 0, 0, 0,
-  "more rectangle selection handling"
-  ) {
-  if (env->context) {
-    if (Get_Flag(env->context->flags, Context_Flag_Bounding)) {
-      // add hot process to active processes
-      Process *hot_process = env->context->hot_process.process;
-      if (hot_process) {
-        B32 hot_is_active = is_active_process(env->context, hot_process);
-        if (!hot_is_active) {
-          SLLQueuePush_NZ(env->context->active_processes.first, env->context->active_processes.last, hot_process, next_active, 0);
-        }
-      }
-    }
-  }
-
-  return 0;
-}
 
 
 
@@ -238,6 +212,47 @@ Define_Keybind_And_Action(
 }
 
 
+
+function B32 keybind_zoom_handler(Keybind_Environment *env) {
+  B32 handled = 0;
+  Context *context = env->context;
+
+  B32 zoom_in = Test_Keybind(env, Enter);
+  B32 zoom_out = Test_Keybind(env, Enter);
+
+  for (S32 v = 0; v < View_Count; ++v) {
+    View *view = context->views + v;
+    Camera2D *camera = &view->camera;
+    Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position,
+                                                      *camera);
+
+    camera->offset = context->ui_state.mouse_position;
+    camera->target = mouse_world_position;
+
+    if (zoom_in) {
+      handled = 1;
+      if (Keybind_Has_Mouse_Wheel_Movement(env->keybind)) {
+        camera->zoom += -0.1f*context->ui_state.mouse_wheel_movement.y;
+      }
+      else {
+        camera->zoom *= 1.4f;
+      }
+    }
+    else if (zoom_out) {
+      handled = 1;
+      if (Keybind_Has_Mouse_Wheel_Movement(env->keybind)) {
+        camera->zoom += -0.1f*context->ui_state.mouse_wheel_movement.y;
+      }
+      else {
+        camera->zoom *= (1.0f/1.4f);
+      }
+    }
+
+    camera->zoom = Max(0.1f, camera->zoom);
+  }
+
+  return handled;
+}
 
 
 
@@ -394,7 +409,6 @@ Define_Keybind_And_Action(
 
 
 
-function B32 handle_keybind_SelectAnotherProcess(Keybind_Environment *env);
 
 
 Define_Keybind_And_Action(

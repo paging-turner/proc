@@ -2446,26 +2446,6 @@ Define_Keybind_Action(
     // for-each-process
     Handle_Keybind_Action(env, ForAllProcessInteractions);
 
-#if 0
-    Handle_Keybind_Action(env, BoundDesiredKbResStack_Exit);
-    Handle_Keybind_Action(env, Undo);
-    Handle_Keybind_Action(env, Redo);
-    Handle_Keybind_Action(env, Pan);
-    Handle_Keybind_Action(env, ZoomIn);
-    Handle_Keybind_Action(env, ZoomOut);
-    Handle_Keybind_Action(env, ForAllProcessInteractions);
-    Handle_Keybind_Action(env, ZeroOutSelection);
-    Handle_Keybind_Action(env, MoreRectangleSelectionHandling);
-    Handle_Keybind_Action(env, CreateProcess);
-    Handle_Keybind_Action(env, CancelSelection);
-    Handle_Keybind_Action(env, BoundDesiredKbResStack_Enter);
-    Handle_Keybind_Action(env, ToggleDisplayMode);
-    Handle_Keybind_Action(env, CopyProcess);
-    Handle_Keybind_Action(env, PasteProcess);
-    Handle_Keybind_Action(env, HandleMovedWire);
-    Handle_Keybind_Action(env, HandleActiveProcess);
-#endif
-
     // at-the-end
     for (U32 i = 0; i < some_count; ++i) {
       Keybind *keybind = SymbolMetadataFromID(Keybind_Sym, i+1);

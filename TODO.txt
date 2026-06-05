@@ -84,6 +84,7 @@
 === Graphics ===
 ================
   [ ] Replace line-drawing calls with a call that draws triangle-strips/fans. This should help deal with how to cleanly connect the ends of lines together.
+  [ ] Detect pixel density and adjust sizes of rendered objects
 
 
 ======================
