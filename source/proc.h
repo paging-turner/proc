@@ -452,6 +452,9 @@ struct Context {
   Arena *temp_arena;
   Arena *per_frame_arena;
 
+  Keybind *keybinds;
+  U32 keybind_count;
+
   U32 flags;
 
   Proc_Trie_Trie *proc_trie;

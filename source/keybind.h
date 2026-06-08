@@ -11,12 +11,12 @@ typedef enum {
   Keybind_Behavior_Alternate
 } Keybind_Behavior;
 
+
 typedef enum {
-  Keybind_Timing__Null             = 0,
-  Keybind_Timing_AtTheStart        = 1<<0,
-  Keybind_Timing_ForAllProcesses   = 1<<1,
-  Keybind_Timing_AtTheEnd          = 1<<2,
+  Keybind_Timing_OnlyOnce,
+  Keybind_Timing_ForAllProcesses
 } Keybind_Timing;
+
 
 typedef enum {
   Ui_Constraint__Null            = 0,
@@ -28,6 +28,7 @@ typedef enum {
   Ui_Constraint_ActiveProcesses  = (1 << 5),
 } Ui_Constraint;
 
+
 // NOTE: These enum values start with values higher than raylib's highest KEY_* value, which is in the 300s
 typedef enum {
   Key_Kind_Mouse0 = 1000,
@@ -35,6 +36,7 @@ typedef enum {
   Key_Kind_MouseWheelUp,
   Key_Kind_MouseWheelDown,
 } Key_Kind;
+
 
 typedef enum {
   Modifier_Key__Null    = 0,
@@ -44,12 +46,29 @@ typedef enum {
   Modifier_Key_Super    = (1 << 3),
 } Modifier_Key;
 
+
 #define Modifier_Key_4(a1, a2, a3, a4, ...)   Modifier_Key_##a1|Modifier_Key_##a2|Modifier_Key_##a3|Modifier_Key_##a4
 #define Modifier_Key_3(a1, a2, a3, ...)       Modifier_Key_##a1|Modifier_Key_##a2|Modifier_Key_##a3
 #define Modifier_Key_2(a1, a2, ...)           Modifier_Key_##a1|Modifier_Key_##a2
 #define Modifier_Key_1(a1, ...)               Modifier_Key_##a1
 #define SEMI_LIST(a1, a2, a3, a4, a5, ...)   Modifier_Key ## a5 (a1, a2, a3, a4)
 #define Modifier_Keys(...)   SEMI_LIST(__VA_ARGS__, _4, _3, _2, _1)
+
+
+typedef enum {
+  Keybind_Order__Null,
+  Keybind_Order_Before,
+  Keybind_Order_After,
+} Keybind_Order_Kind;
+
+
+typedef struct Keybind_Order {
+  Keybind_Order_Kind kind;
+  B32 removed;
+  Keybind *keybind_a;
+  Keybind *keybind_b;
+} Keybind_Order;
+
 
 struct Keybind_Environment {
   Context *context;
@@ -67,16 +86,17 @@ struct Keybind_Environment {
 
 struct Keybind {
   Keybind_Behavior behavior;
-  Keybind_Timing timing;
+  B32 for_all_processes;
   U32 key_kind; // Uses raylib's KEY_* enum and some special ones for mouse-keys
   U32 modifiers;
   Ui_Constraint constraint;
   String8 name;
   B32 (*handle)(Keybind_Environment *env);
+
+  Keybind *next;
 };
 
 
-function B32 keybind_zoom_handler(Keybind_Environment *env);
 
 
 
@@ -102,14 +122,27 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
 // Keybind
 ///////////////////////////
 #define SYMBOL_SET_DEFINE Keybind_Sym
-#define Keybind_Sym_Type      Keybind
-#define Keybind_Sym_section   "_prckbnd"
+#define Keybind_Sym_Type     Keybind
+#define Keybind_Sym_section  "_prckbnd"
 #define Keybind_Sym_ID(  N)  SymbolID(      Keybind_Sym, N)
 #define Keybind_Sym_RAW( N)  SymbolRaw(     Keybind_Sym, N)
 #define Keybind_Sym_DECL(N)  SymbolDeclare( Keybind_Sym, N)
 #define Keybind_Sym_REF( N)  SymbolMetadata(Keybind_Sym, N)
 #include "../libraries/mr4th/src/mr4th_symbol_set.define.h"
 
+
+
+///////////////////////////
+// Keybind Order
+///////////////////////////
+#define SYMBOL_SET_DEFINE Keybind_Order_Sym
+#define Keybind_Order_Sym_Type     Keybind_Order
+#define Keybind_Order_Sym_section  "_prckbor"
+#define Keybind_Order_Sym_ID(  N)  SymbolID(      Keybind_Order_Sym, N)
+#define Keybind_Order_Sym_RAW( N)  SymbolRaw(     Keybind_Order_Sym, N)
+#define Keybind_Order_Sym_DECL(N)  SymbolDeclare( Keybind_Order_Sym, N)
+#define Keybind_Order_Sym_REF( N)  SymbolMetadata(Keybind_Order_Sym, N)
+#include "../libraries/mr4th/src/mr4th_symbol_set.define.h"
 
 
 
@@ -135,7 +168,7 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
   MR4TH_BEFORE_MAIN(proc_keybind_##action_name##_##keybind_name){\
     Keybind_Sym_Type *keybind = Keybind_Sym_REF(action_name##_##keybind_name);\
     keybind->behavior = (behavior_name);\
-    Set_Flag(keybind->timing, Keybind_Timing_##timing_name);\
+    keybind->for_all_processes = Keybind_Timing_##timing_name;\
     keybind->key_kind = (k);\
     keybind->modifiers = (m);\
     keybind->constraint = (c);\
@@ -144,12 +177,24 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
   }
 
 
+#define Define_Keybind_Order(keybind_name_a, order, keybind_name_b)\
+  static Keybind_Sym_DECL(keybind_name_a);\
+  static Keybind_Sym_DECL(keybind_name_b);\
+  static Keybind_Order_Sym_DECL(keybind_name_a##_##order##_##keybind_name_b);\
+  MR4TH_BEFORE_MAIN(proc_keybind_order_##keybind_name_a##_##order##_##keybind_name_b){\
+    Keybind_Order_Sym_Type *keybind_order =\
+      Keybind_Order_Sym_REF(keybind_name_a##_##order##_##keybind_name_b);\
+    keybind_order->kind = Keybind_Order_##order;\
+    keybind_order->keybind_a = Keybind_Sym_REF(keybind_name_a);\
+    keybind_order->keybind_b = Keybind_Sym_REF(keybind_name_b);\
+  }
+
 
 #define Define_Keybind_And_Action(\
   action_name, keybind_name,\
   behavior_name, timing_name,\
   k, m, c, desc)\
-  Define_Keybind(action_name, keybind_name, behavior_name, timing_name, k, m, c);\
+  Define_Keybind(action_name, keybind_name, behavior_name, timing_name, k, m, c)\
   Define_Keybind_Action(action_name, desc)
 
 
@@ -163,6 +208,18 @@ function B32 keybind_zoom_handler(Keybind_Environment *env);
    (keybind)->key_kind == Key_Kind_MouseWheelDown)
 
 
+#define Keybind_Is_Before(k, o)\
+  (((o)->kind == Keybind_Order_Before && (o)->keybind_a == (k)) ||\
+   ((o)->kind == Keybind_Order_After && (o)->keybind_b == (k)))
+
+#define Keybind_Is_After(k, o)\
+  (((o)->kind == Keybind_Order_Before && (o)->keybind_b == (k)) ||\
+   ((o)->kind == Keybind_Order_After && (o)->keybind_a == (k)))
+
+#define Keybind_Order_Is_Valid(o)\
+  ((o)->keybind_a && (o)->keybind_b &&\
+   (o)->keybind_a->handle && (o)->keybind_b->handle &&\
+   ((o)->keybind_a != (o)->keybind_b))
 
 
 function Keybind_Environment create_keybind_environment(

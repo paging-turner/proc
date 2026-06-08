@@ -7,7 +7,6 @@
 
 
 
-
 function S32 process_compare_pos_x(void *a, void *b, void *udata) {
   S32 result = 0;
 
@@ -27,11 +26,13 @@ function S32 process_compare_pos_x(void *a, void *b, void *udata) {
 ////////////////////////////////////////
 Define_Keybind(
   ProcessConnectionByModClick, Standard,
-  Keybind_Behavior_Alternate, AtTheStart,
+  Keybind_Behavior_Alternate, OnlyOnce,
   Key_Kind_Mouse0, Modifier_Key_Super,
   (Ui_Constraint_ActionNotOccured |
    Ui_Constraint_HotProcess |
    Ui_Constraint_ActiveProcesses));
+
+Define_Keybind_Order(ProcessConnectionByModClick_Standard, Before, ForAllProcessInteractions_Default);
 
 Define_Keybind_Action(
   ProcessConnectionByModClick,
@@ -91,10 +92,11 @@ Define_Keybind_Action(
 
 Define_Keybind(
   ToggleDataStructureView, Standard,
-  Keybind_Behavior_Overwrite, AtTheStart,
+  Keybind_Behavior_Overwrite, OnlyOnce,
   KEY_D, Modifier_Key_Control|Modifier_Key_Shift,
   Ui_Constraint_ActionNotOccured);
 
+Define_Keybind_Order(ToggleDataStructureView_Standard, Before, ForAllProcessInteractions_Default);
 
 Define_Keybind_Action(
   ToggleDataStructureView,
@@ -145,3 +147,5 @@ Define_Keybind_And_Action(
 
   return handled;
 }
+
+

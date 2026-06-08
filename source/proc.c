@@ -2416,50 +2416,6 @@ function void do_menu_ui(Context *context, B32 sizing) {
 
 
 
-Define_Keybind(
-  process_interaction, Default,
-  Keybind_Behavior_Alternate, _Null, 0, 0, 0);
-
-Define_Keybind_Action(
-  process_interaction,
-  "This is the function that calls all the defined keybinds. If you want to change the behavior of when things like undo/redo are called, you would want to overwrite this keybind with one that does what you want."
-  ) {
-  if (env->context) {
-    Ui_State *ui_state = &env->context->ui_state;
-
-    U32 some_count = SymbolCount(Keybind_Sym);
-
-    Keybind *keybind = Keybind_Sym_REF(Bound_Default);
-    env->keybind = keybind;
-    keybind->handle(env);
-
-    // at-the-start
-    for (U32 i = 0; i < some_count; ++i) {
-      Keybind *keybind = SymbolMetadataFromID(Keybind_Sym, i+1);
-      env->keybind = keybind;
-
-      if (keybind->timing == Keybind_Timing_AtTheStart) {
-        keybind->handle(env);
-      }
-    }
-
-    // for-each-process
-    Handle_Keybind_Action(env, ForAllProcessInteractions);
-
-    // at-the-end
-    for (U32 i = 0; i < some_count; ++i) {
-      Keybind *keybind = SymbolMetadataFromID(Keybind_Sym, i+1);
-      env->keybind = keybind;
-
-      if (keybind->timing == Keybind_Timing_AtTheEnd) {
-        keybind->handle(env);
-      }
-    }
-  }
-
-  return 0;
-}
-
 
 
 
@@ -2575,14 +2531,128 @@ function void set_global_window_render_size(void) {
 
 
 
-Define_Keybind(
-  CreateProcess, Custom,
-  Keybind_Behavior_Alternate, AtTheStart,
-  KEY_J, Modifier_Key_Shift,
-  Ui_Constraint_NoHotProcess
-  );
 
+// NOTE; Kahn's algorithm
+function void create_keybind_array(Context *context) {
+  Arena *arena = context->permanent_arena;
 
+  Keybind *keybind_set_first = 0;
+  Keybind *keybind_set_last = 0;
+
+  Keybind *keybind_final_first = 0;
+  Keybind *keybind_final_last = 0;
+
+  U32 order_count = SymbolCount(Keybind_Order_Sym);
+
+  // add keybinds with no preceding keybind
+  for (U32 k = 0; k < SymbolCount(Keybind_Sym); ++k) {
+    Keybind *keybind = SymbolMetadataFromID(Keybind_Sym, k+1);
+
+    if (keybind->handle) {
+      B32 has_preceding_keybind = 0;
+
+      for (U32 o = 0; o < order_count; ++o) {
+        Keybind_Order *order = SymbolMetadataFromID(Keybind_Order_Sym, o+1);
+        if (Keybind_Order_Is_Valid(order)) {
+          if (Keybind_Is_After(keybind, order)) {
+            has_preceding_keybind = 1;
+            break;
+          }
+        }
+      }
+
+      if (!has_preceding_keybind) {
+        SLLQueuePush(keybind_set_first, keybind_set_last, keybind);
+      }
+    }
+  }
+
+  // remove invalid orders
+  for (U32 o = 0; o < order_count; ++o) {
+    Keybind_Order *order = SymbolMetadataFromID(Keybind_Order_Sym, o+1);
+    if (!Keybind_Order_Is_Valid(order)) {
+      order->removed = 1;
+    }
+  }
+
+  // sort keybinds
+  for (;;) {
+    Keybind *stack_keybind = keybind_set_first;
+    SLLStackPop(keybind_set_first);
+
+    if (stack_keybind) {
+      SLLQueuePush(keybind_final_first, keybind_final_last, stack_keybind);
+      context->keybind_count += 1;
+
+      for (U32 o = 0; o < order_count; ++o) {
+        Keybind_Order *order = SymbolMetadataFromID(Keybind_Order_Sym, o+1);
+        Keybind *other_keybind = (order->keybind_a == stack_keybind) ? order->keybind_b : order->keybind_a;
+
+        if (Keybind_Order_Is_Valid(order)) {
+          if (!order->removed) {
+            // other keybind comes after current keybind
+            if (Keybind_Is_Before(stack_keybind, order) &&
+                Keybind_Is_After(other_keybind, order)) {
+              order->removed = 1;
+              B32 has_no_preceding_keybinds = 1;
+
+              for (U32 test_o = 0; test_o < order_count; ++test_o) {
+                Keybind_Order *test_order = SymbolMetadataFromID(Keybind_Order_Sym, test_o+1);
+                if (!test_order->removed) {
+                  if (Keybind_Is_After(other_keybind, test_order)) {
+                    has_no_preceding_keybinds = 0;
+                    break;
+                  }
+                }
+              }
+
+              if (has_no_preceding_keybinds) {
+                SLLQueuePush(keybind_set_first, keybind_set_last, other_keybind);
+              }
+            }
+          }
+        }
+      }
+    }
+    else {
+      break;
+    }
+  }
+
+  if (context->keybind_count) {
+    context->keybinds = push_array(arena, Keybind, context->keybind_count);
+
+    if (context->keybinds) {
+      U32 index = 0;
+      for (Keybind *keybind = keybind_final_first; keybind != 0; keybind = keybind->next) {
+        if (index < context->keybind_count) {
+          context->keybinds[index] = *keybind;
+          index += 1;
+        }
+        else {
+          printf("[ Error ] Keybind count mismatch.\n");
+          break;
+        }
+      }
+    }
+    else {
+      printf("[ Error ] While pushing keybind array.\n");
+    }
+  }
+
+  // check if there are un-removed edges
+  for (U32 o = 0; o < order_count; ++o) {
+    Keybind_Order *order = SymbolMetadataFromID(Keybind_Order_Sym, o+1);
+    if (Keybind_Order_Is_Valid(order)) {
+      if (!order->removed) {
+        B32 is_before_kind = order->kind == Keybind_Order_Before;
+        Keybind *before_keybind = is_before_kind ? order->keybind_a : order->keybind_b;
+        Keybind *after_keybind = is_before_kind ? order->keybind_b : order->keybind_a;
+        printf("[ Warning ] Cycles exist in keybinds! The order '%s'->'%s' is not satisfied.\n", before_keybind->name.str, after_keybind->name.str);
+      }
+    }
+  }
+}
 
 
 
@@ -2599,11 +2669,15 @@ int main(void) {
   Context context = (Context){0};
   Render_Context *prc = 0;
   uint64_t cpu_freq;
+
   {
-    InitWindow(800, 500, "proc");
-    SetExitKey(0);
-    SetWindowState(FLAG_WINDOW_RESIZABLE);
-    SetTargetFPS(60);
+    // Init window
+    {
+      InitWindow(800, 500, "proc");
+      SetExitKey(0);
+      SetWindowState(FLAG_WINDOW_RESIZABLE);
+      SetTargetFPS(60);
+    }
 
     // init context
     {
@@ -2632,6 +2706,11 @@ int main(void) {
       Set_Flag(context.flags, Context_Flag_AutoAlignChains);
       Set_Flag(context.flags, Context_Flag_DataStructureView);
       gather_processes_from_trie(&context);
+    }
+
+    // init keybinds
+    {
+      create_keybind_array(&context);
     }
 
     // init globals
@@ -2703,9 +2782,7 @@ int main(void) {
       os_file_make_directory(Saves_Filepath);
     }
 
-
-    // misc. initting
-    {
+    { // misc. init
       SetWindowSize(global_window_size.x, global_window_size.y);
       render_Initialize(context.temp_arena);
       set_global_window_render_size();
@@ -2795,7 +2872,11 @@ int main(void) {
         //////////////////////////////////////////
         // Handle Process Interaction
         //////////////////////////////////////////
-        Handle_Keybind_Action(env, process_interaction);
+        for (U32 i = 0; i < env->context->keybind_count; ++i) {
+          Keybind *keybind = env->context->keybinds + i;
+          env->keybind = keybind;
+          keybind->handle(env);
+        }
       }
     }
 

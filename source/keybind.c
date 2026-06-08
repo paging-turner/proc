@@ -7,7 +7,7 @@
 
 Define_Keybind_And_Action(
   HandleActiveProcess, Default,
-  Keybind_Behavior_Alternate, AtTheEnd,
+  Keybind_Behavior_Alternate, OnlyOnce,
   0, 0, 0,
   "handle active-process"
   ) {
@@ -23,6 +23,7 @@ Define_Keybind_And_Action(
   return 0;
 }
 
+Define_Keybind_Order(HandleActiveProcess_Default, After, ForAllProcessInteractions_Default);
 
 
 
@@ -30,7 +31,7 @@ Define_Keybind_And_Action(
 
 Define_Keybind_And_Action(
   Bound, Default,
-  Keybind_Behavior_Alternate, AtTheStart,
+  Keybind_Behavior_Alternate, OnlyOnce,
   Key_Kind_Mouse0, 0,
   Ui_Constraint_NoHotProcess|Ui_Constraint_ExitOnKeyup,
   "Select multiple processes by drawing a rectangle with your mouse."
@@ -57,6 +58,7 @@ Define_Keybind_And_Action(
   return handled;
 }
 
+Define_Keybind_Order(Bound_Default, Before, ForAllProcessInteractions_Default);
 
 
 
@@ -100,7 +102,7 @@ Define_Keybind_And_Action(
 
 Define_Keybind_And_Action(
   ZeroOutSelection, Default,
-  Keybind_Behavior_Alternate, AtTheEnd, 0, 0, 0,
+  Keybind_Behavior_Alternate, OnlyOnce, 0, 0, 0,
   ""
   ) {
   if (env->context) {
@@ -115,6 +117,7 @@ Define_Keybind_And_Action(
   return 0;
 }
 
+Define_Keybind_Order(ZeroOutSelection_Default, After, ForAllProcessInteractions_Default);
 
 
 
@@ -123,7 +126,7 @@ Define_Keybind_And_Action(
 
 Define_Keybind_And_Action(
   HandleMovedWire, Default,
-  Keybind_Behavior_Alternate, AtTheEnd, 0, 0, 0,
+  Keybind_Behavior_Alternate, OnlyOnce, 0, 0, 0,
   "handle moved wire"
   ) {
   if (env->moved_wire && env->context) {
@@ -159,6 +162,7 @@ Define_Keybind_And_Action(
   return 0;
 }
 
+Define_Keybind_Order(HandleMovedWire_Default, After, ForAllProcessInteractions_Default);
 
 
 
@@ -168,7 +172,7 @@ Define_Keybind_And_Action(
 
 Define_Keybind_And_Action(
   Pan, Default,
-  Keybind_Behavior_Alternate, AtTheStart,
+  Keybind_Behavior_Alternate, OnlyOnce,
   Key_Kind_Mouse1, 0,
   Ui_Constraint_ExitOnKeyup,
   "Slide your field of view by moving your mouse."
@@ -208,6 +212,7 @@ Define_Keybind_And_Action(
   return handled;
 }
 
+Define_Keybind_Order(Pan_Default, Before, ForAllProcessInteractions_Default);
 
 
 Define_Keybind_Action(
@@ -247,21 +252,25 @@ Define_Keybind_Action(
 
 Define_Keybind(
   Zoom, DefaultIn,
-  Keybind_Behavior_Alternate, AtTheStart,
+  Keybind_Behavior_Alternate, OnlyOnce,
   Key_Kind_MouseWheelUp, 0,
   Ui_Constraint_ActionNotOccured);
 
 
 Define_Keybind(
   Zoom, DefaultOut,
-  Keybind_Behavior_Alternate, AtTheStart,
+  Keybind_Behavior_Alternate, OnlyOnce,
   Key_Kind_MouseWheelDown, 0,
   Ui_Constraint_ActionNotOccured);
 
+Define_Keybind_Order(Zoom_DefaultIn, Before, ForAllProcessInteractions_Default);
+Define_Keybind_Order(Zoom_DefaultOut, Before, ForAllProcessInteractions_Default);
 
 
-Define_Keybind_Action(
-  ForAllProcessInteractions,
+Define_Keybind_And_Action(
+  ForAllProcessInteractions, Default,
+  Keybind_Behavior_Alternate, OnlyOnce,
+  0, 0, 0,
   "Loop through all processes and handle per-process interactions."
   ) {
   if (env->context) {
@@ -281,11 +290,11 @@ Define_Keybind_Action(
           Assign_Flag(env->context->ui_state.flags, Ui_State_Flag_hot_id_assigned, hot_id_assigned);
 
           // per-process keybinds
-          for (U32 i = 0; i < SymbolCount(Keybind_Sym); ++i) {
-            Keybind *keybind = SymbolMetadataFromID(Keybind_Sym, i+1);
+          for (U32 i = 0; i < env->context->keybind_count; ++i) {
+            Keybind *keybind = env->context->keybinds + i;
             env->keybind = keybind;
 
-            if (Get_Flag(keybind->timing, Keybind_Timing_ForAllProcesses)) {
+            if (keybind->for_all_processes) {
               keybind->handle(env);
             }
           }
@@ -314,6 +323,10 @@ Define_Keybind_And_Action(
   Context *context = env->context;
   Process_Selection selection = env->selection;
   Keybind_Result kb_res = Check_Keybind(env);
+
+  if (env->p == 0) {
+    return 0;
+  }
 
   if (kb_res == Keybind_Result_Enter) {
     if (selection.view == context->views + View_Kind_Procs) {
@@ -393,7 +406,7 @@ Define_Keybind_And_Action(
 
 Define_Keybind_And_Action(
   MaybeSetHotProcess, Default,
-  Keybind_Behavior_Alternate, AtTheStart, 0, 0, 0,
+  Keybind_Behavior_Alternate, OnlyOnce, 0, 0, 0,
   "Maybe select another process, or maybe set the context's hot-process to the keybind-environment's process."
   ) {
   if (env->selection.type == Process_Selection_Process) {
@@ -406,6 +419,7 @@ Define_Keybind_And_Action(
   return 0;
 }
 
+Define_Keybind_Order(MaybeSetHotProcess_Default, Before, ForAllProcessInteractions_Default);
 
 
 
@@ -448,7 +462,7 @@ Define_Keybind_And_Action(
 
 Define_Keybind_And_Action(
   CancelSelection, Default,
-  Keybind_Behavior_Alternate, AtTheEnd,
+  Keybind_Behavior_Alternate, OnlyOnce,
   Key_Kind_Mouse0, 0,
   Ui_Constraint_NoHotProcess,
   "Clear out the selected processes."
@@ -464,11 +478,12 @@ Define_Keybind_And_Action(
   return handled;
 }
 
+Define_Keybind_Order(CancelSelection_Default, After, ForAllProcessInteractions_Default);
 
 
 Define_Keybind_And_Action(
   CreateProcess, Default,
-  Keybind_Behavior_Alternate, AtTheStart,
+  Keybind_Behavior_Alternate, OnlyOnce,
   Key_Kind_Mouse0, Modifier_Key_Control,
   Ui_Constraint_NoHotProcess,
   "Create a new process."
@@ -498,11 +513,12 @@ Define_Keybind_And_Action(
   return handled;
 }
 
+Define_Keybind_Order(CreateProcess_Default, Before, ForAllProcessInteractions_Default);
 
 
 Define_Keybind_And_Action(
   DeleteProcess, Default,
-  Keybind_Behavior_Alternate, AtTheStart,
+  Keybind_Behavior_Alternate, OnlyOnce,
   KEY_D, Modifier_Key_Control, 0,
   "Delete the selected processes."
   ) {
@@ -524,12 +540,13 @@ Define_Keybind_And_Action(
   return handled;
 }
 
+Define_Keybind_Order(DeleteProcess_Default, Before, ForAllProcessInteractions_Default);
 
 
 
 Define_Keybind_And_Action(
   CycleProcessDisplay, Default,
-  Keybind_Behavior_Alternate, AtTheStart,
+  Keybind_Behavior_Alternate, OnlyOnce,
   KEY_TAB, 0, 0,
   "Cycle through special displays for selected processes."
   ) {
@@ -564,11 +581,12 @@ Define_Keybind_And_Action(
   return handled;
 }
 
+Define_Keybind_Order(CycleProcessDisplay_Default, Before, ForAllProcessInteractions_Default);
 
 
 Define_Keybind_And_Action(
   ToggleDisplayMode, Default,
-  Keybind_Behavior_Alternate, AtTheStart,
+  Keybind_Behavior_Alternate, OnlyOnce,
   KEY_M, Modifier_Key_Control, 0,
   "Toggle between 'classic' and 'rounded' display modes."
   ) {
@@ -583,12 +601,13 @@ Define_Keybind_And_Action(
   return handler;
 }
 
+Define_Keybind_Order(ToggleDisplayMode_Default, Before, ForAllProcessInteractions_Default);
 
 
 
 Define_Keybind_And_Action(
   CopyProcess, Default,
-  Keybind_Behavior_Alternate, AtTheStart,
+  Keybind_Behavior_Alternate, OnlyOnce,
   KEY_C, Modifier_Key_Control, 0,
   "Copy selected processes."
   ) {
@@ -603,11 +622,12 @@ Define_Keybind_And_Action(
   return handled;
 }
 
+Define_Keybind_Order(CopyProcess_Default, Before, ForAllProcessInteractions_Default);
 
 
 Define_Keybind_And_Action(
   PasteProcess, Default,
-  Keybind_Behavior_Alternate, AtTheStart,
+  Keybind_Behavior_Alternate, OnlyOnce,
   KEY_V, Modifier_Key_Control, 0,
   "Paste copied processes, centered at the mouse."
   ) {
@@ -622,12 +642,13 @@ Define_Keybind_And_Action(
   return handled;
 }
 
+Define_Keybind_Order(PasteProcess_Default, Before, ForAllProcessInteractions_Default);
 
 
 
 Define_Keybind_And_Action(
   Undo, Default,
-  Keybind_Behavior_Alternate, AtTheStart,
+  Keybind_Behavior_Alternate, OnlyOnce,
   KEY_Z, Modifier_Key_Control, 0,
   "Performs undo on the proc-trie."
   ) {
@@ -644,11 +665,12 @@ Define_Keybind_And_Action(
   return handled;
 }
 
+Define_Keybind_Order(Undo_Default, Before, ForAllProcessInteractions_Default);
 
 
 Define_Keybind_And_Action(
   Redo, Default,
-  Keybind_Behavior_Alternate, AtTheStart,
+  Keybind_Behavior_Alternate, OnlyOnce,
   KEY_Z, Modifier_Key_Control|Modifier_Key_Shift, 0,
   "Performs redo on the proc-trie."
   ) {
@@ -664,3 +686,4 @@ Define_Keybind_And_Action(
   return handled;
 }
 
+Define_Keybind_Order(Redo_Default, Before, ForAllProcessInteractions_Default);
