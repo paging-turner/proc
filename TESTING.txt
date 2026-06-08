@@ -122,3 +122,12 @@ For now, we will have to manually test a bunch of features. This file exists to 
     1. Create some processes and select some of them
     2. Undo and redo a few times
     EXPECT: The processes undo/redo and do *NOT* type the bound key in the selected processes.
+
+
+------------------------------------------
+014 Delete process and connected wire
+    1. Create two processes
+    2. Connect the processes
+    3. Select one of the processes AND the connected wire
+    4. Deleted the process and wire
+    EXPECT: There should only be the non-deleted process present.

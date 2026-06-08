@@ -1696,7 +1696,7 @@ function void add_wire_connection(
 
 
 // TODO: inline this function since it's only used in `delete_process`
-function void delete_wire(
+function void handle_deleted_wire(
   Context *context,
   Process *wire,
   Process_Connection_Flag conn_flags
@@ -1782,7 +1782,7 @@ function void delete_process(Context *context, Process *p, U32 which_conn_flags)
     Process_Connection_Flag which_conn_flags_resolved = which_conn_flags
       ? which_conn_flags
       : (Process_Connection_Flag_In | Process_Connection_Flag_Out);
-    delete_wire(context, p, which_conn_flags_resolved); // TODO: inline this function since it's only used in `delete_process`
+    handle_deleted_wire(context, p, which_conn_flags_resolved); // TODO: inline this function since it's only used in `delete_process`
   }
   else {
     // check for wires connected to the deleted process, and delete those also
@@ -1792,47 +1792,10 @@ function void delete_process(Context *context, Process *p, U32 which_conn_flags)
       B32 should_delete = 0;
 
       if (in_match || out_match) {
-        if (!in_match) {
-          // adjust in-connections to deleted wire
-          for (Process *test_wire = context->views[View_Kind_Procs].processes.first; test_wire != 0; test_wire = test_wire->next) {
-            if (test_wire->in == wire->in && test_wire->which_in > wire->which_in) {
-              Editable_Process new_wire = get_editable_process(context->process_edit_list, test_wire);
-              new_wire.process.which_in -= 1;
-              add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, new_wire.process);
-            }
-          }
-
-          if (wire->in) {
-            Editable_Process new_wire = get_editable_process(context->process_edit_list, wire->in);
-            /* Process edit_p = *wire->in; */
-            new_wire.process.in_count -= 1;
-            add_process_to_process_edit_list(context, wire->in, Proc_Trie_Edit_Update, new_wire.process);
-          }
-        }
-
-        if (!out_match) {
-          // adjust out-connections to deleted wire
-          for (Process *test_wire = context->views[View_Kind_Procs].processes.first; test_wire != 0; test_wire = test_wire->next) {
-            if (test_wire->out == wire->out && test_wire->which_out > wire->which_out) {
-              Editable_Process new_wire = get_editable_process(context->process_edit_list, test_wire);
-              new_wire.process.which_out -= 1;
-              add_process_to_process_edit_list(context, test_wire, Proc_Trie_Edit_Update, new_wire.process);
-            }
-          }
-
-          if (wire->out) {
-            Editable_Process new_wire = get_editable_process(context->process_edit_list, wire->out);
-            new_wire.process.out_count -= 1;
-            add_process_to_process_edit_list(context, wire->out, Proc_Trie_Edit_Update, new_wire.process);
-          }
-        }
-
-        should_delete = 1;
-      }
-
-      if (should_delete) {
         add_process_to_process_edit_list(context, wire, Proc_Trie_Edit_Delete, (Process){0});
+        handle_deleted_wire(context, wire, (Process_Connection_Flag_In|Process_Connection_Flag_Out));
       }
+
       wire = wire->next;
     }
   }

@@ -149,3 +149,8 @@ Define_Keybind_And_Action(
 }
 
 
+
+Define_Keybind(
+  DeleteProcess, Easy,
+  Keybind_Behavior_Alternate, OnlyOnce,
+  KEY_BACKSPACE, 0, 0);
