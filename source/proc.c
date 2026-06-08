@@ -338,12 +338,13 @@ function Process_Edit *process_edit_list_contains_process(
 
 
 
-function void add_process_to_process_edit_list(
+function B32 add_process_to_process_edit_list(
   Context *context,
   Process *p,
   Proc_Trie_Edit_Kind edit_kind,
   Process new_process
   ) {
+  B32 overwritten = 0;
   Process_Edit *found_proc_edit = 0;
 
   for (Process_Edit *proc_edit = context->process_edit_list.first;
@@ -367,8 +368,11 @@ function void add_process_to_process_edit_list(
       found_proc_edit->process = p;
       found_proc_edit->edit_kind = edit_kind;
       found_proc_edit->new_process = new_process;
+      overwritten = 1;
     }
   }
+
+  return overwritten;
 }
 
 
@@ -1775,14 +1779,16 @@ function void handle_deleted_wire(
 function void delete_process(Context *context, Process *p, U32 which_conn_flags) {
   Proc_Trie_Trie *trie = context->proc_trie;
 
-  add_process_to_process_edit_list(context, p, Proc_Trie_Edit_Delete, (Process){0});
+  B32 p_overwritten = add_process_to_process_edit_list(context, p, Proc_Trie_Edit_Delete, (Process){0});
 
   // if deleting a wire, adjust connected processes
   if (Get_Flag(p->flags, Process_Flag_Wire)) {
     Process_Connection_Flag which_conn_flags_resolved = which_conn_flags
       ? which_conn_flags
       : (Process_Connection_Flag_In | Process_Connection_Flag_Out);
-    handle_deleted_wire(context, p, which_conn_flags_resolved); // TODO: inline this function since it's only used in `delete_process`
+    if (p_overwritten) {
+      handle_deleted_wire(context, p, which_conn_flags_resolved); // TODO: inline this function since it's only used in `delete_process`
+    }
   }
   else {
     // check for wires connected to the deleted process, and delete those also
@@ -1792,8 +1798,10 @@ function void delete_process(Context *context, Process *p, U32 which_conn_flags)
       B32 should_delete = 0;
 
       if (in_match || out_match) {
-        add_process_to_process_edit_list(context, wire, Proc_Trie_Edit_Delete, (Process){0});
-        handle_deleted_wire(context, wire, (Process_Connection_Flag_In|Process_Connection_Flag_Out));
+        B32 wire_overwritten = add_process_to_process_edit_list(context, wire, Proc_Trie_Edit_Delete, (Process){0});
+        if (wire_overwritten) {
+          handle_deleted_wire(context, wire, (Process_Connection_Flag_In|Process_Connection_Flag_Out));
+        }
       }
 
       wire = wire->next;
