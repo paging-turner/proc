@@ -379,10 +379,13 @@ Define_Keybind_And_Action(
     // stop dragging proc
     if (Get_Flag(env->context->flags, Context_Flag_Dragging)) {
       // update positions of active processes
-      for (Process *a = env->context->active_processes.first; a != 0; a = a->next_active) {
-        Vector2 new_position = get_process_position(env->context, &env->context->views[View_Kind_Procs], a);
-        a->position = new_position;
+      for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
+        Vector2 new_position = get_process_position(context, &context->views[View_Kind_Procs], a);
+        Editable_Process new_a = get_editable_process(context->process_edit_list, a);
+        new_a.process.position = new_position;
+        add_process_to_process_edit_list(context, a, Proc_Trie_Edit_Update, new_a.process);
       }
+      gather_processes_from_trie(context);
       Unset_Flag(env->context->flags, Context_Flag_Dragging);
     }
 

@@ -175,10 +175,10 @@ function           Vector2 get_process_position(Context *context, View *view, Pr
 function Process_Selection get_process_selection(Context *context, View *view, Process *p);
 function               B32 is_active_process(Context *context, Process *p);
 function              void remove_process_from_active_processes(Context *context, Process *p);
-/* function    Keybind_Result check_keybind(Context *context, Keybind *keybind, Process_Selection selection); */
-/* function    Keybind_Result check_keybind(Context *context, Keybind_Environment *keybind_env, Process_Selection selection); */
 function    Keybind_Result check_keybind(Keybind_Environment *keybind_env);
 function              void exit_add_wire_mode(Context *context);
+function  Editable_Process get_editable_process(Process_Edit_List edit_list, Process *p);
+function               B32 add_process_to_process_edit_list(Context *context, Process *p, Proc_Trie_Edit_Kind edit_kind, Process new_process);
 function              void delete_process(Context *context, Process *p, Process_Connection_Flag which_conn_flags);
 function              void copy_active_processes(Context *context);
 function              void paste_processes(Context *context);
