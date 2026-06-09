@@ -429,7 +429,12 @@ function void apply_process_edits_by_kind(Context *context, B32 handle_wires) {
           update_edited_wire_pointers(context, proc_edit, 1);
         }
 
+
+#if Proc_Trie_Use_Key_Value
         proc_trie_set(arena, context->proc_trie, IntFromPtr(proc_edit->process), proc_edit->process);
+#else
+        proc_trie_insert(arena, context->proc_trie, IntFromPtr(proc_edit->process));
+#endif
       } break;
       case Proc_Trie_Edit_Delete: {
         proc_trie_delete(arena, context->proc_trie, IntFromPtr(proc_edit->process));
@@ -480,7 +485,11 @@ function void apply_process_edits_by_kind(Context *context, B32 handle_wires) {
 
           *new_p = proc_edit->new_process;
           proc_trie_delete(arena, context->proc_trie, IntFromPtr(proc_edit->process));
+#if Proc_Trie_Use_Key_Value
           proc_trie_set(arena, context->proc_trie, IntFromPtr(new_p), new_p);
+#else
+          proc_trie_insert(arena, context->proc_trie, IntFromPtr(new_p));
+#endif
         }
       } break;
       default: Assert(0);
@@ -935,6 +944,7 @@ function void handle_label_editing(Context *context, Process_List ps) {
             a->label_cursor = 0;
           }
         } else if (key == KEY_BACKSPACE) {
+          continue; // TODO: implement backspace......
           if (a->label_cursor == 0) {
             // only free string-chunk if it is _not_ the only chunk
             if (a->label.first != a->label.last) {
@@ -1452,7 +1462,7 @@ function Vector2 get_process_position(Context *context, View *view, Process *pro
   B32 is_dragging = is_proc_view && Get_Flag(context->flags, Context_Flag_Dragging);
 
   if (is_active && is_dragging) {
-    Vector2 delta = Vector2Subtract(context->ui_state.mouse_position, context->active_position);
+    Vector2 delta = Vector2Subtract(context->ui_state.mouse_position, context->ui_state.active_position);
     position = Vector2Add(position, Vector2Scale(delta, 1.0f/view->camera.zoom));
   }
 
@@ -1531,10 +1541,10 @@ function Rectangle get_new_wire_box(Context *context, View *view, Process *p, Pr
 
 
 function Rectangle get_selection_rectangle(Context *context) {
-  F32 x = fmin(context->active_position.x, context->ui_state.mouse_position.x);
-  F32 y = fmin(context->active_position.y, context->ui_state.mouse_position.y);
-  F32 x1 = fmax(context->active_position.x, context->ui_state.mouse_position.x);
-  F32 y1 = fmax(context->active_position.y, context->ui_state.mouse_position.y);
+  F32 x = fmin(context->ui_state.active_position.x, context->ui_state.mouse_position.x);
+  F32 y = fmin(context->ui_state.active_position.y, context->ui_state.mouse_position.y);
+  F32 x1 = fmax(context->ui_state.active_position.x, context->ui_state.mouse_position.x);
+  F32 y1 = fmax(context->ui_state.active_position.y, context->ui_state.mouse_position.y);
   Rectangle selection_rect = (Rectangle){x, y, x1-x, y1-y};
 
   return selection_rect;
@@ -2785,6 +2795,11 @@ int main(void) {
         Ui_State *ui_state = &context.ui_state;
 
         ui_state->mouse_position = GetMousePosition(); // TODO: mouse_position should go in ui_state
+        F32 mouse_move_threshold = 0.1f;
+        ui_state->mouse_moved =
+          ((fabs(ui_state->active_position.x - ui_state->mouse_position.x) > mouse_move_threshold) ||
+           (fabs(ui_state->active_position.y - ui_state->mouse_position.y) > mouse_move_threshold));
+
         ui_state->mouse_wheel_movement = GetMouseWheelMoveV();
         ui_state->kb_action = 0;
 
@@ -3039,10 +3054,10 @@ int main(void) {
               Vector2 out_position = get_process_wire_position(&context, view, p->out, out_shape, Process_Connection_Out, p->which_out);
               Vector2 in_position = get_process_wire_position(&context, view, p->in, in_shape, Process_Connection_In, p->which_in);
               if (Get_Flag(p->flags, Process_Flag_Drag_In)) {
-                Vector2 delta = Vector2Subtract(context.ui_state.mouse_position, context.active_position);
+                Vector2 delta = Vector2Subtract(context.ui_state.mouse_position, context.ui_state.active_position);
                 in_position = Vector2Add(in_position, delta);
               } else if (Get_Flag(p->flags, Process_Flag_Drag_Out)) {
-                Vector2 delta = Vector2Subtract(context.ui_state.mouse_position, context.active_position);
+                Vector2 delta = Vector2Subtract(context.ui_state.mouse_position, context.ui_state.active_position);
                 out_position = Vector2Add(out_position, delta);
               }
 

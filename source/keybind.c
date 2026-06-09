@@ -44,7 +44,7 @@ Define_Keybind_And_Action(
   if (kb_res == Keybind_Result_Enter) {
     // enter
     Set_Flag(context->flags, Context_Flag_Bounding);
-    context->active_position = context->ui_state.mouse_position;
+    context->ui_state.active_position = context->ui_state.mouse_position;
     handled = 1;
   }
   else if (kb_res == Keybind_Result_Exit) {
@@ -189,7 +189,7 @@ Define_Keybind_And_Action(
     if (Get_Flag(view->flags, View_Flag_Active) && mouse_is_within_view) {
       if (kb_res == Keybind_Result_Enter) {
         Set_Flag(view->flags, View_Flag_Panning);
-        context->active_position = context->ui_state.mouse_position;
+        context->ui_state.active_position = context->ui_state.mouse_position;
         handled = 1;
       }
 
@@ -342,7 +342,7 @@ Define_Keybind_And_Action(
           U32 drag_flag = in_selection ? Process_Flag_Drag_In : Process_Flag_Drag_Out;
           Unset_Flag(context->flags, Context_Flag_NewWire);
           Set_Flag(wire->flags, drag_flag);
-          context->active_position = context->ui_state.mouse_position;
+          context->ui_state.active_position = context->ui_state.mouse_position;
           if (!is_active_wire) {
             clear_active_processes(context);
             SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, wire, next_active, 0);
@@ -370,7 +370,7 @@ Define_Keybind_And_Action(
           }
           Unset_Flag(context->flags, Context_Flag_NewWire);
           Set_Flag(context->flags, Context_Flag_Dragging);
-          context->active_position = context->ui_state.mouse_position;
+          context->ui_state.active_position = context->ui_state.mouse_position;
         }
       }
     }
@@ -378,14 +378,16 @@ Define_Keybind_And_Action(
   else if (kb_res == Keybind_Result_Exit) {
     // stop dragging proc
     if (Get_Flag(env->context->flags, Context_Flag_Dragging)) {
-      // update positions of active processes
-      for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
-        Vector2 new_position = get_process_position(context, &context->views[View_Kind_Procs], a);
-        Editable_Process new_a = get_editable_process(context->process_edit_list, a);
-        new_a.process.position = new_position;
-        add_process_to_process_edit_list(context, a, Proc_Trie_Edit_Update, new_a.process);
+      if (context->ui_state.mouse_moved) {
+        // update positions of active processes
+        for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
+          Vector2 new_position = get_process_position(context, &context->views[View_Kind_Procs], a);
+          Editable_Process new_a = get_editable_process(context->process_edit_list, a);
+          new_a.process.position = new_position;
+          add_process_to_process_edit_list(context, a, Proc_Trie_Edit_Update, new_a.process);
+        }
+        gather_processes_from_trie(context);
       }
-      gather_processes_from_trie(context);
       Unset_Flag(env->context->flags, Context_Flag_Dragging);
     }
 

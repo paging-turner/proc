@@ -678,7 +678,7 @@ Steady_Function Steady_Trie(Edit_Result) steady_trie(insert)(
   ) {
   Steady_Trie_Debug_Print("insert\n");
   Steady_Trie_Value_Type value = steady_trie(get_default_value)();
-  return steady_trie(edit)(arena, trie, &key, value, 1, Steady_Trie(Edit_Insert));
+  return steady_trie(edit)(arena, trie, &key, &value, 1, Steady_Trie(Edit_Insert));
 }
 #endif
 

@@ -56,7 +56,7 @@ struct Process {
   };
 
   //////////////
-  // Members that are "ephemeral", which can be ocnstructed from serialized members.
+  // Members that are "ephemeral", which can be constructed from serialized members.
   //     or it's for UI...
   //////////////
   union {
@@ -87,7 +87,7 @@ struct Process {
 // Process Trie
 #define Proc_Trie_Key_Bits               64
 #define Proc_Trie_Slot_Bits              2
-#define Proc_Trie_Use_Key_Value          1
+#define Proc_Trie_Use_Key_Value          0
 #define Steady_Trie(ident)               Proc_Trie_##ident
 #define steady_trie(ident)               proc_trie_##ident
 #define Steady_Trie_Key_Bits             Proc_Trie_Key_Bits
@@ -394,6 +394,8 @@ typedef struct {
   U32 kb_action;
 
   Vector2 mouse_position;
+  Vector2 active_position;
+  B32 mouse_moved;
   Vector2 mouse_wheel_movement;
 
 #define Max_Key_Presses_Per_Frame 256
@@ -476,7 +478,6 @@ struct Context {
 
   Ui_State ui_state;
   Menu_State menu_state;
-  Vector2 active_position;
   Vector2 copy_center;
 
   String_Chunk_List save_file_name;
