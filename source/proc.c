@@ -2655,9 +2655,17 @@ int main(void) {
 
     Piece_Table table = (Piece_Table){0};
     Piece_Table_Range range = (Piece_Table_Range){0};
+
+#if 0
     String8 some_string = str8_lit("Hello");
     String8 another_string = str8_lit(" World!");
     String8 inner_string = str8_lit("inner");
+
+    range = piece_table_insert(&test_context, &table, range, 0, another_string);
+    debug_print_piece_table(&table);
+    printf("Text:\n");
+    debug_print_piece_table_range(&table, range);
+    printf("\n");
 
     range = piece_table_insert(&test_context, &table, range, 0, some_string);
     debug_print_piece_table(&table);
@@ -2665,17 +2673,34 @@ int main(void) {
     debug_print_piece_table_range(&table, range);
     printf("\n");
 
-    range = piece_table_insert(&test_context, &table, range, 5, another_string);
-    debug_print_piece_table(&table);
-    printf("Text:\n");
-    debug_print_piece_table_range(&table, range);
-    printf("\n");
+    /* range = piece_table_insert(&test_context, &table, range, 1, inner_string); */
+    /* debug_print_piece_table(&table); */
+    /* printf("Text:\n"); */
+    /* debug_print_piece_table_range(&table, range); */
+    /* printf("\n"); */
+#else
+    String8 some_string = str8_lit("--------");
+    String8 another_string = str8_lit("$$$$$$$$");
+    String8 hello_string = str8_lit("hello");
 
-    range = piece_table_insert(&test_context, &table, range, 1, inner_string);
+    range = piece_table_insert(&test_context, &table, range, 0, some_string);
     debug_print_piece_table(&table);
     printf("Text:\n");
     debug_print_piece_table_range(&table, range);
-    printf("\n");
+    printf("\n\n");
+
+    range = piece_table_insert(&test_context, &table, range, 8, another_string);
+    debug_print_piece_table(&table);
+    printf("Text:\n");
+    debug_print_piece_table_range(&table, range);
+    printf("\n\n");
+
+    range = piece_table_insert(&test_context, &table, range, 8, hello_string);
+    debug_print_piece_table(&table);
+    printf("Text:\n");
+    debug_print_piece_table_range(&table, range);
+    printf("\n\n");
+#endif
 
     return 0;
   }

@@ -1,4 +1,4 @@
-#define Piece_Table_Chunk_Size 1024
+#define Piece_Table_Chunk_Size 8
 
 
 typedef struct Piece_Table_Chunk {
@@ -132,6 +132,22 @@ function Piece_Table_Range piece_table_copy_text_into_table(
                  string_to_insert.str + amount_of_text_copied,
                  amount_of_text_to_copy);
 
+      // write the row
+      Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
+      if (copy_row) {
+        copy_row->chunk = table->edit_chunk;
+        copy_row->offset = table->edit_chunk->offset;
+        copy_row->size = amount_of_text_to_copy;
+        table->last_section->write_row_offset += 1;
+        result_range.row_count += 1;
+        // update edit-chunk offset
+        table->edit_chunk->offset += amount_of_text_to_copy;
+      }
+      else {
+        printf("[ Error ] Getting editable row. Copy full text into table.\n");
+        break;
+      }
+
       // create new, empty edit-chunk
       if (space_in_edit_chunk == amount_of_text_to_copy) {
         table->edit_chunk->frozen = 1;
@@ -141,23 +157,6 @@ function Piece_Table_Range piece_table_copy_text_into_table(
           printf("[ Error ] Pushing Piece_Table_Chunk for table's edit-chunk. Empty edit-chunk\n");
         }
       }
-
-      // write the row
-      Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
-      if (copy_row) {
-        copy_row->chunk = table->edit_chunk;
-        copy_row->offset = table->edit_chunk->offset;
-        copy_row->size = amount_of_text_to_copy;
-        table->last_section->write_row_offset += 1;
-        result_range.row_count += 1;
-      }
-      else {
-        printf("[ Error ] Getting editable row. Copy full text into table.\n");
-        break;
-      }
-
-      // update edit-chunk offset
-      table->edit_chunk->offset += amount_of_text_to_copy;
       break;
     }
     else {
@@ -166,13 +165,6 @@ function Piece_Table_Range piece_table_copy_text_into_table(
                  string_to_insert.str + amount_of_text_copied,
                  space_in_edit_chunk);
       amount_of_text_copied += space_in_edit_chunk;
-
-      // new edit-chunk
-      table->edit_chunk = push_struct(context->permanent_arena, Piece_Table_Chunk);
-      if (table->edit_chunk == 0) {
-        printf("[ Error ] Pushing Piece_Table_Chunk for table's edit-chunk. Empty edit-chunk\n");
-        break;
-      }
 
       // write the row
       Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
@@ -190,6 +182,13 @@ function Piece_Table_Range piece_table_copy_text_into_table(
 
       // update edit-chunk offset
       table->edit_chunk->offset = space_in_edit_chunk;
+
+      // new edit-chunk
+      table->edit_chunk = push_struct(context->permanent_arena, Piece_Table_Chunk);
+      if (table->edit_chunk == 0) {
+        printf("[ Error ] Pushing Piece_Table_Chunk for table's edit-chunk. Empty edit-chunk\n");
+        break;
+      }
     }
   }
 
@@ -213,62 +212,66 @@ function Piece_Table_Range piece_table_insert(
   if (Piece_Table_Is_Empty(table)) {
     // table is empty, so just add the text
     U32 remainder = string_to_insert.size % Piece_Table_Chunk_Size;
-    B32 remainder_count = remainder ? 1 : 0;
-    U32 full_chunk_count = (string_to_insert.size / Piece_Table_Chunk_Size) + remainder_count;
+    U32 chunk_count = (string_to_insert.size / Piece_Table_Chunk_Size) + 1;
 
     U32 current_row_offset = 0;
     Piece_Table_Section *current_section = 0;
 
     // copy full chunks
-    for (U32 c = 0; c < full_chunk_count; ++c) {
-      Piece_Table_Chunk *chunk = push_struct(context->permanent_arena, Piece_Table_Chunk);
+    for (U32 c = 0; c < chunk_count; ++c) {
+      table->edit_chunk = push_struct(context->permanent_arena, Piece_Table_Chunk);
 
-      if (chunk) {
-        Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
+      if (table->edit_chunk) {
+        U32 row_size = 0;
+        B32 should_copy = 0;
 
-        if (copy_row) {
-          U32 row_size = 0;
+        if (c+1 < chunk_count) {
+          // copy a full chunk
+          U64 string_offset = c * Piece_Table_Chunk_Size;
+          MemoryCopy(table->edit_chunk->str_array,
+                     string_to_insert.str + string_offset,
+                     Piece_Table_Chunk_Size);
+          table->edit_chunk->frozen = 1;
 
-          if (c+1 < full_chunk_count) {
-            // copy a full chunk
-            U64 string_offset = c * Piece_Table_Chunk_Size;
-            MemoryCopy(table->edit_chunk->str_array,
-                       string_to_insert.str + string_offset,
-                       Piece_Table_Chunk_Size);
-            chunk->frozen = 1;
-
-            row_size = Piece_Table_Chunk_Size;
-          }
-          else if (remainder) {
-            // copy the remainder
-            table->edit_chunk = chunk;
-            table->edit_chunk->offset = remainder;
-            U64 string_offset = c * Piece_Table_Chunk_Size;
-            MemoryCopy(table->edit_chunk->str_array,
-                       string_to_insert.str + string_offset,
-                       remainder);
-
-            row_size = remainder;
-          }
-
-          // fill out the row
-#if 0
-          copy_row->kind = Piece_Table_Row_Chunk;
-#endif
-          copy_row->chunk = chunk;
-          copy_row->offset = 0;
-          copy_row->size = row_size;
-          result_range.row_count += 1;
-
-          // fill out the beginning section
-          if (c == 0) {
-            result_range.section = table->last_section;
-          }
+          row_size = Piece_Table_Chunk_Size;
+          should_copy = 1;
         }
-        else {
-          printf("[ Error ] Getting editable-row for empty Piece_Table.\n");
-          result_range = (Piece_Table_Range){0};
-          break;
+        else if (remainder) {
+          // copy the remainder
+          table->edit_chunk->offset = remainder;
+          U64 string_offset = c * Piece_Table_Chunk_Size;
+          MemoryCopy(table->edit_chunk->str_array,
+                     string_to_insert.str + string_offset,
+                     remainder);
+
+          row_size = remainder;
+          should_copy = 1;
+        }
+
+        if (should_copy) {
+          Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
+
+          if (copy_row) {
+            // fill out the row
+#if 0
+            copy_row->kind = Piece_Table_Row_Chunk;
+#endif
+            copy_row->chunk = table->edit_chunk;
+            copy_row->offset = 0;
+            copy_row->size = row_size;
+            table->last_section->write_row_offset += 1;
+            result_range.row_count += 1;
+
+            // fill out the beginning section
+            if (c == 0) {
+              result_range.section = table->last_section;
+            }
+          }
+          else {
+            printf("[ Error ] Getting editable-row for empty Piece_Table.\n");
+            result_range = (Piece_Table_Range){0};
+            break;
+          }
         }
       }
       else {
@@ -287,13 +290,12 @@ function Piece_Table_Range piece_table_insert(
 
     // fill out beginning section
     result_range.section = piece_table_get_editable_section(context, table);
+    result_range.row_offset = result_range.section->write_row_offset;
 
     if (result_range.section == 0) {
       printf("[ Error ] Pushing Piece_Table_Section for new copy-section. Init.\n");
     }
     else {
-      result_range.row_offset = result_range.section->write_row_offset;
-
       for (U64 i = 0; i < range.row_count; ++i) {
         // update current-row trackers
         if (current_row_offset == Piece_Table_Row_Count) {
@@ -322,9 +324,9 @@ function Piece_Table_Range piece_table_insert(
           row_edited = 1;
         }
         else if (!row_edited && current_text_offset > text_offset) {
-          U64 text_size_before = current_text_offset - text_offset;
-          Assert(text_size_before < current_row->size);
-          U64 text_size_after = current_row->size - text_size_before;
+          U64 text_size_after = current_text_offset - text_offset;
+          Assert(text_size_after <= current_row->size);
+          U64 text_size_before = current_row->size - text_size_after;
 
           // copy first part of current row
           Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
@@ -419,7 +421,8 @@ function void debug_print_piece_table(Piece_Table *table) {
       }
       }
 #else
-      printf("Chunk %p %d %d\n", row->chunk, row->offset, row->size);
+      char write_row_indicator = r == current_section->write_row_offset ? '#' : ' ';
+      printf("%c Chunk %p %d %d\n", write_row_indicator, row->chunk, row->offset, row->size);
 #endif
     }
   }
