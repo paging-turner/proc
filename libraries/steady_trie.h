@@ -183,12 +183,6 @@ typedef U64 Steady_Trie(Value_Type);
 # define Steady_Trie_Default_Value 0
 #endif
 
-#if 0
-# if Steady_Trie_Use_Key_Value_Pair
-// Define steady_trie(values_equal) without an implementation to force the user to define the function with the custom types.
-static B32 steady_trie(values_equal)(Steady_Trie_Value_Type v1, Steady_Trie_Value_Type v2);
-# endif
-#endif
 
 
 
@@ -323,16 +317,6 @@ Steady_Function void steady_trie(delete_stack_node)(
 }
 
 
-Steady_Function S32 steady_trie(get_depth_from_iterator)(Steady_Trie(Iterator) *iter) {
-  S32 depth = -1;
-
-  // @Speed
-  for (Steady_Trie(Stack_Node) *node = iter->stack; node != 0; node = node->next) {
-    depth += 1;
-  }
-
-  return depth;
-}
 
 
 
@@ -805,15 +789,6 @@ Steady_Function B32 steady_trie(ensure_key_has_occupation)(
       Steady_Trie_Debug_Print("[ Error ] Null value at key %llu\n", (U64)key);
       errors = 1;
     }
-#if 0
-# if Steady_Trie_Use_Key_Value_Pair
-    // TODO: Check that values are equal.
-    else if (occupation && !steady_trie(values_equal)(*value, steady_trie(get_default_value)())) {
-      Steady_Trie_Debug_Print("[ Error ] Mismatched value at key %llu.\n", (U64)key);
-      errors = 1;
-    }
-# endif
-#endif
     else if (!occupation && value) {
       Steady_Trie_Debug_Print("[ Error ] Found a value at key %llu, but was not expecting a value.\n",
              (U64)key);

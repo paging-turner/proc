@@ -52,6 +52,7 @@ Define_Cycle_Detector_Function(
 #include "../source/standard_keybinds.h"
 #include "../source/saves.h"
 
+#include "../source/piece_table.h"
 
 
 
@@ -928,6 +929,9 @@ function void handle_label_editing(Context *context, Process_List ps) {
         B32 is_ascii = key > 0 && key < 256;
         U8 c = ascii_char_lookup[key&0xff][shift_down];
         if (is_ascii && c != 0) {
+          Assert((a->label.first == 0 && a->label.last == 0) ||
+                 (a->label.first != 0 && a->label.last != 0));
+
           // push string-chunk if string list is empty
           if (a->label.last == 0) {
             String_Chunk *sc = create_string_chunk(context);
@@ -2643,6 +2647,24 @@ function void create_keybind_array(Context *context) {
 // Main
 //////////////////////////////////////////
 int main(void) {
+
+  { // TODO: remove piece-table testing code
+    Context test_context = (Context){0};
+    test_context.temp_arena = arena_alloc_reserve(Context_Temp_Arena_Size, 0);
+    test_context.permanent_arena = arena_alloc_reserve(Context_Permanent_Arena_Size, 0);
+
+    Piece_Table table = (Piece_Table){0};
+    Piece_Table_Range range = (Piece_Table_Range){0};
+    String8 some_string = str8_lit("Hello");
+    String8 another_string = str8_lit(" World!");
+
+    range = piece_table_insert(&test_context, &table, range, 0, some_string);
+    range = piece_table_insert(&test_context, &table, range, 5, another_string);
+
+    debug_print_piece_table(&table);
+    debug_print_piece_table_range(&table, range);
+    return 0;
+  }
 
   //////////////////////////////////////////
   // Init
