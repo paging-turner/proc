@@ -8,57 +8,28 @@ typedef struct Piece_Table_Chunk {
 } Piece_Table_Chunk;
 
 
-typedef struct Piece_Table Piece_Table;
-typedef struct Piece_Table_Section Piece_Table_Section;
-
-
-#if 0
-typedef enum Piece_Table_Row_Kind {
-  Piece_Table_Row__Null,
-  Piece_Table_Row_Chunk,
-  Piece_Table_Row_Ref,
-} Piece_Table_Row_Kind;
-#endif
-
-
 typedef struct Piece_Table_Row {
-#if 0
-  Piece_Table_Row_Kind kind;
-#endif
-  union {
-    Piece_Table_Section *section;
-    Piece_Table_Chunk *chunk;
-  };
+  Piece_Table_Chunk *chunk;
   U32 offset;
   U32 size;
 } Piece_Table_Row;
 
 
-#if 0
-typedef struct Piece_Table_Row_Stack {
-  struct Piece_Table_Row_Stack *next;
-  Piece_Table *table;
-  Piece_Table_Row *row;
-  B32 visited;
-} Piece_Table_Row_Stack;
-#endif
+#define Piece_Table_Row_Count 4
 
 
-#define Piece_Table_Row_Count 16
-
-
-struct Piece_Table_Section {
+typedef struct Piece_Table_Section {
   struct Piece_Table_Section *next;
   Piece_Table_Row rows[Piece_Table_Row_Count];
   U32 write_row_offset;
-};
+} Piece_Table_Section;
 
 
-struct Piece_Table {
+typedef struct Piece_Table {
   Piece_Table_Section *first_section;
   Piece_Table_Section *last_section;
   Piece_Table_Chunk *edit_chunk;
-};
+} Piece_Table;
 
 
 typedef struct Piece_Table_Range {
@@ -107,10 +78,12 @@ function Piece_Table_Row *piece_table_get_editable_row(
 
   if (section) {
     row = section->rows + section->write_row_offset;
+    section->write_row_offset += 1;
   }
 
   return row;
 }
+
 
 
 function Piece_Table_Range piece_table_copy_text_into_table(
@@ -138,9 +111,7 @@ function Piece_Table_Range piece_table_copy_text_into_table(
         copy_row->chunk = table->edit_chunk;
         copy_row->offset = table->edit_chunk->offset;
         copy_row->size = amount_of_text_to_copy;
-        table->last_section->write_row_offset += 1;
         result_range.row_count += 1;
-        // update edit-chunk offset
         table->edit_chunk->offset += amount_of_text_to_copy;
       }
       else {
@@ -172,16 +143,13 @@ function Piece_Table_Range piece_table_copy_text_into_table(
         copy_row->chunk = table->edit_chunk;
         copy_row->offset = table->edit_chunk->offset;
         copy_row->size = space_in_edit_chunk;
-        table->last_section->write_row_offset += 1;
         result_range.row_count += 1;
+        table->edit_chunk->offset += space_in_edit_chunk;
       }
       else {
         printf("[ Error ] Getting editable row. Copy part of text into table.\n");
         break;
       }
-
-      // update edit-chunk offset
-      table->edit_chunk->offset = space_in_edit_chunk;
 
       // new edit-chunk
       table->edit_chunk = push_struct(context->permanent_arena, Piece_Table_Chunk);
@@ -238,7 +206,6 @@ function Piece_Table_Range piece_table_insert(
         }
         else if (remainder) {
           // copy the remainder
-          table->edit_chunk->offset = remainder;
           U64 string_offset = c * Piece_Table_Chunk_Size;
           MemoryCopy(table->edit_chunk->str_array,
                      string_to_insert.str + string_offset,
@@ -250,7 +217,6 @@ function Piece_Table_Range piece_table_insert(
 
         if (should_copy) {
           Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
-
           if (copy_row) {
             // fill out the row
 #if 0
@@ -259,8 +225,8 @@ function Piece_Table_Range piece_table_insert(
             copy_row->chunk = table->edit_chunk;
             copy_row->offset = 0;
             copy_row->size = row_size;
-            table->last_section->write_row_offset += 1;
             result_range.row_count += 1;
+            table->edit_chunk->offset += row_size;
 
             // fill out the beginning section
             if (c == 0) {
@@ -312,7 +278,6 @@ function Piece_Table_Range piece_table_insert(
           Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
           if (copy_row) {
             *copy_row = *current_row;
-            table->last_section->write_row_offset += 1;
             result_range.row_count += 1;
           }
           else {
@@ -334,7 +299,6 @@ function Piece_Table_Range piece_table_insert(
             copy_row->chunk = current_row->chunk;
             copy_row->offset = current_row->offset;
             copy_row->size = text_size_before;
-            table->last_section->write_row_offset += 1;
             result_range.row_count += 1;
           }
           else {
@@ -351,7 +315,6 @@ function Piece_Table_Range piece_table_insert(
             copy_row->chunk = current_row->chunk;
             copy_row->offset = current_row->offset + text_size_before;
             copy_row->size = text_size_after;
-            table->last_section->write_row_offset += 1;
             result_range.row_count += 1;
           }
           else {
@@ -366,7 +329,6 @@ function Piece_Table_Range piece_table_insert(
           Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
           if (copy_row) {
             *copy_row = *current_row;
-            table->last_section->write_row_offset += 1;
             result_range.row_count += 1;
           }
           else {
@@ -406,24 +368,8 @@ function void debug_print_piece_table(Piece_Table *table) {
        current_section = current_section->next) {
     for (U32 r = 0; r < Piece_Table_Row_Count; ++r) {
       Piece_Table_Row *row = current_section->rows + r;
-
-#if 0
-      switch (row->kind) {
-      case Piece_Table_Row_Chunk: {
-        printf("Chunk %p %d %d\n", row->chunk, row->offset, row->size);
-      } break;
-      case Piece_Table_Row_Ref: {
-        printf("  Ref %p %d %d\n", row->chunk, row->offset, row->size);
-      } break;
-      default: {
-        r = Piece_Table_Row_Count;
-        current_section = 0;
-      }
-      }
-#else
       char write_row_indicator = r == current_section->write_row_offset ? '#' : ' ';
       printf("%c Chunk %p %d %d\n", write_row_indicator, row->chunk, row->offset, row->size);
-#endif
     }
   }
 }
@@ -436,27 +382,6 @@ function void debug_print_piece_table_range(Piece_Table *table, Piece_Table_Rang
   U32 current_row_offset = range.row_offset;
 
   for (U32 i = 0; i < range.row_count; ++i) {
-    Piece_Table_Row *row = current_section->rows + current_row_offset;
-
-#if 0
-    if (row->kind == Piece_Table_Row_Chunk) {
-      for (U32 c = 0; c < row->size; ++c) {
-        printf("%c", row->chunk->str_array[row->offset+c]);
-      }
-    }
-    else if (row->kind == Piece_Table_Row_Ref) {
-      Assert(!"TODO");
-    }
-    else {
-      printf("[ Error ] Unknown row found while printing piece-table range.\n");
-      break;
-    }
-#else
-    for (U32 c = 0; c < row->size; ++c) {
-      printf("%c", row->chunk->str_array[row->offset+c]);
-    }
-#endif
-
     if (current_row_offset == Piece_Table_Row_Count) {
       if (current_section->next) {
         current_section = current_section->next;
@@ -467,9 +392,14 @@ function void debug_print_piece_table_range(Piece_Table *table, Piece_Table_Rang
         break;
       }
     }
-    else {
-      current_row_offset += 1;
+
+    Piece_Table_Row *row = current_section->rows + current_row_offset;
+
+    for (U32 c = 0; c < row->size; ++c) {
+      printf("%c", row->chunk->str_array[row->offset+c]);
     }
+
+    current_row_offset += 1;
   }
 }
 

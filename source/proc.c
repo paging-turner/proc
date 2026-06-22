@@ -2695,7 +2695,13 @@ int main(void) {
     debug_print_piece_table_range(&table, range);
     printf("\n\n");
 
-    range = piece_table_insert(&test_context, &table, range, 8, hello_string);
+    range = piece_table_insert(&test_context, &table, range, 0, hello_string);
+    debug_print_piece_table(&table);
+    printf("Text:\n");
+    debug_print_piece_table_range(&table, range);
+    printf("\n\n");
+
+    range = piece_table_insert(&test_context, &table, range, 11, hello_string);
     debug_print_piece_table(&table);
     printf("Text:\n");
     debug_print_piece_table_range(&table, range);
