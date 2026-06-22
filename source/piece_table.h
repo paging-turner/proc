@@ -198,6 +198,7 @@ function Piece_Table_Range piece_table_copy_text_into_table(
 
 
 
+
 function Piece_Table_Range piece_table_insert(
   Context *context,
   Piece_Table *table,
@@ -247,7 +248,7 @@ function Piece_Table_Range piece_table_insert(
                        string_to_insert.str + string_offset,
                        remainder);
 
-            row_size = Piece_Table_Chunk_Size;
+            row_size = remainder;
           }
 
           // fill out the row
