@@ -2647,7 +2647,6 @@ function void create_keybind_array(Context *context) {
 // Main
 //////////////////////////////////////////
 int main(void) {
-
   { // TODO: remove piece-table testing code
     Context test_context = (Context){0};
     test_context.temp_arena = arena_alloc_reserve(Context_Temp_Arena_Size, 0);
@@ -2681,7 +2680,7 @@ int main(void) {
 #else
     String8 some_string = str8_lit("--------");
     String8 another_string = str8_lit("$$$$$$$$");
-    String8 hello_string = str8_lit("hello");
+    String8 hello_string = str8_lit("_hello_there_this_is_long_");
 
     range = piece_table_insert(&test_context, &table, range, 0, some_string);
     debug_print_piece_table(&table);

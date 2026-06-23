@@ -173,78 +173,18 @@ function Piece_Table_Range piece_table_insert(
   U64 text_offset,
   String8 string_to_insert
   ) {
-  Assert(range.row_offset < Piece_Table_Row_Count);
-
   Piece_Table_Range result_range = (Piece_Table_Range){0};
 
+  Assert(range.row_offset < Piece_Table_Row_Count);
+
   if (Piece_Table_Is_Empty(table)) {
-    // table is empty, so just add the text
-    U32 remainder = string_to_insert.size % Piece_Table_Chunk_Size;
-    U32 chunk_count = (string_to_insert.size / Piece_Table_Chunk_Size) + 1;
-
-    U32 current_row_offset = 0;
-    Piece_Table_Section *current_section = 0;
-
-    // copy full chunks
-    for (U32 c = 0; c < chunk_count; ++c) {
-      table->edit_chunk = push_struct(context->permanent_arena, Piece_Table_Chunk);
-
-      if (table->edit_chunk) {
-        U32 row_size = 0;
-        B32 should_copy = 0;
-
-        if (c+1 < chunk_count) {
-          // copy a full chunk
-          U64 string_offset = c * Piece_Table_Chunk_Size;
-          MemoryCopy(table->edit_chunk->str_array,
-                     string_to_insert.str + string_offset,
-                     Piece_Table_Chunk_Size);
-          table->edit_chunk->frozen = 1;
-
-          row_size = Piece_Table_Chunk_Size;
-          should_copy = 1;
-        }
-        else if (remainder) {
-          // copy the remainder
-          U64 string_offset = c * Piece_Table_Chunk_Size;
-          MemoryCopy(table->edit_chunk->str_array,
-                     string_to_insert.str + string_offset,
-                     remainder);
-
-          row_size = remainder;
-          should_copy = 1;
-        }
-
-        if (should_copy) {
-          Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
-          if (copy_row) {
-            // fill out the row
-#if 0
-            copy_row->kind = Piece_Table_Row_Chunk;
-#endif
-            copy_row->chunk = table->edit_chunk;
-            copy_row->offset = 0;
-            copy_row->size = row_size;
-            result_range.row_count += 1;
-            table->edit_chunk->offset += row_size;
-
-            // fill out the beginning section
-            if (c == 0) {
-              result_range.section = table->last_section;
-            }
-          }
-          else {
-            printf("[ Error ] Getting editable-row for empty Piece_Table.\n");
-            result_range = (Piece_Table_Range){0};
-            break;
-          }
-        }
-      }
-      else {
-        printf("[ Error ] Pushing Piece_Table_Chunk to empty Piece_Table.\n");
-        result_range = (Piece_Table_Range){0};
-        break;
-      }
+    table->edit_chunk = push_struct(context->permanent_arena, Piece_Table_Chunk);
+    if (table->edit_chunk) {
+      result_range = piece_table_copy_text_into_table(context, table, range, string_to_insert);
+      result_range.section = table->last_section;
+    }
+    else {
+      printf("[ Error ] Pushing Piece_Table_Chunk for edit-chunk of empty table.\n");
     }
   }
   else {
@@ -260,6 +200,7 @@ function Piece_Table_Range piece_table_insert(
 
     if (result_range.section == 0) {
       printf("[ Error ] Pushing Piece_Table_Section for new copy-section. Init.\n");
+      result_range = (Piece_Table_Range){0};
     }
     else {
       for (U64 i = 0; i < range.row_count; ++i) {
@@ -349,14 +290,25 @@ function Piece_Table_Range piece_table_insert(
 
 
 
-function void piece_table_delete(
+function Piece_Table_Range piece_table_delete(
+  Context *context,
   Piece_Table *table,
-  U64 row_offset,
-  U64 offset,
-  U64 amount
+  Piece_Table_Range range,
+  U64 text_offset,
+  U64 amount_to_delete
   ) {
-  Assert(!"TODO");
-  Assert(row_offset < Piece_Table_Row_Count);
+  Assert(range.row_offset < Piece_Table_Row_Count);
+  Piece_Table_Range result_range = (Piece_Table_Range){0};
+
+  if (Piece_Table_Is_Empty(table)) {
+    // nothing to do, just return the same range that was passed in
+    result_range = range;
+  }
+  else {
+    Assert(!"TODO");
+  }
+
+  return result_range;
 }
 
 
