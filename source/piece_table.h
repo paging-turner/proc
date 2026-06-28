@@ -215,6 +215,7 @@ function Piece_Table_Range piece_table_insert(
         current_text_offset += current_row->size;
 
         if (!row_edited && current_text_offset == text_offset) {
+          // @Copypasta
           // copy current row
           Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
           if (copy_row) {
@@ -222,7 +223,7 @@ function Piece_Table_Range piece_table_insert(
             result_range.row_count += 1;
           }
           else {
-            printf("[ Error ] Getting editable row. No row split.\n");
+            printf("[ Error ] Getting editable row. Insert. No row split.\n");
           }
 
           // copy the new text
@@ -234,6 +235,7 @@ function Piece_Table_Range piece_table_insert(
           Assert(text_size_after <= current_row->size);
           U64 text_size_before = current_row->size - text_size_after;
 
+          // @Copypasta
           // copy first part of current row
           Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
           if (copy_row) {
@@ -250,6 +252,7 @@ function Piece_Table_Range piece_table_insert(
           // copy new row
           result_range = piece_table_copy_text_into_table(context, table, result_range, string_to_insert);
 
+          // @Copypasta
           // copy last part of current row
           copy_row = piece_table_get_editable_row(context, table);
           if (copy_row) {
@@ -305,7 +308,129 @@ function Piece_Table_Range piece_table_delete(
     result_range = range;
   }
   else {
-    Assert(!"TODO");
+    enum Delete_Mode {
+      Delete_Mode_Begin,
+      Delete_Mode_Middle,
+      Delete_Mode_End,
+    };
+    enum Delete_Mode mode = Delete_Mode_Begin;
+    B32 row_edited = 0;
+    Piece_Table_Section *current_section = range.section;
+    U32 current_row_offset = range.row_offset;
+    U32 current_text_offset = 0;
+    U64 target_text_offset = text_offset;
+
+    result_range.section = current_section;
+    result_range.row_offset = result_range.section->write_row_offset;
+
+    for (U64 i = 0; i < range.row_count; ++i) {
+      // update current-row trackers
+      if (current_row_offset == Piece_Table_Row_Count) {
+        current_row_offset = 0;
+        Assert(current_section->next);
+        current_section = current_section->next;
+      }
+
+      Piece_Table_Row *current_row = current_section->rows + current_row_offset;
+      current_text_offset += current_row->size;
+
+      if (mode != Delete_Mode_End && current_text_offset == target_text_offset) {
+        if (mode == Delete_Mode_Begin) {
+          mode = Delete_Mode_Middle;
+          target_text_offset += amount_to_delete;
+
+          // copy the row
+          Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
+          if (copy_row) {
+            *copy_row = *current_row;
+            result_range.row_count += 1;
+          }
+          else {
+            printf("[ Error ] Getting editable row. Delete. No row split.\n");
+          }
+        }
+        else if (mode == Delete_Mode_Middle) {
+          mode = Delete_Mode_End;
+        }
+      }
+      else if (mode != Delete_Mode_End && current_text_offset > target_text_offset) {
+        U64 text_size_after = 0;
+        if ((text_offset + amount_to_delete) < current_text_offset) {
+          text_size_after = current_text_offset - (text_offset + amount_to_delete);
+        }
+        Assert(text_size_after <= current_row->size);
+        U64 text_size_before = current_row->size - (text_size_after + amount_to_delete);
+
+        if (mode == Delete_Mode_Begin) {
+          // when in begin mode, copy the first part of the row
+          mode = Delete_Mode_Middle;
+
+          // @Copypasta
+          // copy first part of current row
+          Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
+          if (copy_row) {
+            copy_row->chunk = current_row->chunk;
+            copy_row->offset = current_row->offset;
+            copy_row->size = text_size_before;
+            result_range.row_count += 1;
+          }
+          else {
+            printf("[ Error ] Pushing Piece_Table_Section for new copy-section. Delete. Row split first part.\n");
+            break;
+          }
+        }
+        else if (mode == Delete_Mode_Middle) {
+          // when in middle mode, copy the last part of the row
+          mode = Delete_Mode_End;
+          // @Copypasta
+          // copy last part of current row
+          Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
+          if (copy_row) {
+            copy_row->chunk = current_row->chunk;
+            copy_row->offset = current_row->offset + text_size_before;
+            copy_row->size = text_size_after;
+            result_range.row_count += 1;
+          }
+          else {
+            printf("[ Error ] Pushing Piece_Table_Section for new copy-section. Delete. Row split last part.\n");
+            break;
+          }
+        }
+      }
+      else if (mode != Delete_Mode_Middle) {
+        // @Copypasta
+        // copy current row
+        Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
+        if (copy_row) {
+          *copy_row = *current_row;
+          result_range.row_count += 1;
+        }
+        else {
+          printf("[ Error ] Getting editable row. Delete. No row split.\n");
+        }
+      }
+
+      // check if we are deleting text *within* the current section
+      if ((mode != Delete_Mode_End) &&
+          (text_offset + amount_to_delete < current_text_offset)) {
+        Assert(Piece_Table_Chunk_Size > (text_offset + amount_to_delete));
+        mode = Delete_Mode_End;
+        U64 offset = text_offset + amount_to_delete;
+        Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
+        if (copy_row) {
+          copy_row->chunk = current_row->chunk;
+          copy_row->offset = offset;
+          copy_row->size = Piece_Table_Chunk_Size - (text_offset + amount_to_delete);
+          result_range.row_count += 1;
+        }
+        else {
+          printf("[ Error ] Getting editable row. Delete. Last part within a section.\n");
+        }
+      }
+
+      // increment row offset
+      current_row_offset += 1;
+    }
   }
 
   return result_range;

@@ -2677,10 +2677,10 @@ int main(void) {
     /* printf("Text:\n"); */
     /* debug_print_piece_table_range(&table, range); */
     /* printf("\n"); */
-#else
+#elif 0
     String8 some_string = str8_lit("--------");
     String8 another_string = str8_lit("$$$$$$$$");
-    String8 hello_string = str8_lit("_hello_there_this_is_long_");
+    String8 hello_string = str8_lit("hello_there");
 
     range = piece_table_insert(&test_context, &table, range, 0, some_string);
     debug_print_piece_table(&table);
@@ -2701,6 +2701,20 @@ int main(void) {
     printf("\n\n");
 
     range = piece_table_insert(&test_context, &table, range, 11, hello_string);
+    debug_print_piece_table(&table);
+    printf("Text:\n");
+    debug_print_piece_table_range(&table, range);
+    printf("\n\n");
+#else
+    String8 some_string = str8_lit("abcdefghi");
+
+    range = piece_table_insert(&test_context, &table, range, 0, some_string);
+    debug_print_piece_table(&table);
+    printf("Text:\n");
+    debug_print_piece_table_range(&table, range);
+    printf("\n\n");
+
+    range = piece_table_delete(&test_context, &table, range, 3, 2);
     debug_print_piece_table(&table);
     printf("Text:\n");
     debug_print_piece_table_range(&table, range);
