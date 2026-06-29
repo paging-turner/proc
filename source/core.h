@@ -78,30 +78,6 @@ Define_Cycle_Detector_Function(
   string_chunk_has_cycles,
   String_Chunk, next);
 
-function void ensure_string_chunk_has_proper_termination(String_Chunk *head) {
-  if (head) {
-    Assert(!string_chunk_has_cycles(head));
-
-    for (String_Chunk *chunk = head; chunk != 0; chunk = chunk->next) {
-      B32 has_next = chunk->next ? 1 : 0;
-      B32 has_zeroes = 0;
-
-      for (U32 i = 0; i < String_Chunk_Size; ++i) {
-        has_zeroes = has_zeroes || chunk->str_array[i] == 0;
-      }
-
-      B32 is_proper = has_zeroes ^ has_next;
-
-      Assert(is_proper);
-    }
-  }
-}
-
-
-function void ensure_string_chunk_list_is_proper(String_Chunk_List scl) {
-  ensure_string_chunk_has_proper_termination(scl.first);
-  ensure_string_chunk_has_proper_termination(scl.last);
-}
 
 typedef struct {
   U64 size;
@@ -192,7 +168,6 @@ function void print_string_chunk_list(String_Chunk_List list) {
 function U64 get_total_size_of_string_chunk_list(String_Chunk_List *scl) {
   Assert(!string_chunk_has_cycles(scl ? scl->first : 0));
   String_Chunk *sc = scl ? scl->first : 0;
-  ensure_string_chunk_has_proper_termination(sc);
 
   // @Speed
   // get the total size
@@ -214,6 +189,7 @@ function U64 get_total_size_of_string_chunk_list(String_Chunk_List *scl) {
 
   return total_size;
 }
+
 
 
 function U8 *c_string_from_string_chunk_list(Arena *arena, String_Chunk_List *scl) {

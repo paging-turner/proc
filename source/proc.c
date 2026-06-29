@@ -34,6 +34,7 @@ global_variable String8 Build_Filepath;
 
 
 
+typedef struct Piece_Table Piece_Table;
 #include "../source/proc.h"
 #include "../source/keybind_funcs.h"
 
@@ -50,7 +51,7 @@ Define_Cycle_Detector_Function(
 #include "../source/keybind.c"
 
 #include "../source/standard_keybinds.h"
-#include "../source/saves.h"
+/* #include "../source/saves.h" */
 
 #include "../source/piece_table.h"
 
@@ -208,9 +209,6 @@ global_variable Ui_Box save_file_as_confirm_box = (Ui_Box){
 function void check_process_list(Process_List list) {
   Assert(!process_list_has_cycles(list.first));
   Assert(!process_list_has_cycles(list.last));
-  for (Process *p = list.first; p != 0; p = p->next) {
-    ensure_string_chunk_list_is_proper(p->label);
-  }
 }
 
 
@@ -620,6 +618,12 @@ function void remove_process_from_process_list(Context *context, Process_List *l
 
 
 
+function Piece_Table *copy_piece_table(Context *context, Piece_Table *table) {
+  Assert(!"TODO");
+  return 0;
+}
+
+
 function String_Chunk_List copy_string_chunk_list(Context *context, String_Chunk_List *scl) {
   String_Chunk_List result = (String_Chunk_List){0};
 
@@ -774,8 +778,8 @@ function void copy_active_processes(Context *context) {
     }
 
     // copy label
-    if (c->label.first) {
-      c->label = copy_string_chunk_list(context, &c->label);
+    if (c->label) {
+      c->label = copy_piece_table(context, c->label);
     }
   }
 
@@ -877,11 +881,6 @@ function Process *find_process_connection(
 ////////////////////////////////////////
 
 function void clear_ui_state(Context *context) {
-  // free string-chunks
-  for (Process *e = context->save_file_list.first; e != 0; e = e->next) {
-    remove_string_chunk_list(context, &e->label);
-  }
-
   context->save_file_list.first = 0;
   context->save_file_list.last = 0;
 
@@ -919,6 +918,9 @@ function void set_menu_state_as_save_file_as(Context *context, Process *element)
 
 
 function void handle_label_editing(Context *context, Process_List ps) {
+#if 1
+  // TODO
+#else
   U32 key = 0;
   U32 k = 0;
   B32 shift_down = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
@@ -978,6 +980,7 @@ function void handle_label_editing(Context *context, Process_List ps) {
       }
     }
   }
+#endif
 }
 
 
@@ -987,8 +990,8 @@ function Vector2 get_ui_element_size(Context *context, Process *element, B32 fit
   F32 font_size = global_panel_font_size;
   Vector2 padding = global_button_padding;
 
-  if (label == 0 && element->label.first && element->label.last) {
-    label = c_string_from_string_chunk_list(render_GlobalTempArena, &element->label);
+  if (label == 0 && element->label) {
+    label = c_string_from_piece_table(render_GlobalTempArena, element->label);
   }
 
   if (fit_to_text) {
@@ -1103,8 +1106,8 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
   if (sizing) {
     if (!Get_Flag(element->flags, Process_Flag_UseLabelCString)) {
       element->label_c_string = 0;
-      if (element->label.first && element->label.last) {
-        element->label_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &element->label);
+      if (element->label) {
+        element->label_c_string = c_string_from_piece_table(render_GlobalTempArena, element->label);
       }
     }
 
@@ -1226,15 +1229,15 @@ function Process *create_button(Arena *arena, Vector2 position, String_Chunk_Lis
   F32 font_size = global_panel_font_size;
 
   if (button) {
-    button->label = label;
-    U8 *label_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &button->label);
+    U8 *label_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &label);
     S32 text_width = MeasureText((char *)label_c_string, font_size);
     button->size.x = text_width + 2.0f*padding.x;
     button->size.y = font_size + 2.0f*padding.y;
 
     Set_Flag(button->flags, Process_Flag_Clickable|Process_Flag_FitToText);
     button->position = position;
-    button->label = label;
+    /* button->label = label; */
+    button->label_c_string = label_c_string;
   }
 
   return button;
@@ -1365,7 +1368,7 @@ function S32 collect_save_files(Context *context) {
 }
 
 
-
+#if 0
 function void save_file(Context *context, Process *element) {
   if (context->save_file_name.first && context->save_file_name.last) {
     write_save_file(context, context->temp_arena, context->save_file_name);
@@ -1432,6 +1435,7 @@ function void do_save_file_as(Context *context, B32 sizing) {
   }
   ui_box_end(context, &save_file_as_box, sizing);
 }
+#endif
 
 
 function void handle_copy(Context *context, Process *element) {
@@ -2048,7 +2052,7 @@ function Process_Shape get_process_shape(
   U64 arena_pop_pos = arena_current_pos(context->temp_arena);
 
   F32 font_size = view->camera.zoom * global_process_font_size;
-  U8 *label_c_string = c_string_from_string_chunk_list(context->temp_arena, &p->label);
+  U8 *label_c_string = c_string_from_piece_table(context->temp_arena, p->label);
   S32 text_width = MeasureText((char *)label_c_string, font_size);
 
   Vector2 position = get_process_position(context, view, p);
@@ -2337,7 +2341,8 @@ function Process create_lit_button(Context *context, String8 label, F32 x_pos, F
   button.position.x = x_pos;
   button.position.y = y_pos;
 
-  button.label = string_chunk_list_from_string8(context, label);
+  /* button.label = string_chunk_list_from_string8(context, label); */
+  button.label_c_string = label.str;
 
   return button;
 }
@@ -2647,7 +2652,7 @@ function void create_keybind_array(Context *context) {
 // Main
 //////////////////////////////////////////
 int main(void) {
-  { // TODO: remove piece-table testing code
+  if(0){ // TODO: remove piece-table testing code
     Context test_context = (Context){0};
     test_context.temp_arena = arena_alloc_reserve(Context_Temp_Arena_Size, 0);
     test_context.permanent_arena = arena_alloc_reserve(Context_Permanent_Arena_Size, 0);
@@ -2818,7 +2823,7 @@ int main(void) {
       open_file_button = create_lit_button(&context, str8_lit("Open..."), 0, 0);
       open_file_button.func = set_menu_state_as_open_file;
       save_file_button = create_lit_button(&context, str8_lit("Save"), 0, 0);
-      save_file_button.func = save_file;
+      /* save_file_button.func = save_file; */
       save_as_file_button = create_lit_button(&context, str8_lit("Save As..."), 0, 0);
       save_as_file_button.func = set_menu_state_as_save_file_as;
       edit_menu_button = create_lit_button(&context, str8_lit("Edit"), 0, 0);
@@ -2911,12 +2916,12 @@ int main(void) {
 
         switch(context.menu_state) {
         case Menu_State_OpenFile: {
-          do_open_file(&context, 1);
-          do_open_file(&context, 0);
+          /* do_open_file(&context, 1); */
+          /* do_open_file(&context, 0); */
         } break;
         case Menu_State_SaveFileAs: {
-          do_save_file_as(&context, 1);
-          do_save_file_as(&context, 0);
+          /* do_save_file_as(&context, 1); */
+          /* do_save_file_as(&context, 0); */
         } break;
         }
 
@@ -2999,7 +3004,7 @@ int main(void) {
           // draw processes
           for (Process *p = processes_to_draw; p != 0; p = p->next) {
             B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
-            U8 *label_c_string = c_string_from_string_chunk_list(context.temp_arena, &p->label);
+            U8 *label_c_string = c_string_from_piece_table(context.temp_arena, p->label);
             S32 text_width = MeasureText((char *)label_c_string, font_size);
             B32 is_invisible = Get_Flag(p->flags, Process_Flag_Invisible);
 

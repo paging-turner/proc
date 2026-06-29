@@ -37,7 +37,9 @@ struct Process {
   //////////////
   B32 flags;
   Vector2 position;
-  String_Chunk_List label;
+
+  /* String_Chunk_List label; */
+  Piece_Table *label;
 
   union {
     struct {

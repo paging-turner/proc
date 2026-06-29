@@ -25,18 +25,20 @@ typedef struct Piece_Table_Section {
 } Piece_Table_Section;
 
 
-typedef struct Piece_Table {
-  Piece_Table_Section *first_section;
-  Piece_Table_Section *last_section;
-  Piece_Table_Chunk *edit_chunk;
-} Piece_Table;
-
-
 typedef struct Piece_Table_Range {
   Piece_Table_Section *section;
   U64 row_offset;
   U64 row_count;
 } Piece_Table_Range;
+
+
+struct Piece_Table {
+  Piece_Table_Section *first_section;
+  Piece_Table_Section *last_section;
+  Piece_Table_Chunk *edit_chunk;
+  Piece_Table_Range range;
+};
+
 
 
 
@@ -436,6 +438,11 @@ function Piece_Table_Range piece_table_delete(
   return result_range;
 }
 
+
+function U8 *c_string_from_piece_table(Arena *arena, Piece_Table *table) {
+  /* Assert(!"TODO"); */
+  return (U8 *)"";
+}
 
 
 
