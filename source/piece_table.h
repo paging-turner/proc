@@ -88,6 +88,32 @@ function Piece_Table_Row *piece_table_get_editable_row(
 
 
 
+function B32 piece_table_write_row(
+  Context *context,
+  Piece_Table *table,
+  Piece_Table_Range *range,
+  Piece_Table_Chunk *chunk,
+  U32 offset,
+  U32 size
+  ) {
+  B32 error = 0;
+  Piece_Table_Row *row = piece_table_get_editable_row(context, table);
+
+  if (row) {
+    row->chunk = chunk;
+    row->offset = offset;
+    row->size = size;
+    range->row_count += 1;
+  }
+  else {
+    error = 1;
+  }
+
+  return error;
+}
+
+
+
 function Piece_Table_Range piece_table_copy_text_into_table(
   Context *context,
   Piece_Table *table,
@@ -108,17 +134,16 @@ function Piece_Table_Range piece_table_copy_text_into_table(
                  amount_of_text_to_copy);
 
       // write the row
-      Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
-      if (copy_row) {
-        copy_row->chunk = table->edit_chunk;
-        copy_row->offset = table->edit_chunk->offset;
-        copy_row->size = amount_of_text_to_copy;
-        result_range.row_count += 1;
-        table->edit_chunk->offset += amount_of_text_to_copy;
-      }
-      else {
+      if (piece_table_write_row(
+            context, table, &result_range,
+            table->edit_chunk,
+            table->edit_chunk->offset,
+            amount_of_text_to_copy)) {
         printf("[ Error ] Getting editable row. Copy full text into table.\n");
         break;
+      }
+      else {
+        table->edit_chunk->offset += amount_of_text_to_copy;
       }
 
       // create new, empty edit-chunk
@@ -140,17 +165,16 @@ function Piece_Table_Range piece_table_copy_text_into_table(
       amount_of_text_copied += space_in_edit_chunk;
 
       // write the row
-      Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
-      if (copy_row) {
-        copy_row->chunk = table->edit_chunk;
-        copy_row->offset = table->edit_chunk->offset;
-        copy_row->size = space_in_edit_chunk;
-        result_range.row_count += 1;
-        table->edit_chunk->offset += space_in_edit_chunk;
-      }
-      else {
+      if (piece_table_write_row(
+            context, table, &result_range,
+            table->edit_chunk,
+            table->edit_chunk->offset,
+            space_in_edit_chunk)) {
         printf("[ Error ] Getting editable row. Copy part of text into table.\n");
         break;
+      }
+      else {
+        table->edit_chunk->offset += space_in_edit_chunk;
       }
 
       // new edit-chunk
@@ -219,12 +243,11 @@ function Piece_Table_Range piece_table_insert(
         if (!row_edited && current_text_offset == text_offset) {
           // @Copypasta
           // copy current row
-          Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
-          if (copy_row) {
-            *copy_row = *current_row;
-            result_range.row_count += 1;
-          }
-          else {
+          if (piece_table_write_row(
+                context, table, &result_range,
+                current_row->chunk,
+                current_row->offset,
+                current_row->size)) {
             printf("[ Error ] Getting editable row. Insert. No row split.\n");
           }
 
@@ -239,14 +262,11 @@ function Piece_Table_Range piece_table_insert(
 
           // @Copypasta
           // copy first part of current row
-          Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
-          if (copy_row) {
-            copy_row->chunk = current_row->chunk;
-            copy_row->offset = current_row->offset;
-            copy_row->size = text_size_before;
-            result_range.row_count += 1;
-          }
-          else {
+          if (piece_table_write_row(
+                context, table, &result_range,
+                current_row->chunk,
+                current_row->offset,
+                text_size_before)) {
             printf("[ Error ] Pushing Piece_Table_Section for new copy-section. Row split first part.\n");
             break;
           }
@@ -256,14 +276,11 @@ function Piece_Table_Range piece_table_insert(
 
           // @Copypasta
           // copy last part of current row
-          copy_row = piece_table_get_editable_row(context, table);
-          if (copy_row) {
-            copy_row->chunk = current_row->chunk;
-            copy_row->offset = current_row->offset + text_size_before;
-            copy_row->size = text_size_after;
-            result_range.row_count += 1;
-          }
-          else {
+          if (piece_table_write_row(
+                context, table, &result_range,
+                current_row->chunk,
+                current_row->offset + text_size_before,
+                text_size_after)) {
             printf("[ Error ] Pushing Piece_Table_Section for new copy-section. Row split last part.\n");
             break;
           }
@@ -272,12 +289,11 @@ function Piece_Table_Range piece_table_insert(
         }
         else {
           // copy current row
-          Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
-          if (copy_row) {
-            *copy_row = *current_row;
-            result_range.row_count += 1;
-          }
-          else {
+          if (piece_table_write_row(
+                context, table, &result_range,
+                current_row->chunk,
+                current_row->offset,
+                current_row->size)) {
             printf("[ Error ] Getting editable row. Row copy.\n");
           }
         }
@@ -342,12 +358,11 @@ function Piece_Table_Range piece_table_delete(
           target_text_offset += amount_to_delete;
 
           // copy the row
-          Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
-          if (copy_row) {
-            *copy_row = *current_row;
-            result_range.row_count += 1;
-          }
-          else {
+          if (piece_table_write_row(
+                context, table, &result_range,
+                current_row->chunk,
+                current_row->offset,
+                current_row->size)) {
             printf("[ Error ] Getting editable row. Delete. No row split.\n");
           }
         }
@@ -369,14 +384,11 @@ function Piece_Table_Range piece_table_delete(
 
           // @Copypasta
           // copy first part of current row
-          Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
-          if (copy_row) {
-            copy_row->chunk = current_row->chunk;
-            copy_row->offset = current_row->offset;
-            copy_row->size = text_size_before;
-            result_range.row_count += 1;
-          }
-          else {
+          if (piece_table_write_row(
+                context, table, &result_range,
+                current_row->chunk,
+                current_row->offset,
+                text_size_before)) {
             printf("[ Error ] Pushing Piece_Table_Section for new copy-section. Delete. Row split first part.\n");
             break;
           }
@@ -386,14 +398,11 @@ function Piece_Table_Range piece_table_delete(
           mode = Delete_Mode_End;
           // @Copypasta
           // copy last part of current row
-          Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
-          if (copy_row) {
-            copy_row->chunk = current_row->chunk;
-            copy_row->offset = current_row->offset + text_size_before;
-            copy_row->size = text_size_after;
-            result_range.row_count += 1;
-          }
-          else {
+          if (piece_table_write_row(
+                context, table, &result_range,
+                current_row->chunk,
+                current_row->offset + text_size_before,
+                text_size_after)) {
             printf("[ Error ] Pushing Piece_Table_Section for new copy-section. Delete. Row split last part.\n");
             break;
           }
@@ -402,12 +411,11 @@ function Piece_Table_Range piece_table_delete(
       else if (mode != Delete_Mode_Middle) {
         // @Copypasta
         // copy current row
-        Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
-        if (copy_row) {
-          *copy_row = *current_row;
-          result_range.row_count += 1;
-        }
-        else {
+        if (piece_table_write_row(
+              context, table, &result_range,
+              current_row->chunk,
+              current_row->offset,
+              current_row->size)) {
           printf("[ Error ] Getting editable row. Delete. No row split.\n");
         }
       }
@@ -417,15 +425,11 @@ function Piece_Table_Range piece_table_delete(
           (text_offset + amount_to_delete < current_text_offset)) {
         Assert(Piece_Table_Chunk_Size > (text_offset + amount_to_delete));
         mode = Delete_Mode_End;
-        U64 offset = text_offset + amount_to_delete;
-        Piece_Table_Row *copy_row = piece_table_get_editable_row(context, table);
-        if (copy_row) {
-          copy_row->chunk = current_row->chunk;
-          copy_row->offset = offset;
-          copy_row->size = Piece_Table_Chunk_Size - (text_offset + amount_to_delete);
-          result_range.row_count += 1;
-        }
-        else {
+        if (piece_table_write_row(
+              context, table, &result_range,
+              current_row->chunk,
+              text_offset + amount_to_delete,
+              Piece_Table_Chunk_Size - (text_offset + amount_to_delete))) {
           printf("[ Error ] Getting editable row. Delete. Last part within a section.\n");
         }
       }
@@ -437,6 +441,7 @@ function Piece_Table_Range piece_table_delete(
 
   return result_range;
 }
+
 
 
 function U8 *c_string_from_piece_table(Arena *arena, Piece_Table *table) {

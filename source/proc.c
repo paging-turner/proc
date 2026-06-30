@@ -2652,7 +2652,7 @@ function void create_keybind_array(Context *context) {
 // Main
 //////////////////////////////////////////
 int main(void) {
-  if(0){ // TODO: remove piece-table testing code
+  if(1){ // TODO: remove piece-table testing code
     Context test_context = (Context){0};
     test_context.temp_arena = arena_alloc_reserve(Context_Temp_Arena_Size, 0);
     test_context.permanent_arena = arena_alloc_reserve(Context_Permanent_Arena_Size, 0);
@@ -2660,7 +2660,7 @@ int main(void) {
     Piece_Table table = (Piece_Table){0};
     Piece_Table_Range range = (Piece_Table_Range){0};
 
-#if 0
+/* #if 0 */
     String8 some_string = str8_lit("Hello");
     String8 another_string = str8_lit(" World!");
     String8 inner_string = str8_lit("inner");
@@ -2675,16 +2675,16 @@ int main(void) {
     debug_print_piece_table(&table);
     printf("Text:\n");
     debug_print_piece_table_range(&table, range);
-    printf("\n");
+    printf("\n\n\n");
 
     /* range = piece_table_insert(&test_context, &table, range, 1, inner_string); */
     /* debug_print_piece_table(&table); */
     /* printf("Text:\n"); */
     /* debug_print_piece_table_range(&table, range); */
     /* printf("\n"); */
-#elif 0
-    String8 some_string = str8_lit("--------");
-    String8 another_string = str8_lit("$$$$$$$$");
+/* #elif 0 */
+    some_string = str8_lit("--------");
+    another_string = str8_lit("$$$$$$$$");
     String8 hello_string = str8_lit("hello_there");
 
     range = piece_table_insert(&test_context, &table, range, 0, some_string);
@@ -2709,9 +2709,9 @@ int main(void) {
     debug_print_piece_table(&table);
     printf("Text:\n");
     debug_print_piece_table_range(&table, range);
-    printf("\n\n");
-#else
-    String8 some_string = str8_lit("abcdefghi");
+    printf("\n\n\n");
+/* #else */
+    some_string = str8_lit("abcdefghi");
 
     range = piece_table_insert(&test_context, &table, range, 0, some_string);
     debug_print_piece_table(&table);
@@ -2723,8 +2723,8 @@ int main(void) {
     debug_print_piece_table(&table);
     printf("Text:\n");
     debug_print_piece_table_range(&table, range);
-    printf("\n\n");
-#endif
+    printf("\n\n\n");
+/* #endif */
 
     return 0;
   }
