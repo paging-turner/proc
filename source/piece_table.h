@@ -97,16 +97,19 @@ function B32 piece_table_write_row(
   U32 size
   ) {
   B32 error = 0;
-  Piece_Table_Row *row = piece_table_get_editable_row(context, table);
 
-  if (row) {
-    row->chunk = chunk;
-    row->offset = offset;
-    row->size = size;
-    range->row_count += 1;
-  }
-  else {
-    error = 1;
+  if (size) {
+    Piece_Table_Row *row = piece_table_get_editable_row(context, table);
+
+    if (row) {
+      row->chunk = chunk;
+      row->offset = offset;
+      row->size = size;
+      range->row_count += 1;
+    }
+    else {
+      error = 1;
+    }
   }
 
   return error;
@@ -241,7 +244,6 @@ function Piece_Table_Range piece_table_insert(
         current_text_offset += current_row->size;
 
         if (!row_edited && current_text_offset == text_offset) {
-          // @Copypasta
           // copy current row
           if (piece_table_write_row(
                 context, table, &result_range,
@@ -260,7 +262,6 @@ function Piece_Table_Range piece_table_insert(
           Assert(text_size_after <= current_row->size);
           U64 text_size_before = current_row->size - text_size_after;
 
-          // @Copypasta
           // copy first part of current row
           if (piece_table_write_row(
                 context, table, &result_range,
@@ -274,7 +275,6 @@ function Piece_Table_Range piece_table_insert(
           // copy new row
           result_range = piece_table_copy_text_into_table(context, table, result_range, string_to_insert);
 
-          // @Copypasta
           // copy last part of current row
           if (piece_table_write_row(
                 context, table, &result_range,
@@ -338,7 +338,8 @@ function Piece_Table_Range piece_table_delete(
     U32 current_text_offset = 0;
     U64 target_text_offset = text_offset;
 
-    result_range.section = current_section;
+    // init result-range
+    result_range.section = piece_table_get_editable_section(context, table);
     result_range.row_offset = result_range.section->write_row_offset;
 
     for (U64 i = 0; i < range.row_count; ++i) {
@@ -382,7 +383,6 @@ function Piece_Table_Range piece_table_delete(
           // when in begin mode, copy the first part of the row
           mode = Delete_Mode_Middle;
 
-          // @Copypasta
           // copy first part of current row
           if (piece_table_write_row(
                 context, table, &result_range,
@@ -396,7 +396,6 @@ function Piece_Table_Range piece_table_delete(
         else if (mode == Delete_Mode_Middle) {
           // when in middle mode, copy the last part of the row
           mode = Delete_Mode_End;
-          // @Copypasta
           // copy last part of current row
           if (piece_table_write_row(
                 context, table, &result_range,
@@ -409,7 +408,6 @@ function Piece_Table_Range piece_table_delete(
         }
       }
       else if (mode != Delete_Mode_Middle) {
-        // @Copypasta
         // copy current row
         if (piece_table_write_row(
               context, table, &result_range,

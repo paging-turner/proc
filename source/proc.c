@@ -2660,7 +2660,7 @@ int main(void) {
     Piece_Table table = (Piece_Table){0};
     Piece_Table_Range range = (Piece_Table_Range){0};
 
-/* #if 0 */
+#if 0
     String8 some_string = str8_lit("Hello");
     String8 another_string = str8_lit(" World!");
     String8 inner_string = str8_lit("inner");
@@ -2682,9 +2682,12 @@ int main(void) {
     /* printf("Text:\n"); */
     /* debug_print_piece_table_range(&table, range); */
     /* printf("\n"); */
-/* #elif 0 */
-    some_string = str8_lit("--------");
-    another_string = str8_lit("$$$$$$$$");
+#elif 1
+    /* some_string = str8_lit("--------"); */
+    /* another_string = str8_lit("$$$$$$$$"); */
+
+    String8 some_string = str8_lit("--------");
+    String8 another_string = str8_lit("$$$$$$$$");
     String8 hello_string = str8_lit("hello_there");
 
     range = piece_table_insert(&test_context, &table, range, 0, some_string);
@@ -2699,18 +2702,19 @@ int main(void) {
     debug_print_piece_table_range(&table, range);
     printf("\n\n");
 
-    range = piece_table_insert(&test_context, &table, range, 0, hello_string);
-    debug_print_piece_table(&table);
-    printf("Text:\n");
-    debug_print_piece_table_range(&table, range);
-    printf("\n\n");
+    /* range = piece_table_insert(&test_context, &table, range, 0, hello_string); */
+    /* debug_print_piece_table(&table); */
+    /* printf("Text:\n"); */
+    /* debug_print_piece_table_range(&table, range); */
+    /* printf("\n\n"); */
 
-    range = piece_table_insert(&test_context, &table, range, 11, hello_string);
-    debug_print_piece_table(&table);
-    printf("Text:\n");
-    debug_print_piece_table_range(&table, range);
-    printf("\n\n\n");
+    /* range = piece_table_insert(&test_context, &table, range, 11, hello_string); */
+    /* debug_print_piece_table(&table); */
+    /* printf("Text:\n"); */
+    /* debug_print_piece_table_range(&table, range); */
+    /* printf("\n\n\n"); */
 /* #else */
+    /* String8 some_string = str8_lit("abcdefghi"); */
     some_string = str8_lit("abcdefghi");
 
     range = piece_table_insert(&test_context, &table, range, 0, some_string);
@@ -2724,7 +2728,7 @@ int main(void) {
     printf("Text:\n");
     debug_print_piece_table_range(&table, range);
     printf("\n\n\n");
-/* #endif */
+#endif
 
     return 0;
   }
