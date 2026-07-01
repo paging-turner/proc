@@ -213,10 +213,7 @@ function void piece_table_insert(
   else {
     // NOTE: for now, we do not use refs...
     B32 row_edited = 0;
-    // Piece_Table_Range current_range = ...;  TODO: use this
-    Piece_Table_Section *current_section = table->range.section;
-    U32 current_row_offset = table->range.row_offset;
-    U32 current_row_count = table->range.row_count;
+    Piece_Table_Range current_range = table->range;
     U32 current_text_offset = 0;
 
     // fill out beginning section
@@ -229,15 +226,15 @@ function void piece_table_insert(
       table->range = (Piece_Table_Range){0};
     }
     else {
-      for (U64 i = 0; i < current_row_count; ++i) {
+      for (U64 i = 0; i < current_range.row_count; ++i) {
         // update current-row trackers
-        if (current_row_offset == Piece_Table_Row_Count) {
-          current_row_offset = 0;
-          Assert(current_section->next);
-          current_section = current_section->next;
+        if (current_range.row_offset == Piece_Table_Row_Count) {
+          current_range.row_offset = 0;
+          Assert(current_range.section->next);
+          current_range.section = current_range.section->next;
         }
 
-        Piece_Table_Row *current_row = current_section->rows + current_row_offset;
+        Piece_Table_Row *current_row = current_range.section->rows + current_range.row_offset;
         current_text_offset += current_row->size;
 
         if (!row_edited && current_text_offset == text_offset) {
@@ -296,7 +293,7 @@ function void piece_table_insert(
         }
 
         // increment row offset
-        current_row_offset += 1;
+        current_range.row_offset += 1;
       }
     }
   }
@@ -322,10 +319,7 @@ function void piece_table_delete(
     };
     enum Delete_Mode mode = Delete_Mode_Begin;
     B32 row_edited = 0;
-    // Piece_Table_Range current_range = ...;  TODO: use this
-    Piece_Table_Section *current_section = table->range.section;
-    U32 current_row_offset = table->range.row_offset;
-    U32 current_row_count = table->range.row_count;
+    Piece_Table_Range current_range = table->range;
     U32 current_text_offset = 0;
     U64 target_text_offset = text_offset;
 
@@ -334,15 +328,15 @@ function void piece_table_delete(
     table->range.row_offset = table->range.section->write_row_offset;
     table->range.row_count = 0;
 
-    for (U64 i = 0; i < current_row_count; ++i) {
+    for (U64 i = 0; i < current_range.row_count; ++i) {
       // update current-row trackers
-      if (current_row_offset == Piece_Table_Row_Count) {
-        current_row_offset = 0;
-        Assert(current_section->next);
-        current_section = current_section->next;
+      if (current_range.row_offset == Piece_Table_Row_Count) {
+        current_range.row_offset = 0;
+        Assert(current_range.section->next);
+        current_range.section = current_range.section->next;
       }
 
-      Piece_Table_Row *current_row = current_section->rows + current_row_offset;
+      Piece_Table_Row *current_row = current_range.section->rows + current_range.row_offset;
       current_text_offset += current_row->size;
 
       if (mode != Delete_Mode_End && current_text_offset == target_text_offset) {
@@ -425,7 +419,7 @@ function void piece_table_delete(
       }
 
       // increment row offset
-      current_row_offset += 1;
+      current_range.row_offset += 1;
     }
   }
 }
