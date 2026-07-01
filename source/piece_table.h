@@ -4,7 +4,6 @@
 typedef struct Piece_Table_Chunk {
   U8 str_array[Piece_Table_Chunk_Size];
   U32 offset;
-  B32 frozen; // is "frozen" this necessary?
 } Piece_Table_Chunk;
 
 
@@ -37,6 +36,7 @@ struct Piece_Table {
   Piece_Table_Section *last_section;
   Piece_Table_Chunk *edit_chunk;
   Piece_Table_Range range;
+  // TODO: Maybe we should store a range in here for the current range of the table.
 };
 
 
@@ -52,6 +52,9 @@ function Piece_Table_Section *piece_table_get_editable_section(
   Context *context,
   Piece_Table *table
   ) {
+  Assert(table->last_section == 0 ||
+         table->last_section->write_row_offset <= Piece_Table_Row_Count);
+
   Piece_Table_Section *result = table->last_section;
 
   if (table->last_section == 0 ||
@@ -91,7 +94,6 @@ function Piece_Table_Row *piece_table_get_editable_row(
 function B32 piece_table_write_row(
   Context *context,
   Piece_Table *table,
-  Piece_Table_Range *range,
   Piece_Table_Chunk *chunk,
   U32 offset,
   U32 size
@@ -105,7 +107,7 @@ function B32 piece_table_write_row(
       row->chunk = chunk;
       row->offset = offset;
       row->size = size;
-      range->row_count += 1;
+      table->range.row_count += 1;
     }
     else {
       error = 1;
@@ -117,13 +119,11 @@ function B32 piece_table_write_row(
 
 
 
-function Piece_Table_Range piece_table_copy_text_into_table(
+function void piece_table_copy_text_into_table(
   Context *context,
   Piece_Table *table,
-  Piece_Table_Range range,
   String8 string_to_insert
   ) {
-  Piece_Table_Range result_range = range;
   U64 amount_of_text_copied = 0;
 
   while (string_to_insert.size - amount_of_text_copied) {
@@ -138,7 +138,7 @@ function Piece_Table_Range piece_table_copy_text_into_table(
 
       // write the row
       if (piece_table_write_row(
-            context, table, &result_range,
+            context, table,
             table->edit_chunk,
             table->edit_chunk->offset,
             amount_of_text_to_copy)) {
@@ -151,7 +151,6 @@ function Piece_Table_Range piece_table_copy_text_into_table(
 
       // create new, empty edit-chunk
       if (space_in_edit_chunk == amount_of_text_to_copy) {
-        table->edit_chunk->frozen = 1;
         table->edit_chunk->offset = Piece_Table_Chunk_Size;
         table->edit_chunk = push_struct(context->permanent_arena, Piece_Table_Chunk);
         if (table->edit_chunk == 0) {
@@ -169,7 +168,7 @@ function Piece_Table_Range piece_table_copy_text_into_table(
 
       // write the row
       if (piece_table_write_row(
-            context, table, &result_range,
+            context, table,
             table->edit_chunk,
             table->edit_chunk->offset,
             space_in_edit_chunk)) {
@@ -188,29 +187,24 @@ function Piece_Table_Range piece_table_copy_text_into_table(
       }
     }
   }
-
-  return result_range;
 }
 
 
 
 
-function Piece_Table_Range piece_table_insert(
+function void piece_table_insert(
   Context *context,
   Piece_Table *table,
-  Piece_Table_Range range,
   U64 text_offset,
   String8 string_to_insert
   ) {
-  Piece_Table_Range result_range = (Piece_Table_Range){0};
-
-  Assert(range.row_offset < Piece_Table_Row_Count);
+  Assert(table->range.row_offset < Piece_Table_Row_Count);
 
   if (Piece_Table_Is_Empty(table)) {
     table->edit_chunk = push_struct(context->permanent_arena, Piece_Table_Chunk);
     if (table->edit_chunk) {
-      result_range = piece_table_copy_text_into_table(context, table, range, string_to_insert);
-      result_range.section = table->last_section;
+      piece_table_copy_text_into_table(context, table, string_to_insert);
+      table->range.section = table->last_section;
     }
     else {
       printf("[ Error ] Pushing Piece_Table_Chunk for edit-chunk of empty table.\n");
@@ -219,20 +213,23 @@ function Piece_Table_Range piece_table_insert(
   else {
     // NOTE: for now, we do not use refs...
     B32 row_edited = 0;
-    Piece_Table_Section *current_section = range.section;
-    U32 current_row_offset = range.row_offset;
+    // Piece_Table_Range current_range = ...;  TODO: use this
+    Piece_Table_Section *current_section = table->range.section;
+    U32 current_row_offset = table->range.row_offset;
+    U32 current_row_count = table->range.row_count;
     U32 current_text_offset = 0;
 
     // fill out beginning section
-    result_range.section = piece_table_get_editable_section(context, table);
-    result_range.row_offset = result_range.section->write_row_offset;
+    table->range.section = piece_table_get_editable_section(context, table);
+    table->range.row_offset = table->range.section->write_row_offset;
+    table->range.row_count = 0;
 
-    if (result_range.section == 0) {
+    if (table->range.section == 0) {
       printf("[ Error ] Pushing Piece_Table_Section for new copy-section. Init.\n");
-      result_range = (Piece_Table_Range){0};
+      table->range = (Piece_Table_Range){0};
     }
     else {
-      for (U64 i = 0; i < range.row_count; ++i) {
+      for (U64 i = 0; i < current_row_count; ++i) {
         // update current-row trackers
         if (current_row_offset == Piece_Table_Row_Count) {
           current_row_offset = 0;
@@ -246,7 +243,7 @@ function Piece_Table_Range piece_table_insert(
         if (!row_edited && current_text_offset == text_offset) {
           // copy current row
           if (piece_table_write_row(
-                context, table, &result_range,
+                context, table,
                 current_row->chunk,
                 current_row->offset,
                 current_row->size)) {
@@ -254,7 +251,7 @@ function Piece_Table_Range piece_table_insert(
           }
 
           // copy the new text
-          result_range = piece_table_copy_text_into_table(context, table, result_range, string_to_insert);
+          piece_table_copy_text_into_table(context, table, string_to_insert);
           row_edited = 1;
         }
         else if (!row_edited && current_text_offset > text_offset) {
@@ -264,7 +261,7 @@ function Piece_Table_Range piece_table_insert(
 
           // copy first part of current row
           if (piece_table_write_row(
-                context, table, &result_range,
+                context, table,
                 current_row->chunk,
                 current_row->offset,
                 text_size_before)) {
@@ -273,11 +270,11 @@ function Piece_Table_Range piece_table_insert(
           }
 
           // copy new row
-          result_range = piece_table_copy_text_into_table(context, table, result_range, string_to_insert);
+          piece_table_copy_text_into_table(context, table, string_to_insert);
 
           // copy last part of current row
           if (piece_table_write_row(
-                context, table, &result_range,
+                context, table,
                 current_row->chunk,
                 current_row->offset + text_size_before,
                 text_size_after)) {
@@ -290,7 +287,7 @@ function Piece_Table_Range piece_table_insert(
         else {
           // copy current row
           if (piece_table_write_row(
-                context, table, &result_range,
+                context, table,
                 current_row->chunk,
                 current_row->offset,
                 current_row->size)) {
@@ -303,29 +300,21 @@ function Piece_Table_Range piece_table_insert(
       }
     }
   }
-
-  return result_range;
 }
 
 
 
 
 
-function Piece_Table_Range piece_table_delete(
+function void piece_table_delete(
   Context *context,
   Piece_Table *table,
-  Piece_Table_Range range,
   U64 text_offset,
   U64 amount_to_delete
   ) {
-  Assert(range.row_offset < Piece_Table_Row_Count);
-  Piece_Table_Range result_range = (Piece_Table_Range){0};
+  Assert(table->range.row_offset < Piece_Table_Row_Count);
 
-  if (Piece_Table_Is_Empty(table)) {
-    // nothing to do, just return the same range that was passed in
-    result_range = range;
-  }
-  else {
+  if (!Piece_Table_Is_Empty(table)) {
     enum Delete_Mode {
       Delete_Mode_Begin,
       Delete_Mode_Middle,
@@ -333,16 +322,19 @@ function Piece_Table_Range piece_table_delete(
     };
     enum Delete_Mode mode = Delete_Mode_Begin;
     B32 row_edited = 0;
-    Piece_Table_Section *current_section = range.section;
-    U32 current_row_offset = range.row_offset;
+    // Piece_Table_Range current_range = ...;  TODO: use this
+    Piece_Table_Section *current_section = table->range.section;
+    U32 current_row_offset = table->range.row_offset;
+    U32 current_row_count = table->range.row_count;
     U32 current_text_offset = 0;
     U64 target_text_offset = text_offset;
 
     // init result-range
-    result_range.section = piece_table_get_editable_section(context, table);
-    result_range.row_offset = result_range.section->write_row_offset;
+    table->range.section = piece_table_get_editable_section(context, table);
+    table->range.row_offset = table->range.section->write_row_offset;
+    table->range.row_count = 0;
 
-    for (U64 i = 0; i < range.row_count; ++i) {
+    for (U64 i = 0; i < current_row_count; ++i) {
       // update current-row trackers
       if (current_row_offset == Piece_Table_Row_Count) {
         current_row_offset = 0;
@@ -360,7 +352,7 @@ function Piece_Table_Range piece_table_delete(
 
           // copy the row
           if (piece_table_write_row(
-                context, table, &result_range,
+                context, table,
                 current_row->chunk,
                 current_row->offset,
                 current_row->size)) {
@@ -385,7 +377,7 @@ function Piece_Table_Range piece_table_delete(
 
           // copy first part of current row
           if (piece_table_write_row(
-                context, table, &result_range,
+                context, table,
                 current_row->chunk,
                 current_row->offset,
                 text_size_before)) {
@@ -398,7 +390,7 @@ function Piece_Table_Range piece_table_delete(
           mode = Delete_Mode_End;
           // copy last part of current row
           if (piece_table_write_row(
-                context, table, &result_range,
+                context, table,
                 current_row->chunk,
                 current_row->offset + text_size_before,
                 text_size_after)) {
@@ -410,7 +402,7 @@ function Piece_Table_Range piece_table_delete(
       else if (mode != Delete_Mode_Middle) {
         // copy current row
         if (piece_table_write_row(
-              context, table, &result_range,
+              context, table,
               current_row->chunk,
               current_row->offset,
               current_row->size)) {
@@ -424,7 +416,7 @@ function Piece_Table_Range piece_table_delete(
         Assert(Piece_Table_Chunk_Size > (text_offset + amount_to_delete));
         mode = Delete_Mode_End;
         if (piece_table_write_row(
-              context, table, &result_range,
+              context, table,
               current_row->chunk,
               text_offset + amount_to_delete,
               Piece_Table_Chunk_Size - (text_offset + amount_to_delete))) {
@@ -436,8 +428,6 @@ function Piece_Table_Range piece_table_delete(
       current_row_offset += 1;
     }
   }
-
-  return result_range;
 }
 
 
@@ -464,11 +454,11 @@ function void debug_print_piece_table(Piece_Table *table) {
 
 
 
-function void debug_print_piece_table_range(Piece_Table *table, Piece_Table_Range range) {
-  Piece_Table_Section *current_section = range.section;
-  U32 current_row_offset = range.row_offset;
+function void debug_print_piece_table_range(Piece_Table *table) {
+  Piece_Table_Section *current_section = table->range.section;
+  U32 current_row_offset = table->range.row_offset;
 
-  for (U32 i = 0; i < range.row_count; ++i) {
+  for (U32 i = 0; i < table->range.row_count; ++i) {
     if (current_row_offset == Piece_Table_Row_Count) {
       if (current_section->next) {
         current_section = current_section->next;
