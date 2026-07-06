@@ -1,5 +1,3 @@
-#ifndef PROC_INCLUDE_H
-# define PROC_INCLUDE_H
 //////////////////////////////////////
 // Forward Declarations
 //////////////////////////////////////
@@ -499,50 +497,10 @@ global_variable Process global_null_process;
 
 
 ////////////////////////
-// Integer as c-string
+// Helper Macros
 ////////////////////////
-#define Integer_C_String_Lookup_Xlist(X)\
-  X( 0) X( 1)\
-  X( 2) X( 3)\
-  X( 4) X( 5) X( 6) X( 7)\
-  X( 8) X( 9) X(10) X(11) X(12) X(13) X(14) X(15)\
-  X(16) X(17) X(18) X(19) X(20) X(21) X(22) X(23) X(24) X(25) X(26) X(27) X(28) X(29) X(30) X(31)\
-  X(32) X(33) X(34) X(35) X(36) X(37) X(38) X(39) X(40) X(41) X(42) X(43) X(44) X(45) X(46) X(47) X(48) X(49) X(50) X(51) X(52) X(53) X(54) X(55) X(56) X(57) X(58) X(59) X(60) X(61) X(62) X(63)
+#define List_For_N(t, n, i, next)\
+  for (t n = (i); n != 0; n = n->next)
 
-#define Integer_C_String_Lookup_Size_Log2   6
-StaticAssert(Integer_C_String_Lookup_Size_Log2 <= 6, integer_c_string_lookup_cant_be_too_big);
-#define Integer_C_String_Lookup_Size        (1 << Integer_C_String_Lookup_Size_Log2)
-#define Integer_C_String_Lookup_Mask        (Integer_C_String_Lookup_Size - 1)
-
-global_variable char *global_integer_c_string_lookup[Integer_C_String_Lookup_Size] = {
-#define X(i)\
-  [i] = #i,
-  Integer_C_String_Lookup_Xlist(X)
-#undef X
-};
-
-global_variable char *global_trie_root_c_string_lookup[Integer_C_String_Lookup_Size] = {
-#define X(i)\
-  [i] = "root " #i,
-  Integer_C_String_Lookup_Xlist(X)
-#undef X
-};
-
-global_variable char *global_trie_node_c_string_lookup[Integer_C_String_Lookup_Size] = {
-#define X(i)\
-  [i] = "node " #i,
-  Integer_C_String_Lookup_Xlist(X)
-#undef X
-};
-
-#define Get_C_String_From_Integer(i)\
-  (global_integer_c_string_lookup[(i) & Integer_C_String_Lookup_Mask])
-
-#define Get_Trie_Root_C_String_From_Integer(i)\
-  (global_trie_root_c_string_lookup[(i) & Integer_C_String_Lookup_Mask])
-
-#define Get_Trie_Node_C_String_From_Integer(i)\
-  (global_trie_node_c_string_lookup[(i) & Integer_C_String_Lookup_Mask])
-
-
-#endif // PROC_INCLUDE_H
+#define List_For(t, n, i)\
+  List_For_N(t, n, i, next)

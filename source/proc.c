@@ -991,7 +991,7 @@ function Vector2 get_ui_element_size(Context *context, Process *element, B32 fit
   Vector2 padding = global_button_padding;
 
   if (label == 0 && element->label) {
-    label = c_string_from_piece_table(render_GlobalTempArena, element->label);
+    label = piece_table_get_c_string(render_GlobalTempArena, element->label);
   }
 
   if (fit_to_text) {
@@ -1107,7 +1107,7 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
     if (!Get_Flag(element->flags, Process_Flag_UseLabelCString)) {
       element->label_c_string = 0;
       if (element->label) {
-        element->label_c_string = c_string_from_piece_table(render_GlobalTempArena, element->label);
+        element->label_c_string = piece_table_get_c_string(render_GlobalTempArena, element->label);
       }
     }
 
@@ -2052,7 +2052,7 @@ function Process_Shape get_process_shape(
   U64 arena_pop_pos = arena_current_pos(context->temp_arena);
 
   F32 font_size = view->camera.zoom * global_process_font_size;
-  U8 *label_c_string = c_string_from_piece_table(context->temp_arena, p->label);
+  U8 *label_c_string = piece_table_get_c_string(context->temp_arena, p->label);
   S32 text_width = MeasureText((char *)label_c_string, font_size);
 
   Vector2 position = get_process_position(context, view, p);
@@ -2691,13 +2691,13 @@ int main(void) {
     piece_table_insert(&test_context, &table, 0, some_string);
     debug_print_piece_table(&table);
     printf("Text:\n");
-    debug_print_piece_table_range(&table);
+    debug_print_piece_table_range(&test_context, &table);
     printf("\n\n");
 
     piece_table_insert(&test_context, &table, 8, another_string);
     debug_print_piece_table(&table);
     printf("Text:\n");
-    debug_print_piece_table_range(&table);
+    debug_print_piece_table_range(&test_context, &table);
     printf("\n\n");
 
     /* piece_table_insert(&test_context, &table, 0, hello_string); */
@@ -2718,13 +2718,13 @@ int main(void) {
     piece_table_insert(&test_context, &table, 0, some_string);
     debug_print_piece_table(&table);
     printf("Text:\n");
-    debug_print_piece_table_range(&table);
+    debug_print_piece_table_range(&test_context, &table);
     printf("\n\n");
 
     piece_table_delete(&test_context, &table, 3, 2);
     debug_print_piece_table(&table);
     printf("Text:\n");
-    debug_print_piece_table_range(&table);
+    debug_print_piece_table_range(&test_context, &table);
     printf("\n\n\n");
 #endif
 
@@ -3006,7 +3006,7 @@ int main(void) {
           // draw processes
           for (Process *p = processes_to_draw; p != 0; p = p->next) {
             B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
-            U8 *label_c_string = c_string_from_piece_table(context.temp_arena, p->label);
+            U8 *label_c_string = piece_table_get_c_string(context.temp_arena, p->label);
             S32 text_width = MeasureText((char *)label_c_string, font_size);
             B32 is_invisible = Get_Flag(p->flags, Process_Flag_Invisible);
 
