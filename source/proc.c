@@ -13,14 +13,10 @@
 
 
 #include "../source/_include_raylib.h"
-
-
 #include "../libraries/ryn_prof.h"
 
 
-
 #include "../source/core.h"
-
 #include "../source/render.h"
 
 
@@ -33,8 +29,6 @@ global_variable String8 Build_Filepath;
 
 
 
-
-typedef struct Piece_Table Piece_Table;
 #include "../source/proc.h"
 #include "../source/keybind_funcs.h"
 

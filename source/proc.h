@@ -1,6 +1,15 @@
 //////////////////////////////////////
 // Forward Declarations
 //////////////////////////////////////
+typedef struct Piece_Table Piece_Table;
+typedef struct Piece_Table_Memory Piece_Table_Memory;
+typedef struct Piece_Table_Row Piece_Table_Row;
+typedef struct Piece_Table_Chunk Piece_Table_Chunk;
+struct Piece_Table_Memory {
+  Piece_Table_Row *free_rows;
+  Piece_Table_Chunk *free_chunks;
+};
+
 #define Process_Connection_Xlist\
   X(In, 0) X(Out, 1)
 
@@ -485,6 +494,8 @@ struct Context {
   View views[View_Count];
 
   Process_Edit_List process_edit_list;
+
+  Piece_Table_Memory piece_table_memory;
 };
 
 

@@ -1,19 +1,20 @@
 #define Piece_Table_Chunk_Size 8
 
 
-typedef struct Piece_Table_Chunk {
+struct Piece_Table_Chunk {
   U32 offset;
   U8 str_array[Piece_Table_Chunk_Size];
-} Piece_Table_Chunk;
+  struct Piece_Table_Chunk *next;
+};
 
 
-typedef struct Piece_Table_Row {
+struct Piece_Table_Row {
   struct Piece_Table_Row *next;
   struct Piece_Table_Row *prev;
   Piece_Table_Chunk *chunk;
   U64 offset;
   U64 size;
-} Piece_Table_Row;
+};
 
 
 struct Piece_Table {
@@ -26,6 +27,40 @@ struct Piece_Table {
 
 
 
+function Piece_Table_Row *piece_table_create_row(Context *context) {
+  Piece_Table_Row *row = 0;
+
+  if (context->piece_table_memory.free_rows) {
+    row = context->piece_table_memory.free_rows;
+    SLLStackPop(context->piece_table_memory.free_rows);
+    *row = (Piece_Table_Row){0};
+  }
+  else {
+    row = push_struct(context->permanent_arena, Piece_Table_Row);
+  }
+
+  return row;
+}
+
+
+
+function Piece_Table_Chunk *piece_table_create_chunk(Context *context) {
+  Piece_Table_Chunk *chunk = 0;
+
+  if (context->piece_table_memory.free_chunks) {
+    chunk = context->piece_table_memory.free_chunks;
+    SLLStackPop(context->piece_table_memory.free_chunks);
+    *chunk = (Piece_Table_Chunk){0};
+  }
+  else {
+    chunk = push_struct(context->permanent_arena, Piece_Table_Chunk);
+  }
+
+  return chunk;
+}
+
+
+
 function B32 piece_table_ensure_insertion_chunk_exists(
   Context *context,
   Piece_Table *table
@@ -33,7 +68,7 @@ function B32 piece_table_ensure_insertion_chunk_exists(
   B32 error = 0;
 
   if (table->insertion_chunk == 0) {
-    table->insertion_chunk = push_struct(context->permanent_arena, Piece_Table_Chunk);
+    table->insertion_chunk = piece_table_create_chunk(context);
     if (table->insertion_chunk == 0) {
       error = 1;
     }
@@ -71,7 +106,7 @@ function void piece_table_insert_text_after_row(
                amount_to_write);
 
     // insert the row
-    Piece_Table_Row *new_row = push_struct(context->permanent_arena, Piece_Table_Row);
+    Piece_Table_Row *new_row = piece_table_create_row(context);
     if (new_row) {
       new_row->chunk = table->insertion_chunk;
       new_row->offset = table->insertion_chunk->offset;
@@ -95,7 +130,7 @@ function void piece_table_insert_text_after_row(
 
     // Create a new insertion-chunk if we need one.
     if (table->insertion_chunk->offset == Piece_Table_Chunk_Size) {
-      table->insertion_chunk = push_struct(context->permanent_arena, Piece_Table_Chunk);
+      table->insertion_chunk = piece_table_create_chunk(context);
       if (table->insertion_chunk == 0) {
         printf("[ Error ] Creating Piece_Table_Chunk while inserting text after a row.\n");
         break;
@@ -133,7 +168,7 @@ function void piece_table_insert(
       }
       else if (current_text_offset > text_offset) {
         // split row and insert text
-        Piece_Table_Row *new_row = push_struct(context->permanent_arena, Piece_Table_Row);
+        Piece_Table_Row *new_row = piece_table_create_row(context);
         if (new_row) {
           U64 first_part_size = current_text_offset - text_offset;
           U64 last_part_size = row->size - first_part_size;
@@ -171,14 +206,74 @@ function void piece_table_delete(
   ) {
   B32 is_deleting = 0;
   U64 current_text_offset = 0;
+  U64 end_text_offset = text_offset + size;
 
   if (piece_table_ensure_insertion_chunk_exists(context, table)) {
     printf("[ Error ] Ensuring piece-table has an insertion-chunk while inserting.\n");
     return;
   }
 
+  Piece_Table_Row *delete_start_row = 0;
+
+  // search for first row to begin deleting
   List_For(Piece_Table_Row *, row, table->first_row) {
-    current_text_offset = row->size;
+    current_text_offset += row->size;
+
+    Piece_Table_Row *row_before = text_offset == 0 ? 0 : row;
+    if (current_text_offset == text_offset) {
+      delete_start_row = row->next;
+      break;
+    }
+    else if (current_text_offset > text_offset) {
+      U64 deleted_size = current_text_offset - text_offset;
+      if (deleted_size > size) {
+        // split the row in two
+        U64 non_first_size = current_text_offset - text_offset;
+        row->size = Piece_Table_Chunk_Size - non_first_size;
+        table->text_size -= size;
+        Piece_Table_Row *new_row = piece_table_create_row(context);
+        if (new_row) {
+          new_row->chunk = row->chunk;
+          new_row->offset = row->offset + row->size + size;
+          new_row->size = deleted_size - size;
+          DLLInsert(table->first_row, table->last_row, row, new_row);
+        }
+        else {
+          printf("[ Error ] Creating new row while deleting text.\n");
+          break;
+        }
+      }
+      else {
+        // decrease the row size
+        U64 non_deleted_size = Piece_Table_Chunk_Size - deleted_size;
+        row->size = non_deleted_size;
+        delete_start_row = row->next;
+        table->text_size -= deleted_size;
+      }
+      break;
+    }
+  }
+
+  // delete some rows
+  List_For(Piece_Table_Row *, row, delete_start_row) {
+    current_text_offset += row->size;
+
+    if (current_text_offset > end_text_offset) {
+      U64 non_deleted_size = current_text_offset - end_text_offset;
+      U64 deleted_size = Piece_Table_Chunk_Size - non_deleted_size;
+      row->offset += deleted_size;
+      row->size = non_deleted_size;
+      table->text_size -= deleted_size;
+      break;
+    }
+    else {
+      DLLRemove(table->first_row, table->last_row, row);
+      SLLStackPush(context->piece_table_memory.free_rows, row);
+      table->text_size -= Piece_Table_Chunk_Size;
+      if (current_text_offset == end_text_offset) {
+        break;
+      }
+    }
   }
 }
 
