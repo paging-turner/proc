@@ -913,7 +913,17 @@ function void set_menu_state_as_save_file_as(Context *context, Process *element)
 
 function void handle_label_editing(Context *context, Process_List ps) {
 #if 1
-  // TODO
+  // TODO: we need more than ascii text editing at some point.....
+  U32 key = 0;
+  U32 k = 0;
+  B32 shift_down = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+
+  while ((key = context->ui_state.key_presses[k++])) {
+    for (Process *a = ps.first; a != 0; a = a->next_active) {
+      if (Get_Flag(a->flags, Process_Flag_TextEdit)) {
+      }
+    }
+  }
 #else
   U32 key = 0;
   U32 k = 0;
@@ -2645,7 +2655,7 @@ function void create_keybind_array(Context *context) {
 // Main
 //////////////////////////////////////////
 int main(void) {
-  if(1){ // TODO: remove piece-table testing code
+  { // TODO: remove piece-table testing code
     Context test_context = (Context){0};
     test_context.temp_arena = arena_alloc_reserve(Context_Temp_Arena_Size, 0);
     test_context.permanent_arena = arena_alloc_reserve(Context_Permanent_Arena_Size, 0);
@@ -2674,7 +2684,7 @@ int main(void) {
     /* printf("Text:\n"); */
     /* debug_print_piece_table_range(&table); */
     /* printf("\n"); */
-#elif 1
+#elif 0
     /* some_string = str8_lit("--------"); */
     /* another_string = str8_lit("$$$$$$$$"); */
 
@@ -2720,11 +2730,26 @@ int main(void) {
     printf("Text:\n");
     debug_print_piece_table_range(&test_context, &table);
     printf("\n\n\n");
+#else
+    String8 some_string = str8_lit("0123");
+    String8 another_string = str8_lit("45678");
+    String8 hello_string = str8_lit("hello_there");
+
+    piece_table_insert(&test_context, &table, 0, some_string);
+    debug_print_piece_table(&table);
+    printf("Text:\n");
+    debug_print_piece_table_range(&test_context, &table);
+    printf("\n\n");
+
+    piece_table_insert(&test_context, &table, 4, another_string);
+    debug_print_piece_table(&table);
+    printf("Text:\n");
+    debug_print_piece_table_range(&test_context, &table);
+    printf("\n\n");
 #endif
 
     return 0;
   }
-
   //////////////////////////////////////////
   // Init
   //////////////////////////////////////////

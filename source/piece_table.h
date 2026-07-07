@@ -105,23 +105,32 @@ function void piece_table_insert_text_after_row(
                text_to_insert.str + amount_of_text_copied,
                amount_to_write);
 
-    // insert the row
-    Piece_Table_Row *new_row = piece_table_create_row(context);
-    if (new_row) {
-      new_row->chunk = table->insertion_chunk;
-      new_row->offset = table->insertion_chunk->offset;
-      new_row->size = amount_to_write;
-      if (table->first_row == 0 || table->last_row == 0 || current_row == 0) {
-        DLLPushFront(table->first_row, table->last_row, new_row);
-        current_row = new_row;
-      }
-      else {
-        DLLInsert(table->first_row, table->last_row, current_row, new_row);
-      }
+    if (row &&
+        (row->chunk == table->insertion_chunk) &&
+        (row->offset + row->size == table->insertion_chunk->offset)) {
+      // extend the row
+      row->size += amount_to_write;
     }
     else {
-      printf("[ Error ] Creating Piece_Table_Row while inserting text after a row.\n");
-      break;
+      /* Assert(!"TODO: check if the current row can be extended. This happens if the next space in the insertion-chunk occurs right after the current row's text."); */
+      // insert the row
+      Piece_Table_Row *new_row = piece_table_create_row(context);
+      if (new_row) {
+        new_row->chunk = table->insertion_chunk;
+        new_row->offset = table->insertion_chunk->offset;
+        new_row->size = amount_to_write;
+        if (table->first_row == 0 || table->last_row == 0 || current_row == 0) {
+          DLLPushFront(table->first_row, table->last_row, new_row);
+          current_row = new_row;
+        }
+        else {
+          DLLInsert(table->first_row, table->last_row, current_row, new_row);
+        }
+      }
+      else {
+        printf("[ Error ] Creating Piece_Table_Row while inserting text after a row.\n");
+        break;
+      }
     }
 
     amount_of_text_copied += amount_to_write;
@@ -167,26 +176,28 @@ function void piece_table_insert(
         break;
       }
       else if (current_text_offset > text_offset) {
-        // split row and insert text
-        Piece_Table_Row *new_row = piece_table_create_row(context);
-        if (new_row) {
-          U64 first_part_size = current_text_offset - text_offset;
-          U64 last_part_size = row->size - first_part_size;
-          // adjust size of current row
-          row->size = first_part_size;
-          // insert last part of current row as new row
-          new_row->chunk = row->chunk;
-          new_row->offset = row->offset + first_part_size;
-          new_row->size = last_part_size;
-          DLLInsert(table->first_row, table->last_row, row, new_row);
-          // insert text between current row
-          piece_table_insert_text_after_row(context, table, row_before, text_to_insert);
-          break;
+        U64 last_part_size = current_text_offset - text_offset;
+        U64 first_part_size = row->size - last_part_size;
+        // adjust size of current row
+        row->size = first_part_size;
+        if (last_part_size) {
+          // split row and insert text
+          Piece_Table_Row *new_row = piece_table_create_row(context);
+          if (new_row) {
+            // insert last part of current row as new row
+            new_row->chunk = row->chunk;
+            new_row->offset = row->offset + first_part_size;
+            new_row->size = last_part_size;
+            DLLInsert(table->first_row, table->last_row, row, new_row);
+          }
+          else {
+            printf("[ Error ] Creating Piece_Table_Row while inserting text.\n");
+            break;
+          }
         }
-        else {
-          printf("[ Error ] Creating Piece_Table_Row while inserting text.\n");
-          break;
-        }
+        // insert text
+        piece_table_insert_text_after_row(context, table, row_before, text_to_insert);
+        break;
       }
     }
   }
@@ -195,6 +206,7 @@ function void piece_table_insert(
     piece_table_insert_text_after_row(context, table, 0, text_to_insert);
   }
 }
+
 
 
 
@@ -279,11 +291,12 @@ function void piece_table_delete(
 
 
 
+
 function U8 *piece_table_get_c_string(Arena *arena, Piece_Table *table) {
   U8 *c_string = (U8 *)"";
   U64 amount_written = 0;
 
-  if (table->text_size) {
+  if (table && table->text_size) {
     c_string = arena_push(arena, table->text_size);
     if (c_string) {
       List_For(Piece_Table_Row *, row, table->first_row) {
