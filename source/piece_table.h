@@ -112,7 +112,6 @@ function void piece_table_insert_text_after_row(
       row->size += amount_to_write;
     }
     else {
-      /* Assert(!"TODO: check if the current row can be extended. This happens if the next space in the insertion-chunk occurs right after the current row's text."); */
       // insert the row
       Piece_Table_Row *new_row = piece_table_create_row(context);
       if (new_row) {
@@ -242,24 +241,40 @@ function void piece_table_delete(
         // split the row in two
         U64 non_first_size = current_text_offset - text_offset;
         row->size = Piece_Table_Chunk_Size - non_first_size;
+        Assert(table->text_size >= size);
         table->text_size -= size;
-        Piece_Table_Row *new_row = piece_table_create_row(context);
-        if (new_row) {
-          new_row->chunk = row->chunk;
-          new_row->offset = row->offset + row->size + size;
-          new_row->size = deleted_size - size;
-          DLLInsert(table->first_row, table->last_row, row, new_row);
+        if (row->size == 0) {
+          // row is empty, so remove it
+          DLLRemove(table->first_row, table->last_row, row);
+          SLLStackPush(context->piece_table_memory.free_rows, row);
         }
         else {
-          printf("[ Error ] Creating new row while deleting text.\n");
-          break;
+          if (deleted_size - size > 0) {
+            Piece_Table_Row *new_row = piece_table_create_row(context);
+            if (new_row) {
+              new_row->chunk = row->chunk;
+              new_row->offset = row->offset + row->size + size;
+              new_row->size = deleted_size - size;
+              DLLInsert(table->first_row, table->last_row, row, new_row);
+            }
+            else {
+              printf("[ Error ] Creating new row while deleting text.\n");
+              break;
+            }
+          }
         }
       }
       else {
         // decrease the row size
-        U64 non_deleted_size = Piece_Table_Chunk_Size - deleted_size;
-        row->size = non_deleted_size;
-        delete_start_row = row->next;
+        if (row->size == deleted_size) {
+          // row is empty, so remove it
+          DLLRemove(table->first_row, table->last_row, row);
+          SLLStackPush(context->piece_table_memory.free_rows, row);
+        }
+        else {
+          row->size -= deleted_size;
+        }
+        Assert(table->text_size >= deleted_size);
         table->text_size -= deleted_size;
       }
       break;
@@ -275,13 +290,15 @@ function void piece_table_delete(
       U64 deleted_size = Piece_Table_Chunk_Size - non_deleted_size;
       row->offset += deleted_size;
       row->size = non_deleted_size;
+      Assert(table->text_size >= size);
       table->text_size -= deleted_size;
       break;
     }
     else {
+      Assert(table->text_size >= row->size);
+      table->text_size -= row->size;
       DLLRemove(table->first_row, table->last_row, row);
       SLLStackPush(context->piece_table_memory.free_rows, row);
-      table->text_size -= Piece_Table_Chunk_Size;
       if (current_text_offset == end_text_offset) {
         break;
       }
@@ -297,7 +314,7 @@ function U8 *piece_table_get_c_string(Arena *arena, Piece_Table *table) {
   U64 amount_written = 0;
 
   if (table && table->text_size) {
-    c_string = arena_push(arena, table->text_size);
+    c_string = arena_push(arena, table->text_size+1);
     if (c_string) {
       List_For(Piece_Table_Row *, row, table->first_row) {
         if (amount_written + row->size > table->text_size) {
@@ -312,6 +329,7 @@ function U8 *piece_table_get_c_string(Arena *arena, Piece_Table *table) {
           amount_written += row->size;
         }
       }
+      c_string[amount_written] = 0;
     }
     else {
       printf("[ Error ] Pushing c-string while getting c-string for piece-table.\n");
@@ -342,4 +360,13 @@ function void debug_print_piece_table(Piece_Table *table) {
 function void debug_print_piece_table_range(Context *context, Piece_Table *table) {
   U8 *c_string = piece_table_get_c_string(context->temp_arena, table);
   printf("%s\n", c_string);
+}
+
+function void debug_check_piece_table(Context *context, Piece_Table *table) {
+  U64 text_size_from_rows = 0;
+  List_For(Piece_Table_Row *, row, table->first_row) {
+    Assert(row->size > 0);
+    text_size_from_rows += row->size;
+  }
+  Assert(text_size_from_rows == table->text_size);
 }

@@ -921,6 +921,29 @@ function void handle_label_editing(Context *context, Process_List ps) {
   while ((key = context->ui_state.key_presses[k++])) {
     for (Process *a = ps.first; a != 0; a = a->next_active) {
       if (Get_Flag(a->flags, Process_Flag_TextEdit)) {
+        if (a->label == 0) {
+          a->label = push_struct(context->permanent_arena, Piece_Table);
+        }
+
+        if (a->label) {
+          B32 is_ascii = key > 0 && key < 256;
+          U8 c = ascii_char_lookup[key&0xff][shift_down];
+          if (is_ascii && c != 0) {
+            // insert character
+            piece_table_insert(context, a->label, a->label_cursor, (String8){&c, 1});
+            a->label_cursor += 1;
+          } else if (key == KEY_BACKSPACE) {
+            // handle backspace
+            if (a->label_cursor > 0) {
+              piece_table_delete(context, a->label, a->label_cursor-1, 1);
+              a->label_cursor -= 1;
+            }
+          }
+          debug_check_piece_table(context, a->label);
+        }
+        else {
+          printf("[ Error ] Null label while editing text.\n");
+        }
       }
     }
   }
@@ -2655,101 +2678,6 @@ function void create_keybind_array(Context *context) {
 // Main
 //////////////////////////////////////////
 int main(void) {
-  { // TODO: remove piece-table testing code
-    Context test_context = (Context){0};
-    test_context.temp_arena = arena_alloc_reserve(Context_Temp_Arena_Size, 0);
-    test_context.permanent_arena = arena_alloc_reserve(Context_Permanent_Arena_Size, 0);
-
-    Piece_Table table = (Piece_Table){0};
-
-#if 0
-    String8 some_string = str8_lit("Hello");
-    String8 another_string = str8_lit(" World!");
-    String8 inner_string = str8_lit("inner");
-
-    piece_table_insert(&test_context, &table, 0, another_string);
-    debug_print_piece_table(&table);
-    printf("Text:\n");
-    debug_print_piece_table_range(&table);
-    printf("\n");
-
-    piece_table_insert(&test_context, &table, 0, some_string);
-    debug_print_piece_table(&table);
-    printf("Text:\n");
-    debug_print_piece_table_range(&table);
-    printf("\n\n\n");
-
-    /* piece_table_insert(&test_context, &table, 1, inner_string); */
-    /* debug_print_piece_table(&table); */
-    /* printf("Text:\n"); */
-    /* debug_print_piece_table_range(&table); */
-    /* printf("\n"); */
-#elif 0
-    /* some_string = str8_lit("--------"); */
-    /* another_string = str8_lit("$$$$$$$$"); */
-
-    String8 some_string = str8_lit("--------");
-    String8 another_string = str8_lit("$$$$$$$$");
-    String8 hello_string = str8_lit("hello_there");
-
-    piece_table_insert(&test_context, &table, 0, some_string);
-    debug_print_piece_table(&table);
-    printf("Text:\n");
-    debug_print_piece_table_range(&test_context, &table);
-    printf("\n\n");
-
-    piece_table_insert(&test_context, &table, 8, another_string);
-    debug_print_piece_table(&table);
-    printf("Text:\n");
-    debug_print_piece_table_range(&test_context, &table);
-    printf("\n\n");
-
-    /* piece_table_insert(&test_context, &table, 0, hello_string); */
-    /* debug_print_piece_table(&table); */
-    /* printf("Text:\n"); */
-    /* debug_print_piece_table_range(&table); */
-    /* printf("\n\n"); */
-
-    /* piece_table_insert(&test_context, &table, 11, hello_string); */
-    /* debug_print_piece_table(&table); */
-    /* printf("Text:\n"); */
-    /* debug_print_piece_table_range(&table); */
-    /* printf("\n\n\n"); */
-/* #else */
-    /* String8 some_string = str8_lit("abcdefghi"); */
-    some_string = str8_lit("abcdefghi");
-
-    piece_table_insert(&test_context, &table, 0, some_string);
-    debug_print_piece_table(&table);
-    printf("Text:\n");
-    debug_print_piece_table_range(&test_context, &table);
-    printf("\n\n");
-
-    piece_table_delete(&test_context, &table, 3, 2);
-    debug_print_piece_table(&table);
-    printf("Text:\n");
-    debug_print_piece_table_range(&test_context, &table);
-    printf("\n\n\n");
-#else
-    String8 some_string = str8_lit("0123");
-    String8 another_string = str8_lit("45678");
-    String8 hello_string = str8_lit("hello_there");
-
-    piece_table_insert(&test_context, &table, 0, some_string);
-    debug_print_piece_table(&table);
-    printf("Text:\n");
-    debug_print_piece_table_range(&test_context, &table);
-    printf("\n\n");
-
-    piece_table_insert(&test_context, &table, 4, another_string);
-    debug_print_piece_table(&table);
-    printf("Text:\n");
-    debug_print_piece_table_range(&test_context, &table);
-    printf("\n\n");
-#endif
-
-    return 0;
-  }
   //////////////////////////////////////////
   // Init
   //////////////////////////////////////////
