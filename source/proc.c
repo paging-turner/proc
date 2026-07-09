@@ -912,7 +912,6 @@ function void set_menu_state_as_save_file_as(Context *context, Process *element)
 
 
 function void handle_label_editing(Context *context, Process_List ps) {
-#if 1
   // TODO: we need more than ascii text editing at some point.....
   U32 key = 0;
   U32 k = 0;
@@ -947,67 +946,6 @@ function void handle_label_editing(Context *context, Process_List ps) {
       }
     }
   }
-#else
-  U32 key = 0;
-  U32 k = 0;
-  B32 shift_down = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
-
-  while ((key = context->ui_state.key_presses[k++])) {
-    for (Process *a = ps.first; a != 0; a = a->next_active) {
-      if (Get_Flag(a->flags, Process_Flag_TextEdit)) {
-        B32 is_ascii = key > 0 && key < 256;
-        U8 c = ascii_char_lookup[key&0xff][shift_down];
-        if (is_ascii && c != 0) {
-          Assert((a->label.first == 0 && a->label.last == 0) ||
-                 (a->label.first != 0 && a->label.last != 0));
-
-          // push string-chunk if string list is empty
-          if (a->label.last == 0) {
-            String_Chunk *sc = create_string_chunk(context);
-            SLLQueuePush(a->label.first, a->label.last, sc);
-            a->label_cursor = 0;
-          }
-          // add char to label
-          a->label.last->str_array[a->label_cursor] = c;
-          a->label_cursor += 1;
-          // push string-chunk if at the end of current chunk
-          if (a->label_cursor == String_Chunk_Size) {
-            String_Chunk *sc = create_string_chunk(context);
-            SLLQueuePush(a->label.first, a->label.last, sc);
-            a->label_cursor = 0;
-          }
-        } else if (key == KEY_BACKSPACE) {
-          continue; // TODO: implement backspace......
-          if (a->label_cursor == 0) {
-            // only free string-chunk if it is _not_ the only chunk
-            if (a->label.first != a->label.last) {
-              String_Chunk *free_chunk = a->label.last;
-              if (free_chunk) {
-                a->label_cursor = String_Chunk_Size - 1;
-                // remove last string-chunk
-                for (String_Chunk *chunk = a->label.first; chunk != 0; chunk = chunk->next) {
-                  if (chunk->next == a->label.last) {
-                    chunk->next = 0;
-                    a->label.last = chunk;
-                    break;
-                  }
-                }
-                // add unused string-chunk to free-list
-                SLLQueuePush(context->free_strings.first, context->free_strings.last, free_chunk);
-                // zero current character
-                a->label.last->str_array[a->label_cursor] = 0;
-              }
-            }
-          } else if (a->label.last) {
-            // decrement and zero current character
-            a->label_cursor -= 1;
-            a->label.last->str_array[a->label_cursor] = 0;
-          }
-        }
-      }
-    }
-  }
-#endif
 }
 
 
