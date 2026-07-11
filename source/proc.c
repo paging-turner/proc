@@ -938,6 +938,12 @@ function void handle_label_editing(Context *context, Process_List ps) {
               a->label_cursor -= 1;
             }
           }
+          else if (key == KEY_LEFT && a->label_cursor > 0) {
+            a->label_cursor -= 1;
+          }
+          else if (key == KEY_RIGHT && a->label_cursor < a->label->text_size) {
+            a->label_cursor += 1;
+          }
           debug_check_piece_table(context, a->label);
         }
         else {
@@ -951,16 +957,16 @@ function void handle_label_editing(Context *context, Process_List ps) {
 
 function Vector2 get_ui_element_size(Context *context, Process *element, B32 fit_to_text, U8 *label_c_string) {
   Vector2 size = element->size;
-  U8 *label = label_c_string;
+  String8 label = str8_lit(label_c_string);
   F32 font_size = global_panel_font_size;
   Vector2 padding = global_button_padding;
 
-  if (label == 0 && element->label) {
-    label = piece_table_get_c_string(render_GlobalTempArena, element->label);
+  if (label_c_string == 0 && element->label) {
+    label = piece_table_get_string(render_GlobalTempArena, element->label);
   }
 
   if (fit_to_text) {
-    size.x = (F32)MeasureText((char *)label, font_size) + 2.0f*padding.x;
+    size.x = (F32)MeasureText((char *)label.str, font_size) + 2.0f*padding.x;
     size.y = font_size + 2.0f*padding.y;
   }
 
@@ -1072,7 +1078,8 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
     if (!Get_Flag(element->flags, Process_Flag_UseLabelCString)) {
       element->label_c_string = 0;
       if (element->label) {
-        element->label_c_string = piece_table_get_c_string(render_GlobalTempArena, element->label);
+        String8 string = piece_table_get_string(render_GlobalTempArena, element->label);
+        element->label_c_string = string.str;
       }
     }
 
@@ -2017,7 +2024,8 @@ function Process_Shape get_process_shape(
   U64 arena_pop_pos = arena_current_pos(context->temp_arena);
 
   F32 font_size = view->camera.zoom * global_process_font_size;
-  U8 *label_c_string = piece_table_get_c_string(context->temp_arena, p->label);
+  String8 string = piece_table_get_string(context->temp_arena, p->label);
+  U8 *label_c_string = string.str;
   S32 text_width = MeasureText((char *)label_c_string, font_size);
 
   Vector2 position = get_process_position(context, view, p);
@@ -2891,8 +2899,18 @@ int main(void) {
           // draw processes
           for (Process *p = processes_to_draw; p != 0; p = p->next) {
             B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
-            U8 *label_c_string = piece_table_get_c_string(context.temp_arena, p->label);
-            S32 text_width = MeasureText((char *)label_c_string, font_size);
+
+            String8 label_string = piece_table_get_string(context.temp_arena, p->label);
+            S32 text_width = MeasureText((char *)label_string.str, font_size);
+            S32 cursor_offset = 0;
+            if (p->label_cursor) {
+              // @Speed: It's silly to copy this string just to measure where the cursor needs to be.......
+              String8 label_cursor_string = str8_push_copy(context.temp_arena, label_string);
+              Assert(p->label_cursor <= label_cursor_string.size);
+              label_cursor_string.str[p->label_cursor] = 0;
+              cursor_offset = MeasureText((char *)label_cursor_string.str, font_size);
+            }
+
             B32 is_invisible = Get_Flag(p->flags, Process_Flag_Invisible);
 
             if (!(is_wire || is_invisible)) {
@@ -2931,7 +2949,7 @@ int main(void) {
                     }
                   }
                   render_DrawLineBezierCubic(rc, p0, p1, p1, p0, thickness, stroke_color);
-                } else if (!label_c_string[0]) {
+                } else if (!(label_string.str && label_string.str[0])) {
                   if (rounded) {
                     draw_circular_process(&context, shape.center, shape.radius, thickness, invisible_bg_color, invisible_stroke_color);
                   } else {
@@ -2990,7 +3008,7 @@ int main(void) {
               }
 
               // draw label
-              if (label_c_string[0]) {
+              if (label_string.str && label_string.str[0]) {
                 F32 text_x = shape.center.x-0.5f*text_width;
                 F32 text_y = shape.center.y-0.5f*font_size;
                 if (shape.kind == Process_Shape_HalfCircle) {
@@ -2999,7 +3017,15 @@ int main(void) {
                   F32 offset = fudge * flip * (0.5f * shape.radius);
                   text_y -= offset;
                 }
-                render_DrawText(rc, (char *)label_c_string, text_x, text_y, font_size, text_color, 0);
+                render_DrawText(rc, (char *)label_string.str, text_x, text_y, font_size, text_color, 0);
+
+                if (is_active){
+                  // draw cursor
+                  render_DrawRectangle(
+                    rc,
+                    text_x+cursor_offset, text_y, 4.0f, font_size,
+                    (Color){10, 40, 200, 255});
+                }
               }
 
               // draw new-wire-box

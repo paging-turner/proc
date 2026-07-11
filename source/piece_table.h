@@ -169,7 +169,7 @@ function void piece_table_insert(
       current_text_offset += row->size;
       Piece_Table_Row *row_before = text_offset == 0 ? 0 : row;
 
-      if (current_text_offset == text_offset) {
+      if (text_offset == 0 || current_text_offset == text_offset) {
         // insert text between rows
         piece_table_insert_text_after_row(context, table, row_before, text_to_insert);
         break;
@@ -236,8 +236,12 @@ function void piece_table_delete(
       break;
     }
     else if (current_text_offset > text_offset) {
+      Assert(current_text_offset >= row->size);
+      U64 offset_at_start_of_row = current_text_offset - row->size;
+      Assert(text_offset >= offset_at_start_of_row);
+      U64 amount_to_the_left_of_text_offset = text_offset - offset_at_start_of_row;
       U64 deleted_size = current_text_offset - text_offset;
-      if (deleted_size > size) {
+      if (amount_to_the_left_of_text_offset > size) {
         // split the row in two
         U64 non_first_size = current_text_offset - text_offset;
         row->size = Piece_Table_Chunk_Size - non_first_size;
@@ -249,12 +253,12 @@ function void piece_table_delete(
           SLLStackPush(context->piece_table_memory.free_rows, row);
         }
         else {
-          if (deleted_size - size > 0) {
+          if (amount_to_the_left_of_text_offset - size > 0) {
             Piece_Table_Row *new_row = piece_table_create_row(context);
             if (new_row) {
               new_row->chunk = row->chunk;
               new_row->offset = row->offset + row->size + size;
-              new_row->size = deleted_size - size;
+              new_row->size = amount_to_the_left_of_text_offset - size;
               DLLInsert(table->first_row, table->last_row, row, new_row);
             }
             else {
@@ -266,16 +270,16 @@ function void piece_table_delete(
       }
       else {
         // decrease the row size
-        if (row->size == deleted_size) {
+        if (row->size == amount_to_the_left_of_text_offset) {
           // row is empty, so remove it
           DLLRemove(table->first_row, table->last_row, row);
           SLLStackPush(context->piece_table_memory.free_rows, row);
         }
         else {
-          row->size -= deleted_size;
+          row->size -= amount_to_the_left_of_text_offset;
         }
-        Assert(table->text_size >= deleted_size);
-        table->text_size -= deleted_size;
+        Assert(table->text_size >= amount_to_the_left_of_text_offset);
+        table->text_size -= amount_to_the_left_of_text_offset;
       }
       break;
     }
@@ -309,34 +313,35 @@ function void piece_table_delete(
 
 
 
-function U8 *piece_table_get_c_string(Arena *arena, Piece_Table *table) {
-  U8 *c_string = (U8 *)"";
+function String8 piece_table_get_string(Arena *arena, Piece_Table *table) {
+  String8 string = (String8){0};
   U64 amount_written = 0;
 
   if (table && table->text_size) {
-    c_string = arena_push(arena, table->text_size+1);
-    if (c_string) {
+    string.str = arena_push(arena, table->text_size+1);
+    string.size = table->text_size;
+    if (string.str) {
       List_For(Piece_Table_Row *, row, table->first_row) {
         if (amount_written + row->size > table->text_size) {
           printf("[ Error ] Amount of text in piece-table is greater than the given piece-table's text-size. Getting c-string from piece-table.\n");
-          c_string = (U8 *)"";
+          string = (String8){0};
           break;
         }
         else {
-          MemoryCopy(c_string + amount_written,
+          MemoryCopy(string.str + amount_written,
                      row->chunk->str_array + row->offset,
                      row->size);
           amount_written += row->size;
         }
       }
-      c_string[amount_written] = 0;
+      string.str[amount_written] = 0;
     }
     else {
       printf("[ Error ] Pushing c-string while getting c-string for piece-table.\n");
     }
   }
 
-  return c_string;
+  return string;
 }
 
 
@@ -358,8 +363,8 @@ function void debug_print_piece_table(Piece_Table *table) {
 
 
 function void debug_print_piece_table_range(Context *context, Piece_Table *table) {
-  U8 *c_string = piece_table_get_c_string(context->temp_arena, table);
-  printf("%s\n", c_string);
+  String8 string = piece_table_get_string(context->temp_arena, table);
+  printf("%s\n", string.str);
 }
 
 function void debug_check_piece_table(Context *context, Piece_Table *table) {
