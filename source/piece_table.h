@@ -239,12 +239,12 @@ function void piece_table_delete(
       Assert(current_text_offset >= row->size);
       U64 offset_at_start_of_row = current_text_offset - row->size;
       Assert(text_offset >= offset_at_start_of_row);
-      U64 amount_to_the_left_of_text_offset = text_offset - offset_at_start_of_row;
-      U64 deleted_size = current_text_offset - text_offset;
+      U64 amount_to_the_left_of_text_offset = 1 + text_offset - offset_at_start_of_row;
+      Assert(row->size >= amount_to_the_left_of_text_offset);
+      U64 amount_to_the_right_of_text_offset = row->size - amount_to_the_left_of_text_offset;
       if (amount_to_the_left_of_text_offset > size) {
         // split the row in two
-        U64 non_first_size = current_text_offset - text_offset;
-        row->size = Piece_Table_Chunk_Size - non_first_size;
+        row->size = amount_to_the_left_of_text_offset - size;
         Assert(table->text_size >= size);
         table->text_size -= size;
         if (row->size == 0) {
@@ -253,12 +253,12 @@ function void piece_table_delete(
           SLLStackPush(context->piece_table_memory.free_rows, row);
         }
         else {
-          if (amount_to_the_left_of_text_offset - size > 0) {
+          if (amount_to_the_right_of_text_offset > 0) {
             Piece_Table_Row *new_row = piece_table_create_row(context);
             if (new_row) {
               new_row->chunk = row->chunk;
               new_row->offset = row->offset + row->size + size;
-              new_row->size = amount_to_the_left_of_text_offset - size;
+              new_row->size = amount_to_the_right_of_text_offset;
               DLLInsert(table->first_row, table->last_row, row, new_row);
             }
             else {
