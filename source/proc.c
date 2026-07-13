@@ -934,7 +934,7 @@ function void handle_label_editing(Context *context, Process_List ps) {
           } else if (key == KEY_BACKSPACE) {
             // handle backspace
             if (a->label_cursor > 0) {
-              piece_table_delete(context, a->label, a->label_cursor-1, 1);
+              piece_table_delete(context, a->label, a->label_cursor, 1);
               a->label_cursor -= 1;
             }
           }

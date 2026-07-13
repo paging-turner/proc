@@ -217,7 +217,7 @@ function void piece_table_delete(
   ) {
   B32 is_deleting = 0;
   U64 current_text_offset = 0;
-  U64 end_text_offset = text_offset + size;
+  U64 begin_text_offset = text_offset >= size ? text_offset - size : 0;
 
   if (piece_table_ensure_insertion_chunk_exists(context, table)) {
     printf("[ Error ] Ensuring piece-table has an insertion-chunk while inserting.\n");
@@ -230,16 +230,15 @@ function void piece_table_delete(
   List_For(Piece_Table_Row *, row, table->first_row) {
     current_text_offset += row->size;
 
-    Piece_Table_Row *row_before = text_offset == 0 ? 0 : row;
-    if (current_text_offset == text_offset) {
+    if (current_text_offset == begin_text_offset) {
       delete_start_row = row->next;
       break;
     }
-    else if (current_text_offset > text_offset) {
+    else if (current_text_offset > begin_text_offset) {
       Assert(current_text_offset >= row->size);
       U64 offset_at_start_of_row = current_text_offset - row->size;
-      Assert(text_offset >= offset_at_start_of_row);
-      U64 amount_to_the_left_of_text_offset = 1 + text_offset - offset_at_start_of_row;
+      Assert(begin_text_offset >= offset_at_start_of_row);
+      U64 amount_to_the_left_of_text_offset = text_offset - offset_at_start_of_row;
       Assert(row->size >= amount_to_the_left_of_text_offset);
       U64 amount_to_the_right_of_text_offset = row->size - amount_to_the_left_of_text_offset;
       if (amount_to_the_left_of_text_offset > size) {
@@ -289,9 +288,11 @@ function void piece_table_delete(
   List_For(Piece_Table_Row *, row, delete_start_row) {
     current_text_offset += row->size;
 
-    if (current_text_offset > end_text_offset) {
-      U64 non_deleted_size = current_text_offset - end_text_offset;
-      U64 deleted_size = Piece_Table_Chunk_Size - non_deleted_size;
+    if (current_text_offset > text_offset) {
+      Assert(current_text_offset >= text_offset);
+      U64 non_deleted_size = current_text_offset - text_offset;
+      Assert(row->size >= non_deleted_size);
+      U64 deleted_size = row->size - non_deleted_size;
       row->offset += deleted_size;
       row->size = non_deleted_size;
       Assert(table->text_size >= size);
@@ -303,7 +304,7 @@ function void piece_table_delete(
       table->text_size -= row->size;
       DLLRemove(table->first_row, table->last_row, row);
       SLLStackPush(context->piece_table_memory.free_rows, row);
-      if (current_text_offset == end_text_offset) {
+      if (current_text_offset == text_offset) {
         break;
       }
     }
