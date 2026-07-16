@@ -354,7 +354,6 @@ function B32 add_process_to_process_edit_list(
     SLLQueuePush(context->process_edit_list.first, context->process_edit_list.last, found_proc_edit);
   }
 
-
   // TODO: Overwrite if we are deleting, if we are updating again... then we need to consider that an error or figure out a better way to merge updates.
   if (found_proc_edit) {
     if (found_proc_edit->edit_kind != Proc_Trie_Edit_Delete) {
@@ -476,7 +475,40 @@ function void apply_process_edits_by_kind(Context *context, B32 handle_wires) {
             }
           }
 
+          // copy proc
           *new_p = proc_edit->new_process;
+          // copy proc label
+          {
+            B32 error = 0;
+            Piece_Table *new_piece_table = push_struct(context->permanent_arena, Piece_Table);
+            if (new_piece_table) {
+              new_piece_table->text_size = new_p->label->text_size;
+              new_piece_table->insertion_chunk = new_p->label->insertion_chunk;
+              for (Piece_Table_Row *row = new_p->label->first_row;
+                   row != 0;
+                   row = row->next) {
+                Piece_Table_Row *new_row = push_struct(context->permanent_arena, Piece_Table_Row);
+                if (new_row) {
+                  *new_row = *row;
+                  DLLPushBack(new_piece_table->first_row, new_piece_table->last_row, new_row);
+                }
+                else {
+                  printf("[ Error ] Pushing Piece_Table_Row while copying piece-table in `apply_process_edits_by_kind`\n");
+                  new_p->label = 0;
+                  error = 1;
+                  break;
+                }
+              }
+            }
+            else {
+              printf("[ Error ] Pushing Piece_Table while copying piece-table in `apply_process_edits_by_kind`\n");
+            }
+
+            if (!error) {
+              new_p->label = new_piece_table;
+            }
+          }
+
           proc_trie_delete(arena, context->proc_trie, IntFromPtr(proc_edit->process));
 #if Proc_Trie_Use_Key_Value
           proc_trie_set(arena, context->proc_trie, IntFromPtr(new_p), new_p);
@@ -505,6 +537,22 @@ function void gather_processes_from_trie(Context *context) {
     apply_process_edits_by_kind(context, 0);
     apply_process_edits_by_kind(context, 1);
   }
+
+  // transfer active procs
+  {
+    Process_List new_active_procs = (Process_List){0};
+    for (Process_Edit *proc_edit = context->process_edit_list.first;
+         proc_edit != 0;
+         proc_edit = proc_edit->next) {
+      for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
+        if (proc_edit->process == a && proc_edit->new_process_ptr) {
+          SLLQueuePush(new_active_procs.first, new_active_procs.last, proc_edit->new_process_ptr);
+        }
+      }
+    }
+    context->active_processes = new_active_procs;
+  }
+
   context->process_edit_list = (Process_Edit_List){0};
 
   proc_trie_commit(trie);
@@ -916,41 +964,68 @@ function void handle_label_editing(Context *context, Process_List ps) {
   U32 key = 0;
   U32 k = 0;
   B32 shift_down = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+  B32 should_update_process = context->edit_timeout <= 0.0f;
+  Process_List new_active_list = (Process_List){0};
+  B32 editing_occured = 0;
 
   while ((key = context->ui_state.key_presses[k++])) {
     for (Process *a = ps.first; a != 0; a = a->next_active) {
       if (Get_Flag(a->flags, Process_Flag_TextEdit)) {
-        if (a->label == 0) {
-          a->label = push_struct(context->permanent_arena, Piece_Table);
+        editing_occured = 1;
+        Process edit_a;
+
+        if (should_update_process) {
+          context->edit_timeout = context->time_to_wait_for_label_edit;
+          Editable_Process editable_a = get_editable_process(context->process_edit_list, a);
+          edit_a = editable_a.process;
+        }
+        else {
+          edit_a = *a;
         }
 
-        if (a->label) {
+        if (edit_a.label == 0) {
+          edit_a.label = push_struct(context->permanent_arena, Piece_Table);
+        }
+
+        if (edit_a.label) {
           B32 is_ascii = key > 0 && key < 256;
           U8 c = ascii_char_lookup[key&0xff][shift_down];
           if (is_ascii && c != 0) {
             // insert character
-            piece_table_insert(context, a->label, a->label_cursor, (String8){&c, 1});
-            a->label_cursor += 1;
+            piece_table_insert(context, edit_a.label, edit_a.label_cursor, (String8){&c, 1});
+            edit_a.label_cursor += 1;
           } else if (key == KEY_BACKSPACE) {
             // handle backspace
-            if (a->label_cursor > 0) {
-              piece_table_delete(context, a->label, a->label_cursor, 1);
-              a->label_cursor -= 1;
+            if (edit_a.label_cursor > 0) {
+              piece_table_delete(context, edit_a.label, edit_a.label_cursor, 1);
+              edit_a.label_cursor -= 1;
             }
           }
-          else if (key == KEY_LEFT && a->label_cursor > 0) {
-            a->label_cursor -= 1;
+          else if (key == KEY_LEFT && edit_a.label_cursor > 0) {
+            edit_a.label_cursor -= 1;
           }
-          else if (key == KEY_RIGHT && a->label_cursor < a->label->text_size) {
-            a->label_cursor += 1;
+          else if (key == KEY_RIGHT && edit_a.label_cursor < edit_a.label->text_size) {
+            edit_a.label_cursor += 1;
           }
-          debug_check_piece_table(context, a->label);
+          debug_check_piece_table(context, edit_a.label);
         }
         else {
           printf("[ Error ] Null label while editing text.\n");
         }
+
+        // update active proc
+        if (should_update_process) {
+          add_process_to_process_edit_list(context, a, Proc_Trie_Edit_Update, edit_a);
+        }
+        else {
+          *a = edit_a;
+        }
       }
     }
+  }
+
+  if (should_update_process && editing_occured) {
+    gather_processes_from_trie(context);
   }
 }
 
@@ -2664,6 +2739,8 @@ int main(void) {
 
       context.proc_trie = proc_trie_create_trie(context.permanent_arena);
 
+      context.time_to_wait_for_label_edit = 1.0f;
+
       Set_Flag(context.flags, Context_Flag_AutoAlignChains);
       Set_Flag(context.flags, Context_Flag_DataStructureView);
       gather_processes_from_trie(&context);
@@ -2769,10 +2846,15 @@ int main(void) {
     //////////////////////////////////////////
     // Handle User Input
     //////////////////////////////////////////
+    F32 frame_time = GetTime();
     {
       // update ui-state
       {
         Ui_State *ui_state = &context.ui_state;
+
+        ui_state->frame_delta = frame_time - ui_state->last_frame_time;
+        ui_state->last_frame_time = frame_time;
+        context.edit_timeout -= ui_state->frame_delta;
 
         ui_state->mouse_position = GetMousePosition(); // TODO: mouse_position should go in ui_state
         F32 mouse_move_threshold = 0.1f;

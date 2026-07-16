@@ -396,6 +396,9 @@ typedef enum {
 } Ui_State_Flag;
 
 typedef struct {
+  F32 frame_delta;
+  F32 last_frame_time;
+
   U32 flags;
   U32 kb_action;
 
@@ -493,6 +496,9 @@ struct Context {
   Process_Edit_List process_edit_list;
 
   Piece_Table_Memory piece_table_memory;
+
+  F32 time_to_wait_for_label_edit;
+  F32 edit_timeout;
 };
 
 
