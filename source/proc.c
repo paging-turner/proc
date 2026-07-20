@@ -971,7 +971,6 @@ function void handle_label_editing(Context *context, Process_List ps) {
   while ((key = context->ui_state.key_presses[k++])) {
     for (Process *a = ps.first; a != 0; a = a->next_active) {
       if (Get_Flag(a->flags, Process_Flag_TextEdit)) {
-        editing_occured = 1;
         Process edit_a;
 
         if (should_update_process) {
@@ -994,11 +993,13 @@ function void handle_label_editing(Context *context, Process_List ps) {
             // insert character
             piece_table_insert(context, edit_a.label, edit_a.label_cursor, (String8){&c, 1});
             edit_a.label_cursor += 1;
+            editing_occured = 1;
           } else if (key == KEY_BACKSPACE) {
             // handle backspace
             if (edit_a.label_cursor > 0) {
               piece_table_delete(context, edit_a.label, edit_a.label_cursor, 1);
               edit_a.label_cursor -= 1;
+              editing_occured = 1;
             }
           }
           else if (key == KEY_LEFT && edit_a.label_cursor > 0) {
@@ -1014,7 +1015,7 @@ function void handle_label_editing(Context *context, Process_List ps) {
         }
 
         // update active proc
-        if (should_update_process) {
+        if (should_update_process && editing_occured) {
           add_process_to_process_edit_list(context, a, Proc_Trie_Edit_Update, edit_a);
         }
         else {

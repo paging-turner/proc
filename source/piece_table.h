@@ -26,6 +26,9 @@ struct Piece_Table {
 
 
 
+function void debug_check_piece_table(Context *context, Piece_Table *table);
+
+
 
 function Piece_Table_Row *piece_table_create_row(Context *context) {
   Piece_Table_Row *row = 0;
@@ -89,6 +92,15 @@ function void piece_table_insert_text_after_row(
   Piece_Table_Row *current_row = row;
 
   while (amount_of_text_copied < text_to_insert.size) {
+    // Create a new insertion-chunk if we need one.
+    if (table->insertion_chunk->offset == Piece_Table_Chunk_Size) {
+      table->insertion_chunk = piece_table_create_chunk(context);
+      if (table->insertion_chunk == 0) {
+        printf("[ Error ] Creating Piece_Table_Chunk while inserting text after a row.\n");
+        break;
+      }
+    }
+
     U64 remaining_amount_to_write = text_to_insert.size - amount_of_text_copied;
     U64 space_in_chunk = Piece_Table_Chunk_Size - table->insertion_chunk->offset;
 
@@ -118,6 +130,7 @@ function void piece_table_insert_text_after_row(
         new_row->chunk = table->insertion_chunk;
         new_row->offset = table->insertion_chunk->offset;
         new_row->size = amount_to_write;
+        Assert(new_row->size != 0);
         if (table->first_row == 0 || table->last_row == 0 || current_row == 0) {
           DLLPushFront(table->first_row, table->last_row, new_row);
           current_row = new_row;
@@ -135,15 +148,6 @@ function void piece_table_insert_text_after_row(
     amount_of_text_copied += amount_to_write;
     table->insertion_chunk->offset += amount_to_write;
     table->text_size += amount_to_write;
-
-    // Create a new insertion-chunk if we need one.
-    if (table->insertion_chunk->offset == Piece_Table_Chunk_Size) {
-      table->insertion_chunk = piece_table_create_chunk(context);
-      if (table->insertion_chunk == 0) {
-        printf("[ Error ] Creating Piece_Table_Chunk while inserting text after a row.\n");
-        break;
-      }
-    }
   }
 }
 
