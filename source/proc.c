@@ -212,6 +212,36 @@ function void check_context(Context *context) {
   check_process_list(context->copy_processes);
 }
 
+function void debug_check_edit_list_contains_only_current_procs(Context *context) {
+  List_For(Process_Edit *, e, context->process_edit_list.first) {
+    B32 is_in_processes_or_inserted = 0;
+    if (e->kind == Proc_Trie_Edit_Insert) {
+      is_in_processes_or_inserted = 1;
+    }
+    else {
+      List_For(Process *, p, context->views[View_Kind_Procs].processes.first) {
+        if (e->process == p) {
+          is_in_processes_or_inserted = 1;
+          break;
+        }
+      }
+    }
+    Assert(is_in_processes_or_inserted);
+  }
+}
+
+function void debug_check_active_proc_in_current_procs(Context *context) {
+  List_For(Process *, a, context->active_processes.first) {
+    B32 is_in_processes = 0;
+    List_For(Process *, p, context->views[View_Kind_Procs].processes.first) {
+      if (a == p) {
+        is_in_processes = 1;
+        break;
+      }
+    }
+    Assert(is_in_processes);
+  }
+}
 
 
 
@@ -356,9 +386,9 @@ function B32 add_process_to_process_edit_list(
 
   // TODO: Overwrite if we are deleting, if we are updating again... then we need to consider that an error or figure out a better way to merge updates.
   if (found_proc_edit) {
-    if (found_proc_edit->edit_kind != Proc_Trie_Edit_Delete) {
+    if (found_proc_edit->kind != Proc_Trie_Edit_Delete) {
       found_proc_edit->process = p;
-      found_proc_edit->edit_kind = edit_kind;
+      found_proc_edit->kind = edit_kind;
       found_proc_edit->new_process = new_process;
       overwritten = 1;
     }
@@ -413,7 +443,7 @@ function void apply_process_edits_by_kind(Context *context, B32 handle_wires) {
     B32 should_edit = !(handle_wires ^ is_wire);
 
     if (should_edit) {
-      switch(proc_edit->edit_kind) {
+      switch(proc_edit->kind) {
       case Proc_Trie_Edit_Insert: {
         Assert(proc_edit->process);
 
@@ -478,7 +508,7 @@ function void apply_process_edits_by_kind(Context *context, B32 handle_wires) {
           // copy proc
           *new_p = proc_edit->new_process;
           // copy proc label
-          {
+          if (new_p->label) {
             B32 error = 0;
             Piece_Table *new_piece_table = push_struct(context->permanent_arena, Piece_Table);
             if (new_piece_table) {
@@ -533,12 +563,14 @@ function void gather_processes_from_trie(Context *context) {
   View *view = context->views + View_Kind_Procs;
   Proc_Trie_Trie *trie = context->proc_trie;
 
+  debug_check_edit_list_contains_only_current_procs(context);
+
   { // apply process edits
     apply_process_edits_by_kind(context, 0);
     apply_process_edits_by_kind(context, 1);
   }
 
-  // transfer active procs
+  // transfer active, edited procs
   {
     Process_List new_active_procs = (Process_List){0};
     for (Process_Edit *proc_edit = context->process_edit_list.first;
@@ -606,6 +638,8 @@ function void gather_processes_from_trie(Context *context) {
 
     }
   }
+
+  debug_check_active_proc_in_current_procs(context);
 }
 
 
@@ -1648,7 +1682,7 @@ function Editable_Process get_editable_process(
        proc_edit = proc_edit->next) {
     if (proc_edit->process == p) {
       editable_proc.is_being_edited = 1;
-      if (proc_edit->edit_kind == Proc_Trie_Edit_Update) {
+      if (proc_edit->kind == Proc_Trie_Edit_Update) {
         editable_proc.process = proc_edit->new_process;
       }
       else {

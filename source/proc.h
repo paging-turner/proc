@@ -138,7 +138,7 @@ typedef struct Editable_Process {
 } Editable_Process;
 
 typedef struct Process_Edit {
-  Proc_Trie_Edit_Kind edit_kind;
+  Proc_Trie_Edit_Kind kind;
   Process *process;
   Process new_process;
   Process *new_process_ptr;
