@@ -372,11 +372,14 @@ function void debug_print_piece_table_range(Context *context, Piece_Table *table
   printf("%s\n", string.str);
 }
 
+
 function void debug_check_piece_table(Context *context, Piece_Table *table) {
-  U64 text_size_from_rows = 0;
-  List_For(Piece_Table_Row *, row, table->first_row) {
-    Assert(row->size > 0);
-    text_size_from_rows += row->size;
+  if (table) {
+    U64 text_size_from_rows = 0;
+    List_For(Piece_Table_Row *, row, table->first_row) {
+      Assert(row->size > 0);
+      text_size_from_rows += row->size;
+    }
+    Assert(text_size_from_rows == table->text_size);
   }
-  Assert(text_size_from_rows == table->text_size);
 }

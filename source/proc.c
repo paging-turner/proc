@@ -578,7 +578,7 @@ function void gather_processes_from_trie(Context *context) {
          proc_edit = proc_edit->next) {
       for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
         if (proc_edit->process == a && proc_edit->new_process_ptr) {
-          SLLQueuePush(new_active_procs.first, new_active_procs.last, proc_edit->new_process_ptr);
+          SLLQueuePush_NZ(new_active_procs.first, new_active_procs.last, proc_edit->new_process_ptr, next_active, 0);
         }
       }
     }
@@ -1016,37 +1016,37 @@ function void handle_label_editing(Context *context, Process_List ps) {
           edit_a = *a;
         }
 
-        if (edit_a.label == 0) {
-          edit_a.label = push_struct(context->permanent_arena, Piece_Table);
-        }
+        B32 is_ascii = key > 0 && key < 256;
+        U8 c = ascii_char_lookup[key&0xff][shift_down];
+        if (is_ascii && c != 0) {
+          // insert character
+          if (edit_a.label == 0) {
+            edit_a.label = push_struct(context->permanent_arena, Piece_Table);
+          }
 
-        if (edit_a.label) {
-          B32 is_ascii = key > 0 && key < 256;
-          U8 c = ascii_char_lookup[key&0xff][shift_down];
-          if (is_ascii && c != 0) {
-            // insert character
+          if (edit_a.label) {
             piece_table_insert(context, edit_a.label, edit_a.label_cursor, (String8){&c, 1});
             edit_a.label_cursor += 1;
             editing_occured = 1;
-          } else if (key == KEY_BACKSPACE) {
-            // handle backspace
-            if (edit_a.label_cursor > 0) {
-              piece_table_delete(context, edit_a.label, edit_a.label_cursor, 1);
-              edit_a.label_cursor -= 1;
-              editing_occured = 1;
-            }
           }
-          else if (key == KEY_LEFT && edit_a.label_cursor > 0) {
+          else {
+            printf("[ Error ] Null label while inserting text.\n");
+          }
+        } else if (key == KEY_BACKSPACE) {
+          // handle backspace
+          if (edit_a.label_cursor > 0) {
+            piece_table_delete(context, edit_a.label, edit_a.label_cursor, 1);
             edit_a.label_cursor -= 1;
+            editing_occured = 1;
           }
-          else if (key == KEY_RIGHT && edit_a.label_cursor < edit_a.label->text_size) {
-            edit_a.label_cursor += 1;
-          }
-          debug_check_piece_table(context, edit_a.label);
         }
-        else {
-          printf("[ Error ] Null label while editing text.\n");
+        else if (key == KEY_LEFT && edit_a.label_cursor > 0) {
+          edit_a.label_cursor -= 1;
         }
+        else if (key == KEY_RIGHT && edit_a.label_cursor < edit_a.label->text_size) {
+          edit_a.label_cursor += 1;
+        }
+        debug_check_piece_table(context, edit_a.label);
 
         // update active proc
         if (should_update_process && editing_occured) {
