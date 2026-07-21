@@ -154,22 +154,22 @@ global_variable Ui_Box open_file_confirm_box = (Ui_Box){
 };
 
 global_variable Process open_file_label = (Process){
-  .flags = Process_Flag_UseLabelCString|Process_Flag_FitToText,
+  .flags = Process_Flag_FitToText,
   .label_c_string = (U8 *)"Open File...",
   .margin = (Vector2){5.0f, 8.0f},
 };
 global_variable Process open_button = (Process){
-  .flags = Process_Flag_UseLabelCString|Process_Flag_FitToText|Process_Flag_Clickable,
+  .flags = Process_Flag_FitToText|Process_Flag_Clickable,
   .label_c_string = (U8 *)"Open",
   .margin = (Vector2){5.0f, 8.0f},
 };
 global_variable Process cancel_button = (Process){
-  .flags = Process_Flag_UseLabelCString|Process_Flag_FitToText|Process_Flag_Clickable,
+  .flags = Process_Flag_FitToText|Process_Flag_Clickable,
   .label_c_string = (U8 *)"Cancel",
   .margin = (Vector2){5.0f, 8.0f},
 };
 global_variable Process save_button = (Process){
-  .flags = Process_Flag_UseLabelCString|Process_Flag_FitToText|Process_Flag_Clickable,
+  .flags = Process_Flag_FitToText|Process_Flag_Clickable,
   .label_c_string = (U8 *)"Save",
   .margin = (Vector2){5.0f, 8.0f},
 };
@@ -1185,12 +1185,9 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
   B32 set_box_y = box && ui_box_should_set_y(box);
 
   if (sizing) {
-    if (!Get_Flag(element->flags, Process_Flag_UseLabelCString)) {
-      element->label_c_string = 0;
-      if (element->label) {
-        String8 string = piece_table_get_string(render_GlobalTempArena, element->label);
-        element->label_c_string = string.str;
-      }
+    if (element->label_c_string == 0 && element->label) {
+      String8 string = piece_table_get_string(render_GlobalTempArena, element->label);
+      element->label_c_string = string.str;
     }
 
     B32 fit_to_text = Get_Flag(element->flags, Process_Flag_FitToText);
@@ -2948,7 +2945,6 @@ int main(void) {
         Process_Selection selection = (Process_Selection){0};
         Keybind_Environment env_raw = create_keybind_environment(&context, selection);
         Keybind_Environment *env = &env_raw;
-        /* env->should_stop_dragging = check_keybind(env) == Keybind_Result_Exit; */
         env->moved_wire = 0;
         env->moved_wire_conn = 0;
 
@@ -3023,9 +3019,13 @@ int main(void) {
             if (p->label_cursor) {
               // @Speed: It's silly to copy this string just to measure where the cursor needs to be.......
               String8 label_cursor_string = str8_push_copy(context.temp_arena, label_string);
-              Assert(p->label_cursor <= label_cursor_string.size);
-              label_cursor_string.str[p->label_cursor] = 0;
-              cursor_offset = MeasureText((char *)label_cursor_string.str, font_size);
+              Assert_If(p->label_cursor <= label_cursor_string.size) {
+                printf("[ Error ] Process(%p) label-cursor (%d) greater than label-cursor-string size (%llu).\n", p, p->label_cursor, label_cursor_string.size);
+              }
+              else {
+                label_cursor_string.str[p->label_cursor] = 0;
+                cursor_offset = MeasureText((char *)label_cursor_string.str, font_size);
+              }
             }
 
             B32 is_invisible = Get_Flag(p->flags, Process_Flag_Invisible);
@@ -3282,7 +3282,7 @@ int main(void) {
     // End Profiler
     //////////////////////////////////////////
     ryn_EndAndPrintProfile(cpu_freq);
-    /* // clear profile timers */
+    // clear profile timers
     for(uint32_t TimerIndex = 0; TimerIndex < SymbolCount(ryn_sym_timer); ++TimerIndex)
     {
       ryn_timer_data *Timer = SymbolMetadataFromID(ryn_sym_timer, TimerIndex+1);

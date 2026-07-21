@@ -221,9 +221,8 @@ function          Process *find_process_connection(Context *context, Process *p,
   X( CanBeActive     , 11      )\
   X( Clickable       , 12      )\
   X( FitToText       , 13      )\
-  X( UseLabelCString , 14      )\
-  X( IsDetached      , 15      )\
-  X( Line            , 16      )
+  X( IsDetached      , 14      )\
+  X( Line            , 15      )
 
 
 typedef enum {
@@ -518,3 +517,11 @@ global_variable Process global_null_process;
 
 #define List_For(t, n, i)\
   List_For_N(t, n, i, next)
+
+#define Robust_Assertions 0
+
+#if Robust_Assertions
+# define Assert_If(exp)   if(!(exp))
+#else
+# define Assert_If(exp)   Assert(exp);if(0)
+#endif
