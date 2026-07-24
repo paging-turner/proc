@@ -9,16 +9,12 @@ typedef enum {
   render_command_ClearBackground,
   render_command_DrawRectangleRec,
   render_command_DrawText,
-  render_command_DrawRectangleLinesEx,
   render_command_DrawRectangle,
   render_command_DrawLine,
   render_command_DrawLineBezierCubic,
-  render_command_DrawPoly,
-  render_command_DrawPolyLinesEx,
   render_command_DrawTriangleStrip,
   render_command_DrawTriangleFan,
   render_command_DrawCircle,
-  render_command_DrawCircleSector,
   render_command_DrawCircleLines,
   render_command_DrawCircleSectorLines,
   render_command_BeginScissorMode,
@@ -150,16 +146,6 @@ function void render_DrawText(Render_Context *rc, const char *Text, F32 X, F32 Y
   }
 }
 
-function void render_DrawRectangleLinesEx(Render_Context *rc, Rectangle R, F32 Thickness, Color C) {
-  render_command *Command = create_render_command(rc);
-
-  if (Command) {
-    Command->Kind = render_command_DrawRectangleLinesEx;
-    Command->Rectangle = R;
-    Command->Thickness = Thickness;
-    Command->Color = C;
-  }
-}
 
 function void render_DrawRectangle(Render_Context *rc, F32 X, F32 Y, F32 W, F32 H, Color C) {
   render_command *Command = create_render_command(rc);
@@ -226,34 +212,9 @@ function void render_DrawLineBezierCubic(Render_Context *rc, Vector2 startPos, V
 }
 
 
-function void render_DrawPoly(Render_Context *rc, Vector2 center, int sides, float radius, float rotation, Color color) {
-  render_command *Command = create_render_command(rc);
 
-  if (Command) {
-    Command->Kind = render_command_DrawPoly;
-    Command->X = center.x;
-    Command->Y = center.y;
-    Command->Sides = sides;
-    Command->Radius = radius;
-    Command->Rotation = rotation;
-    Command->Color = color;
-  }
-}
 
-function void render_DrawPolyLinesEx(Render_Context *rc, Vector2 center, int sides, float radius, float rotation, float lineThick, Color color) {
-  render_command *Command = create_render_command(rc);
 
-  if (Command) {
-    Command->Kind = render_command_DrawPolyLinesEx;
-    Command->X = center.x;
-    Command->Y = center.y;
-    Command->Sides = sides;
-    Command->Radius = radius;
-    Command->Rotation = rotation;
-    Command->Thickness = lineThick;
-    Command->Color = color;
-  }
-}
 
 function void render_DrawTriangleStrip(Render_Context *rc, Vector2 *Points, S32 PointCount, Color Color) {
   render_command *Command = create_render_command(rc);
@@ -293,19 +254,6 @@ function void render_DrawCircle(Render_Context *rc, Vector2 center, F32 radius, 
   }
 }
 
-function void render_DrawCircleSector(Render_Context *rc, Vector2 center, float radius, float startAngle, float endAngle, Color color) {
-  render_command *Command = create_render_command(rc);
-
-  if (Command) {
-    Command->Kind = render_command_DrawCircleSector;
-    Command->X = center.x;
-    Command->Y = center.y;
-    Command->Radius = radius;
-    Command->StartAngle = startAngle;
-    Command->EndAngle = endAngle;
-    Command->Color = color;
-  }
-}
 
 function void render_DrawCircleLines(Render_Context *rc, int centerX, int centerY, float radius, F32 thickness, Color color) {
   render_command *Command = create_render_command(rc);
@@ -330,19 +278,6 @@ function void render_DrawCircleLines(Render_Context *rc, int centerX, int center
   }
 }
 
-function void render_DrawCircleSectorLines(Render_Context *rc, Vector2 center, float radius, float startAngle, float endAngle, Color color) {
-  render_command *Command = create_render_command(rc);
-
-  if (Command) {
-    Command->Kind = render_command_DrawCircleSectorLines;
-    Command->X = center.x;
-    Command->Y = center.y;
-    Command->Radius = radius;
-    Command->StartAngle = startAngle;
-    Command->EndAngle = endAngle;
-    Command->Color = color;
-  }
-}
 
 function void render_BeginScissorMode(Render_Context *rc, Vector2 position, Vector2 size) {
   render_command *Command = create_render_command(rc);
@@ -366,30 +301,19 @@ function void render_EndScissorMode(Render_Context *rc) {
 
 
 function void render_Commands(Render_Context *rc) {
-  // NOTE: Assume that the render commands get cleared every frame, so start from the start.
-  /* S32 CommandCount = (context->render_arena->chunk_pos - context->render_zero_pos)/sizeof(render_command); */
-  /* render_command *Commands = (render_command *)(arena + 1); */
-
   for (render_command *C = rc->command_list.first; C != 0; C = C->next) {
-    /* render_command *C = Commands + i; */
-
     switch(C->Kind) {
     case render_command__Null: /* nothing to do here */ break;
     case render_command_ClearBackground: { ClearBackground(C->Color); } break;
     case render_command_DrawRectangleRec: { DrawRectangleRec(C->Rectangle, C->Color); } break;
     case render_command_DrawText: { DrawText(C->Text, C->X, C->Y, C->FontSize, C->Color); } break;
-    case render_command_DrawRectangleLinesEx: { DrawRectangleLinesEx(C->Rectangle, C->Thickness, C->Color); } break;
     case render_command_DrawRectangle: { DrawRectangle(C->X, C->Y, C->Width, C->Height, C->Color); } break;
     case render_command_DrawLine: { DrawLineEx((Vector2){C->X, C->Y}, (Vector2){C->X2, C->Y2}, C->Thickness, C->Color); } break;
     case render_command_DrawLineBezierCubic: { DrawTriangleStrip(C->Points_Ptr, C->PointCount, C->Color); } break;
-    case render_command_DrawPoly: { DrawPoly((Vector2){C->X, C->Y}, C->Sides, C->Radius, C->Rotation, C->Color); } break;
-    case render_command_DrawPolyLinesEx: { DrawPolyLinesEx((Vector2){C->X, C->Y}, C->Sides, C->Radius, C->Rotation, C->Thickness, C->Color); } break;
     case render_command_DrawTriangleStrip: { DrawTriangleStrip(C->Points, C->PointCount, C->Color); } break;
     case render_command_DrawTriangleFan: { DrawTriangleFan(C->Points, C->PointCount, C->Color); } break;
     case render_command_DrawCircle: { DrawCircle(C->X, C->Y, C->Radius, C->Color); } break;
-    case render_command_DrawCircleSector: { DrawCircleSector((Vector2){C->X, C->Y}, C->Radius, C->StartAngle, C->EndAngle, 10, C->Color); } break;
     case render_command_DrawCircleLines: { DrawTriangleStrip(C->Points_Ptr, C->PointCount, C->Color); } break;
-    case render_command_DrawCircleSectorLines: { DrawCircleSectorLines((Vector2){C->X, C->Y}, C->Radius, C->StartAngle, C->EndAngle, 10, C->Color); } break;
     case render_command_BeginScissorMode: { BeginScissorMode(C->X, C->Y, C->Width, C->Height); } break;
     case render_command_EndScissorMode: { EndScissorMode(); } break;
 
