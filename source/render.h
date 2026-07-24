@@ -13,6 +13,7 @@ typedef enum {
   render_command_DrawRectangle,
   render_command_DrawLine,
   render_command_DrawLineBezierCubic,
+  render_command_DrawLineBezierCubic_,
   render_command_DrawPoly,
   render_command_DrawPolyLinesEx,
   render_command_DrawTriangleStrip,
@@ -51,6 +52,7 @@ struct render_command {
   F32 Height;
 #define render_Max_Points 32
   Vector2 Points[render_Max_Points];
+  Vector2 *Points_Ptr;
   S32 PointCount;
   F32 StartAngle;
   F32 EndAngle;
@@ -213,6 +215,30 @@ function void render_DrawLineBezierCubic(Render_Context *rc, Vector2 startPos, V
     Command->Color = color;
   }
 }
+function void render_DrawLineBezierCubic_(Render_Context *rc, Vector2 startPos, Vector2 endPos, Vector2 startControlPos, Vector2 endControlPos, float thick, Color color) {
+  render_command *Command = create_render_command(rc);
+
+  if (Command) {
+    U32 point_count = 24; // TODO: better way of determining point count
+    Vector2 *points = push_array(rc->arena, Vector2, point_count);
+
+    if (points) {
+      // fill out points on bezier line
+      for (U32 i = 0; i < point_count; ++i) {
+        F32 t = (F32)i / (F32)(point_count-1);
+        points[i] = get_bezier_point(startPos, endPos, startControlPos, endControlPos, t);
+      }
+
+      // get connected-path from bezier-path
+      Connected_Path connected_path = get_connected_path(rc->arena, points, point_count, thick, 0);
+
+      Command->Kind = render_command_DrawLineBezierCubic_;
+      Command->PointCount = connected_path.point_count;
+      Command->Points_Ptr = connected_path.points;
+      Command->Color = color;
+    }
+  }
+}
 
 
 function void render_DrawPoly(Render_Context *rc, Vector2 center, int sides, float radius, float rotation, Color color) {
@@ -360,6 +386,7 @@ function void render_Commands(Render_Context *rc) {
     case render_command_DrawRectangle: { DrawRectangle(C->X, C->Y, C->Width, C->Height, C->Color); } break;
     case render_command_DrawLine: { DrawLineEx((Vector2){C->X, C->Y}, (Vector2){C->X2, C->Y2}, C->Thickness, C->Color); } break;
     case render_command_DrawLineBezierCubic: { DrawSplineBezierCubic(C->Points, C->PointCount, C->Thickness, C->Color); } break;
+    case render_command_DrawLineBezierCubic_: { DrawTriangleStrip(C->Points_Ptr, C->PointCount, C->Color); } break;
     case render_command_DrawPoly: { DrawPoly((Vector2){C->X, C->Y}, C->Sides, C->Radius, C->Rotation, C->Color); } break;
     case render_command_DrawPolyLinesEx: { DrawPolyLinesEx((Vector2){C->X, C->Y}, C->Sides, C->Radius, C->Rotation, C->Thickness, C->Color); } break;
     case render_command_DrawTriangleStrip: { DrawTriangleStrip(C->Points, C->PointCount, C->Color); } break;

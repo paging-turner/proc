@@ -299,10 +299,6 @@ struct Process_Shape {
   Vector2 new_wire_position;
 };
 
-typedef struct Connected_Path {
-  U32 point_count;
-  Vector2 *points;
-} Connected_Path;
 
 
 //////////////////////////////////////

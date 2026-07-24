@@ -2489,117 +2489,6 @@ function void do_menu_ui(Context *context, B32 sizing) {
 
 
 
-function Connected_Path get_connected_path(
-  Context *context,
-  Vector2 *points,
-  U32 point_count,
-  F32 thickness,
-  B32 closed
-  ) {
-  Connected_Path result = (Connected_Path){0};
-  F32 half_thickness = 0.5f * thickness;
-
-  if (closed) {
-    point_count += 2;
-  }
-
-  if (point_count >= 3) {
-    result.point_count = 4 + 4*(point_count-2);
-
-    if ((result.points = push_array(context->render_arena, Vector2, result.point_count))) {
-      U32 iter_count = point_count - 2;
-
-      for (U32 i = 0; i < iter_count; ++i) {
-        U32 ri = 4*i;
-
-        Vector2 a = points[i];
-        Vector2 b;
-        Vector2 c;
-        if (closed) {
-          if (i == iter_count-2) {
-            b = points[i+1];
-            c = points[0];
-          }
-          else if (i == iter_count-1) {
-            b = points[0];
-            c = points[1];
-          }
-          else {
-            b = points[i+1];
-            c = points[i+2];
-          }
-        }
-        else {
-          b = points[i+1];
-          c = points[i+2];
-        }
-
-        Vector2 a_to_b = Vector2Normalize(Vector2Subtract(b, a));
-        Vector2 b_to_c = Vector2Normalize(Vector2Subtract(c, b));
-
-        Vector2 a_to_b_perp = (Vector2){-a_to_b.y, a_to_b.x};
-        Vector2 b_to_c_perp = (Vector2){-b_to_c.y, b_to_c.x};
-        Vector2 c_to_b_perp = (Vector2){b_to_c.y, -b_to_c.x};
-
-        Vector2  a0 = Vector2Add(a, Vector2Scale(a_to_b_perp, -half_thickness));
-        Vector2  a1 = Vector2Add(a, Vector2Scale(a_to_b_perp,  half_thickness));
-        Vector2 ba0 = Vector2Add(b, Vector2Scale(a_to_b_perp, -half_thickness));
-        Vector2 ba1 = Vector2Add(b, Vector2Scale(a_to_b_perp,  half_thickness));
-        Vector2 bc0 = Vector2Add(b, Vector2Scale(b_to_c_perp, -half_thickness));
-        Vector2 bc1 = Vector2Add(b, Vector2Scale(b_to_c_perp,  half_thickness));
-        Vector2  c0 = Vector2Add(c, Vector2Scale(c_to_b_perp,  half_thickness));
-        Vector2  c1 = Vector2Add(c, Vector2Scale(c_to_b_perp, -half_thickness));
-
-        F32 a_to_bc0_dist_sq = Vector2DistanceSqr(bc0, a);
-        F32 a_to_bc1_dist_sq = Vector2DistanceSqr(bc1, a);
-
-        // initial 2 points
-        if (i == 0) {
-          result.points[0] = a0;
-          result.points[1] = a1;
-        }
-
-        if (a_to_bc0_dist_sq < a_to_bc1_dist_sq) {
-          Vector2 collision_point = (Vector2){0};
-          if (!CheckCollisionLines(a0, ba0, bc0, c0, &collision_point)) {
-            // fallback
-            collision_point = a0;
-          }
-
-          result.points[ri+2] =
-            Vector2Add(a0, Vector2Scale(Vector2Subtract(collision_point, a0), 0.5f));
-          result.points[ri+3] = ba1;
-          result.points[ri+4] = collision_point;
-          result.points[ri+5] = bc1;
-        }
-        else {
-          Vector2 collision_point = (Vector2){0};
-          if (!CheckCollisionLines(a1, ba1, bc1, c1, &collision_point)) {
-            // fallback
-            collision_point = c1;
-          }
-
-          result.points[ri+2] = ba0;
-          result.points[ri+3] = collision_point;
-          result.points[ri+4] = bc0;
-          result.points[ri+5] =
-            Vector2Add(collision_point, Vector2Scale(Vector2Subtract(c1, collision_point), 0.5f));
-        }
-
-        // final 2 points
-        if (i == iter_count-1) {
-          result.points[result.point_count-2] = c0;
-          result.points[result.point_count-1] = c1;
-        }
-      }
-    }
-  }
-
-  return result;
-}
-
-
-
 
 function void draw_circular_process(Context *context, Vector2 center, F32 radius, F32 thickness, Color bg_color, Color stroke_color) {
   Render_Context *rc = &context->process_render_context;
@@ -2625,7 +2514,7 @@ function void draw_process_with_triangle_fan(Context *context, Process_Shape sha
   render_DrawTriangleFan(rc, shape.points, shape.point_count, bg_color);
 
   // draw path
-  Connected_Path path = get_connected_path(context, shape.points, shape.point_count, thickness, 1);
+  Connected_Path path = get_connected_path(context->render_arena, shape.points, shape.point_count, thickness, 1);
   render_DrawTriangleStrip(rc, path.points, path.point_count, stroke_color);
 }
 
@@ -2636,7 +2525,7 @@ function void draw_process_with_triangle_strip(Context *context, Process_Shape s
   render_DrawTriangleStrip(rc, shape.points, shape.point_count, bg_color);
 
   // draw path
-  Connected_Path path = get_connected_path(context, shape.points, shape.point_count, thickness, 1);
+  Connected_Path path = get_connected_path(context->render_arena, shape.points, shape.point_count, thickness, 1);
   render_DrawTriangleStrip(rc, path.points, path.point_count, stroke_color);
 }
 
@@ -3196,7 +3085,7 @@ int main(void) {
 #if 0
                   // TODO: fix this..........
                   // draw half-circle path
-                  Connected_Path path = get_connected_path(&context, shape.points, shape.point_count, thickness, 1);
+                  Connected_Path path = get_connected_path(context.render_arena, shape.points, shape.point_count, thickness, 1);
                   render_DrawTriangleStrip(rc, path.points, path.point_count, stroke_color);
 #else
                   // draw half-circle lines
@@ -3284,7 +3173,7 @@ int main(void) {
               thickness *= view->camera.zoom;
 
               // draw wire
-              render_DrawLineBezierCubic(rc, out_position, in_position, out_control, in_control, thickness, stroke_color);
+              render_DrawLineBezierCubic_(rc, out_position, in_position, out_control, in_control, thickness, stroke_color);
 
               // draw out wire-box
               if (connected_out_active || is_active) {
