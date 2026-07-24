@@ -3082,26 +3082,10 @@ int main(void) {
                 case Process_Shape_HalfCircle: {
                   // draw half-circle background
                   render_DrawTriangleFan(rc, shape.points, shape.point_count, bg_color);
-#if 0
-                  // TODO: fix this..........
-                  // draw half-circle path
-                  Connected_Path path = get_connected_path(context.render_arena, shape.points, shape.point_count, thickness, 1);
-                  render_DrawTriangleStrip(rc, path.points, path.point_count, stroke_color);
-#else
-                  // draw half-circle lines
-                  for (S32 i = 0; i < shape.point_count-1; ++i) {
-                    Vector2 p0 = shape.points[i];
-                    Vector2 p1 = shape.points[i+1];
-                    render_DrawLine(rc, p0.x, p0.y, p1.x, p1.y, thickness, stroke_color);
-                  }
-                  // connect the line endpoints
-                  render_DrawLine(rc,
-                                  shape.points[0].x,
-                                  shape.points[0].y,
-                                  shape.points[shape.point_count-1].x,
-                                  shape.points[shape.point_count-1].y,
-                                  thickness, stroke_color);
-#endif
+                  Vector2 position = get_process_position(&context, view, p);
+                  position = GetWorldToScreen2D(position, view->camera);
+                  Half_Circle_Points hc_points = get_half_circle_points(&context, view, shape, p, position, text_width, shape.downward);
+                  render_DrawLineBezierCubic_(rc, hc_points.first_point, hc_points.second_point, hc_points.first_control, hc_points.second_control, thickness, stroke_color, 1);
                 } break;
                 default: Assert(0);
                 }
@@ -3173,7 +3157,7 @@ int main(void) {
               thickness *= view->camera.zoom;
 
               // draw wire
-              render_DrawLineBezierCubic_(rc, out_position, in_position, out_control, in_control, thickness, stroke_color);
+              render_DrawLineBezierCubic_(rc, out_position, in_position, out_control, in_control, thickness, stroke_color, 0);
 
               // draw out wire-box
               if (connected_out_active || is_active) {

@@ -215,7 +215,7 @@ function void render_DrawLineBezierCubic(Render_Context *rc, Vector2 startPos, V
     Command->Color = color;
   }
 }
-function void render_DrawLineBezierCubic_(Render_Context *rc, Vector2 startPos, Vector2 endPos, Vector2 startControlPos, Vector2 endControlPos, float thick, Color color) {
+function void render_DrawLineBezierCubic_(Render_Context *rc, Vector2 startPos, Vector2 endPos, Vector2 startControlPos, Vector2 endControlPos, float thick, Color color, B32 closed) {
   render_command *Command = create_render_command(rc);
 
   if (Command) {
@@ -230,7 +230,7 @@ function void render_DrawLineBezierCubic_(Render_Context *rc, Vector2 startPos, 
       }
 
       // get connected-path from bezier-path
-      Connected_Path connected_path = get_connected_path(rc->arena, points, point_count, thick, 0);
+      Connected_Path connected_path = get_connected_path(rc->arena, points, point_count, thick, closed);
 
       Command->Kind = render_command_DrawLineBezierCubic_;
       Command->PointCount = connected_path.point_count;
