@@ -2494,15 +2494,7 @@ function void draw_circular_process(Context *context, Vector2 center, F32 radius
   Render_Context *rc = &context->process_render_context;
 
   render_DrawCircle(rc, center, radius, bg_color);
-  F32 fudge = Half_Circle_Fudge*radius;
-  Vector2 first_point = (Vector2){center.x-radius, center.y};
-  Vector2 second_point = (Vector2){center.x+radius, center.y};
-  Vector2 control0 = (Vector2){first_point.x, first_point.y-fudge};
-  Vector2 control1 = (Vector2){second_point.x, second_point.y-fudge};
-  render_DrawLineBezierCubic(rc, first_point, second_point, control0, control1, thickness, stroke_color);
-  Vector2 control2 = (Vector2){first_point.x, first_point.y+fudge};
-  Vector2 control3 = (Vector2){second_point.x, second_point.y+fudge};
-  render_DrawLineBezierCubic(rc, first_point, second_point, control2, control3, thickness, stroke_color);
+  render_DrawCircleLines(rc, center.x, center.y, radius, thickness, stroke_color);
 }
 
 
@@ -3013,7 +3005,7 @@ int main(void) {
               B32 is_active = is_active_process(&context, p);
               F32 thickness = (is_hot||is_active) ? global_active_line_thickness : global_line_thickness;
               thickness *= view->camera.zoom;
-              F32 cup_cap_control_offset = 10.0f;
+              F32 cup_cap_control_offset = 10.0f*view->camera.zoom;
 
               if (Get_Flag(p->flags, Process_Flag_Empty)) {
                 // draw line through empty shape
@@ -3041,7 +3033,7 @@ int main(void) {
                       p1 = shape.points[2];
                     }
                   }
-                  render_DrawLineBezierCubic(rc, p0, p1, p1, p0, thickness, stroke_color);
+                  render_DrawLineBezierCubic(rc, p0, p1, p1, p0, thickness, stroke_color, 0);
                 } else if (!(label_string.str && label_string.str[0])) {
                   if (rounded) {
                     draw_circular_process(&context, shape.center, shape.radius, thickness, invisible_bg_color, invisible_stroke_color);
@@ -3055,19 +3047,19 @@ int main(void) {
                 Vector2 pos1 = get_process_wire_position(&context, view, p, shape, Process_Connection_Out, 1);
                 Vector2 ctrl0 = (Vector2){pos0.x, pos0.y+cup_cap_control_offset};
                 Vector2 ctrl1 = (Vector2){pos1.x, pos1.y+cup_cap_control_offset};
-                render_DrawLineBezierCubic(rc, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color);
+                render_DrawLineBezierCubic(rc, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color, 0);
               } else if (Get_Flag(p->flags, Process_Flag_Cap)) {
                 // draw cap
                 Vector2 pos0 = get_process_wire_position(&context, view, p, shape, Process_Connection_In, 0);
                 Vector2 pos1 = get_process_wire_position(&context, view, p, shape, Process_Connection_In, 1);
                 Vector2 ctrl0 = (Vector2){pos0.x, pos0.y-cup_cap_control_offset};
                 Vector2 ctrl1 = (Vector2){pos1.x, pos1.y-cup_cap_control_offset};
-                render_DrawLineBezierCubic(rc, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color);
+                render_DrawLineBezierCubic(rc, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color ,0);
               } else if (Get_Flag(p->flags, Process_Flag_Identity)) {
                 // draw "identity" process (just a wire)
                 Vector2 pos0 = get_process_wire_position(&context, view, p, shape, Process_Connection_In, 0);
                 Vector2 pos1 = get_process_wire_position(&context, view, p, shape, Process_Connection_Out, 0);
-                render_DrawLineBezierCubic(rc, pos0, pos1, pos1, pos0, thickness, stroke_color);
+                render_DrawLineBezierCubic(rc, pos0, pos1, pos1, pos0, thickness, stroke_color, 0);
               } else {
                 switch(shape.kind) {
                 case Process_Shape_TriangleStrip: {
@@ -3085,7 +3077,7 @@ int main(void) {
                   Vector2 position = get_process_position(&context, view, p);
                   position = GetWorldToScreen2D(position, view->camera);
                   Half_Circle_Points hc_points = get_half_circle_points(&context, view, shape, p, position, text_width, shape.downward);
-                  render_DrawLineBezierCubic_(rc, hc_points.first_point, hc_points.second_point, hc_points.first_control, hc_points.second_control, thickness, stroke_color, 1);
+                  render_DrawLineBezierCubic(rc, hc_points.first_point, hc_points.second_point, hc_points.first_control, hc_points.second_control, thickness, stroke_color, 1);
                 } break;
                 default: Assert(0);
                 }
@@ -3157,7 +3149,7 @@ int main(void) {
               thickness *= view->camera.zoom;
 
               // draw wire
-              render_DrawLineBezierCubic_(rc, out_position, in_position, out_control, in_control, thickness, stroke_color, 0);
+              render_DrawLineBezierCubic(rc, out_position, in_position, out_control, in_control, thickness, stroke_color, 0);
 
               // draw out wire-box
               if (connected_out_active || is_active) {
@@ -3188,7 +3180,7 @@ int main(void) {
 
             F32 thickness = view->camera.zoom * global_line_thickness;
 
-            render_DrawLineBezierCubic(rc, position, context.ui_state.mouse_position, from_control, to_control, thickness, stroke_color);
+            render_DrawLineBezierCubic(rc, position, context.ui_state.mouse_position, from_control, to_control, thickness, stroke_color, 0);
           }
         }
 
