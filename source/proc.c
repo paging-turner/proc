@@ -2157,18 +2157,18 @@ function Process_Shape get_process_shape(
     if ((F32)text_width > half_width) {
       half_width = 0.5f*(2.0f*padding + (F32)text_width);
     }
-    shape.kind = Process_Shape_TriangleStrip;
+    shape.kind = Process_Shape_TriangleFan;
     shape.point_count = 4;
     shape.triangle_count = 2;
     shape.points[0].x = position.x + half_width;
     shape.points[0].y = position.y - half_size;
     shape.points[1].x = position.x - half_width;
     shape.points[1].y = position.y - half_size;
-    shape.points[2].x = position.x + half_width;
+    shape.points[2].x = position.x - half_width;
     shape.points[2].y = position.y + half_size;
-    shape.points[3].x = position.x - half_width;
+    shape.points[3].x = position.x + half_width;
     shape.points[3].y = position.y + half_size;
-    shape.center = get_percentage_between_points(shape.points[0], shape.points[3], 0.5f);
+    shape.center = get_percentage_between_points(shape.points[0], shape.points[2], 0.5f);
     shape.new_wire_position = shape.points[0];
   } else if (has_in) {
     F32 width = (2.0f*padding + p->in_count*spacing);
