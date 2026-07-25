@@ -104,10 +104,13 @@ function S32 create_bezier_triangle_fan(Vector2 first_point, Vector2 second_poin
 #define Connected_Path_Point_Count_From_Point_Count(pc)\
  ((pc)>=3 ? (4 + 4*((pc)-2)) : 0)
 
-typedef struct Connected_Path {
+#define Triangle_Count_From_Point_Count(pc)\
+ ((pc)>=3 ? ((pc)-2) : 0)
+
+typedef struct Buffer_V2 {
   U32 point_count;
   Vector2 *points;
-} Connected_Path;
+} Buffer_V2;
 
 
 
@@ -384,6 +387,29 @@ function Vector2 get_bezier_point(Vector2 first_point, Vector2 second_point, Vec
 }
 
 
+function Buffer_V2 get_bezier_points(
+  Arena *arena,
+  Vector2 start,
+  Vector2 end,
+  Vector2 start_control,
+  Vector2 end_control
+  ) {
+  Buffer_V2 buffer = (Buffer_V2){0};
+  U32 point_count = Points_Per_Wire;
+  buffer.points = push_array(arena, Vector2, point_count);
+
+  if (buffer.points) {
+    buffer.point_count = point_count;
+
+    for (U32 i = 0; i < point_count; ++i) {
+      F32 t = (F32)i / (F32)(point_count-1);
+      buffer.points[i] = get_bezier_point(start, end, start_control, end_control, t);
+    }
+  }
+
+  return buffer;
+}
+
 
 /*
   This assumes that the bezier is convex, otherwise the triangles might get wonky.
@@ -417,14 +443,14 @@ function S32 create_bezier_triangle_fan(
 
 
 
-function Connected_Path get_connected_path(
+function Buffer_V2 get_connected_path(
   Arena *arena,
   Vector2 *points,
   U32 point_count,
   F32 thickness,
   B32 closed
   ) {
-  Connected_Path result = (Connected_Path){0};
+  Buffer_V2 result = (Buffer_V2){0};
   F32 half_thickness = 0.5f * thickness;
 
   if (closed) {

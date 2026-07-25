@@ -279,6 +279,9 @@ Define_Keybind_And_Action(
       if (Get_Flag(view->flags, View_Flag_Active)) {
         for (Process *p = view->processes.first; p != 0; p = p->next) {
           // per-process environment
+          if (IsKeyPressed(KEY_GRAVE)) {
+            B32 hmmm = 0;
+          }
           env->selection = get_process_selection(env->context, view, p);
           env->view = view;
           env->is_active = is_active_process(env->context, p);

@@ -16,6 +16,8 @@
 #include "../libraries/ryn_prof.h"
 
 
+// TODO: Points_Per_Wire should probably be dynamic...
+#define Points_Per_Wire 24
 #include "../source/core.h"
 #include "../source/render.h"
 
@@ -2127,6 +2129,7 @@ function Process_Shape get_process_shape(
   View *view,
   Process *p
   ) {
+  // TODO: process wire shapes, so that we can make wires hot by hovering
   Process_Shape shape = {0};
   U64 arena_pop_pos = arena_current_pos(context->temp_arena);
 
@@ -2149,7 +2152,32 @@ function Process_Shape get_process_shape(
 
   B32 rounded = Get_Flag(context->flags, Context_Flag_RoundedShapes);
 
-  if (as_box || (has_in && has_out)) {
+  if (Get_Flag(p->flags, Process_Flag_Wire)) {
+    // @Copypasta "draw wires"
+    Process_Shape out_shape = get_process_shape(context, view, p->out);
+    Process_Shape in_shape = get_process_shape(context, view, p->in);
+
+    Vector2 out_position = get_process_wire_position(context, view, p->out, out_shape, Process_Connection_Out, p->which_out);
+    Vector2 in_position = get_process_wire_position(context, view, p->in, in_shape, Process_Connection_In, p->which_in);
+
+    Vector2 out_control = out_position;
+    out_control.y -= view->camera.zoom * 30.0f;
+    Vector2 in_control = in_position;
+    in_control.y += view->camera.zoom * 30.0f;
+
+    B32 is_active = is_active_process(context, p) || context->hot_process.process == p;
+    F32 thickness = is_active ? global_active_line_thickness : global_line_thickness;
+    thickness *= view->camera.zoom;
+
+    Buffer_V2 bez_points = get_bezier_points(context->render_arena, out_position, in_position, out_control, in_control);
+    Buffer_V2 strip_points = get_connected_path(context->render_arena, bez_points.points, bez_points.point_count, thickness, 0);
+
+    shape.kind = Process_Shape_TriangleStrip;
+    shape.points_ptr = strip_points.points;
+    shape.point_count = strip_points.point_count;
+    shape.triangle_count = Triangle_Count_From_Point_Count(strip_points.point_count);
+  }
+  else if (as_box || (has_in && has_out)) {
     // rectangular
     F32 max_conn = as_box ? 1.0f : (F32)Max(p->in_count, p->out_count);
     F32 half_width = 0.5f*(2.0f*padding + max_conn*spacing);
@@ -2327,7 +2355,7 @@ function B32 process_shape_contains_point(
     contains = triangle_fan_contains_point(shape.points, shape.triangle_count, point);
   } break;
   case Process_Shape_TriangleStrip: {
-    contains = triangle_strip_contains_point(shape.points, shape.triangle_count, point);
+    contains = triangle_strip_contains_point(shape.points_ptr, shape.triangle_count, point);
   } break;
   default: Assert(0);
   }
@@ -2388,7 +2416,7 @@ get_process_selection(Context *context, View *view, Process *p) {
         }
       }
 
-      if (selection.type == 0 && !Get_Flag(p->flags, Process_Flag_Wire)) {
+      if (selection.type == 0) {
         if (process_shape_contains_point(context, shape, context->ui_state.mouse_position)) {
           // process selection
           selection.type = Process_Selection_Process;
@@ -2506,20 +2534,11 @@ function void draw_process_with_triangle_fan(Context *context, Process_Shape sha
   render_DrawTriangleFan(rc, shape.points, shape.point_count, bg_color);
 
   // draw path
-  Connected_Path path = get_connected_path(context->render_arena, shape.points, shape.point_count, thickness, 1);
+  Buffer_V2 path = get_connected_path(context->render_arena, shape.points, shape.point_count, thickness, 1);
   render_DrawTriangleStrip(rc, path.points, path.point_count, stroke_color);
 }
 
 
-function void draw_process_with_triangle_strip(Context *context, Process_Shape shape, F32 thickness, Color bg_color, Color stroke_color) {
-  Render_Context *rc = &context->process_render_context;
-  // draw process background
-  render_DrawTriangleStrip(rc, shape.points, shape.point_count, bg_color);
-
-  // draw path
-  Connected_Path path = get_connected_path(context->render_arena, shape.points, shape.point_count, thickness, 1);
-  render_DrawTriangleStrip(rc, path.points, path.point_count, stroke_color);
-}
 
 
 
@@ -3038,7 +3057,7 @@ int main(void) {
                   if (rounded) {
                     draw_circular_process(&context, shape.center, shape.radius, thickness, invisible_bg_color, invisible_stroke_color);
                   } else {
-                    draw_process_with_triangle_strip(&context, shape, thickness, invisible_bg_color, invisible_stroke_color);
+                    draw_process_with_triangle_fan(&context, shape, thickness, invisible_bg_color, invisible_stroke_color);
                   }
                 }
               } else if (Get_Flag(p->flags, Process_Flag_Cup)) {
@@ -3062,9 +3081,6 @@ int main(void) {
                 render_DrawLineBezierCubic(rc, pos0, pos1, pos1, pos0, thickness, stroke_color, 0);
               } else {
                 switch(shape.kind) {
-                case Process_Shape_TriangleStrip: {
-                  draw_process_with_triangle_strip(&context, shape, thickness, bg_color, stroke_color);
-                } break;
                 case Process_Shape_TriangleFan: {
                   draw_process_with_triangle_fan(&context, shape, thickness, bg_color, stroke_color);
                 } break;
@@ -3122,16 +3138,17 @@ int main(void) {
             B32 is_invisible = Get_Flag(p->flags, Process_Flag_Invisible);
 
             if (is_wire && !is_invisible) {
+              Process_Shape shape = get_process_shape(&context, view, p);
+              // @Copypasta get_process_shape
               Process_Shape out_shape = get_process_shape(&context, view, p->out);
               Process_Shape in_shape = get_process_shape(&context, view, p->in);
 
               Vector2 out_position = get_process_wire_position(&context, view, p->out, out_shape, Process_Connection_Out, p->which_out);
               Vector2 in_position = get_process_wire_position(&context, view, p->in, in_shape, Process_Connection_In, p->which_in);
+              Vector2 delta = Vector2Subtract(context.ui_state.mouse_position, context.ui_state.active_position);
               if (Get_Flag(p->flags, Process_Flag_Drag_In)) {
-                Vector2 delta = Vector2Subtract(context.ui_state.mouse_position, context.ui_state.active_position);
                 in_position = Vector2Add(in_position, delta);
               } else if (Get_Flag(p->flags, Process_Flag_Drag_Out)) {
-                Vector2 delta = Vector2Subtract(context.ui_state.mouse_position, context.ui_state.active_position);
                 out_position = Vector2Add(out_position, delta);
               }
 

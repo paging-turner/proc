@@ -289,6 +289,7 @@ struct Process_Shape {
   Process_Shape_Kind kind;
 #define Process_Shape_Max_Points 16
   Vector2 points[Process_Shape_Max_Points];
+  Vector2 *points_ptr;
   S32 triangle_count;
   F32 radius;
   S32 point_count;

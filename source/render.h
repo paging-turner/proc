@@ -13,6 +13,7 @@ typedef enum {
   render_command_DrawLine,
   render_command_DrawLineBezierCubic,
   render_command_DrawTriangleStrip,
+  render_command_DrawTriangleStrip_P,
   render_command_DrawTriangleFan,
   render_command_DrawCircle,
   render_command_DrawCircleLines,
@@ -186,11 +187,13 @@ function void render_DrawLine(Render_Context *rc, int startPosX, int startPosY, 
 }
 
 
+
+
 function void render_DrawLineBezierCubic(Render_Context *rc, Vector2 startPos, Vector2 endPos, Vector2 startControlPos, Vector2 endControlPos, float thick, Color color, B32 closed) {
   render_command *Command = create_render_command(rc);
 
   if (Command) {
-    U32 point_count = 24; // TODO: better way of determining point count
+    U32 point_count = Points_Per_Wire;
     Vector2 *points = push_array(rc->arena, Vector2, point_count);
 
     if (points) {
@@ -201,7 +204,7 @@ function void render_DrawLineBezierCubic(Render_Context *rc, Vector2 startPos, V
       }
 
       // get connected-path from bezier-path
-      Connected_Path connected_path = get_connected_path(rc->arena, points, point_count, thick, closed);
+      Buffer_V2 connected_path = get_connected_path(rc->arena, points, point_count, thick, closed);
 
       Command->Kind = render_command_DrawLineBezierCubic;
       Command->PointCount = connected_path.point_count;
@@ -213,6 +216,16 @@ function void render_DrawLineBezierCubic(Render_Context *rc, Vector2 startPos, V
 
 
 
+function void render_DrawTriangleStrip_P(Render_Context *rc, Vector2 *Points, S32 PointCount, Color Color) {
+  render_command *Command = create_render_command(rc);
+
+  if (Command) {
+    Command->Kind = render_command_DrawTriangleStrip_P;
+    Command->Points_Ptr = Points;
+    Command->PointCount = PointCount;
+    Command->Color = Color;
+  }
+}
 
 
 
@@ -267,7 +280,7 @@ function void render_DrawCircleLines(Render_Context *rc, int centerX, int center
       points[i].y = centerY + radius*sin_F32(t);
     }
 
-    Connected_Path connected_path = get_connected_path(rc->arena, points, point_count, thickness, 1);
+    Buffer_V2 connected_path = get_connected_path(rc->arena, points, point_count, thickness, 1);
 
     if (Command) {
       Command->Kind = render_command_DrawCircleLines;
@@ -311,6 +324,7 @@ function void render_Commands(Render_Context *rc) {
     case render_command_DrawLine: { DrawLineEx((Vector2){C->X, C->Y}, (Vector2){C->X2, C->Y2}, C->Thickness, C->Color); } break;
     case render_command_DrawLineBezierCubic: { DrawTriangleStrip(C->Points_Ptr, C->PointCount, C->Color); } break;
     case render_command_DrawTriangleStrip: { DrawTriangleStrip(C->Points, C->PointCount, C->Color); } break;
+    case render_command_DrawTriangleStrip_P: { DrawTriangleStrip(C->Points_Ptr, C->PointCount, C->Color); } break;
     case render_command_DrawTriangleFan: { DrawTriangleFan(C->Points, C->PointCount, C->Color); } break;
     case render_command_DrawCircle: { DrawCircle(C->X, C->Y, C->Radius, C->Color); } break;
     case render_command_DrawCircleLines: { DrawTriangleStrip(C->Points_Ptr, C->PointCount, C->Color); } break;
