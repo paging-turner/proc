@@ -383,13 +383,25 @@ Define_Keybind_And_Action(
     if (Get_Flag(env->context->flags, Context_Flag_Dragging)) {
       if (context->ui_state.mouse_moved) {
         // update positions of active processes
+        B32 updated = 0;
         for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
-          Vector2 new_position = get_process_position(context, &context->views[View_Kind_Procs], a);
-          Editable_Process new_a = get_editable_process(context->process_edit_list, a);
-          new_a.process.position = new_position;
-          add_process_to_process_edit_list(context, a, Proc_Trie_Edit_Update, new_a.process);
+          if (Get_Flag(a->flags, Process_Flag_Wire)) {
+            // TODO: save these changes into the proc-trie!!!!!
+            Camera2D *camera = &env->view->camera;
+            Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position, *camera);
+            a->inner_position = mouse_world_position;
+          }
+          else {
+            Vector2 new_position = get_process_position(context, &context->views[View_Kind_Procs], a);
+            Editable_Process new_a = get_editable_process(context->process_edit_list, a);
+            new_a.process.position = new_position;
+            add_process_to_process_edit_list(context, a, Proc_Trie_Edit_Update, new_a.process);
+            updated = 1;
+          }
         }
-        gather_processes_from_trie(context);
+        if (updated) {
+          gather_processes_from_trie(context);
+        }
       }
       Unset_Flag(env->context->flags, Context_Flag_Dragging);
     }

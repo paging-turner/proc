@@ -45,7 +45,9 @@ struct Process {
   B32 flags;
   Vector2 position;
 
-  /* String_Chunk_List label; */
+  Vector2 inner_position; // TODO: start of with just one inner position, to figure out some details. BUT, we should eventually allow an arbitrary amount of inner-positions.
+  /* Buffer_V2 *inner_positions; // NOTE: used for extra points in a wire's curve */
+
   Piece_Table *label;
 
   union {
@@ -437,6 +439,7 @@ typedef enum View_Kind {
   View_Kind_Trie,
   View_Kind__Count,
 } View_Kind;
+StaticAssert((View_Kind__Count <= View_Count), Max_View_Count);
 
 typedef enum View_Flag {
   View_Flag_Active   = 1 << 0,
