@@ -302,6 +302,10 @@ struct Process_Shape {
   Vector2 new_wire_position;
 };
 
+typedef struct Bezier_Points {
+  Buffer_V2 controls;
+  Buffer_V2 path;
+} Bezier_Points;
 
 
 //////////////////////////////////////

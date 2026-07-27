@@ -2124,78 +2124,68 @@ function Vector2 get_process_size(
 }
 
 
-function Buffer_V2 get_wire_pre_bezier_points(
+
+
+
+function Bezier_Points get_wire_bezier_points(
   Context *context,
   View *view,
   Process *w,
   B32 is_active
   ) {
-  Arena *arena = context->temp_arena;
-  Buffer_V2 buffer = (Buffer_V2){0};
-  B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging) && is_active;
-  B32 hacky_inner_position_set = w->inner_position.x != 0.0f && w->inner_position.y != 0.0f;
-  B32 use_inner_position = is_dragging || hacky_inner_position_set;
+  Bezier_Points result = (Bezier_Points){0};
+  /* Buffer_V2 pre_buffer = (Buffer_V2){0}; */
+  { // gather inner points into pre-buffer
+    B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging) && is_active;
+    B32 hacky_inner_position_set = w->inner_position.x != 0.0f && w->inner_position.y != 0.0f;
+    B32 use_inner_position = is_dragging || hacky_inner_position_set;
 
-  if (w->out && w->in) {
-    Process_Shape out_shape = get_process_shape(context, view, w->out);
-    Process_Shape in_shape = get_process_shape(context, view, w->in);
-    Vector2 out_position = get_process_wire_position(context, view, w->out, out_shape, Process_Connection_Out, w->which_out);
-    Vector2 in_position = get_process_wire_position(context, view, w->in, in_shape, Process_Connection_In, w->which_in);
+    if (w->out && w->in) {
+      Process_Shape out_shape = get_process_shape(context, view, w->out);
+      Process_Shape in_shape = get_process_shape(context, view, w->in);
+      Vector2 out_position = get_process_wire_position(context, view, w->out, out_shape, Process_Connection_Out, w->which_out);
+      Vector2 in_position = get_process_wire_position(context, view, w->in, in_shape, Process_Connection_In, w->which_in);
 
-    if (use_inner_position) {
-      Vector2 inner_position;
-      if (is_dragging) {
-        inner_position = GetScreenToWorld2D(context->ui_state.mouse_position, view->camera);
+      if (use_inner_position) {
+        Vector2 inner_position;
+        if (is_dragging) {
+          inner_position = GetScreenToWorld2D(context->ui_state.mouse_position, view->camera);
+        }
+        else {
+          inner_position = w->inner_position;
+        }
+
+        // TODO: this will need to eventually handle arbitrary inner-positions
+        Vector2 *points = push_array(context->temp_arena, Vector2, 3);
+        if (points) {
+          result.controls.point_count = 3;
+          result.controls.points = points;
+          result.controls.points[0] = out_position;
+          result.controls.points[1] = GetWorldToScreen2D(inner_position, view->camera);
+          result.controls.points[2] = in_position;
+        }
       }
       else {
-        inner_position = w->inner_position;
-      }
-
-      // TODO: this will need to eventually handle arbitrary inner-positions
-      Vector2 *points = push_array(arena, Vector2, 3);
-      if (points) {
-        buffer.point_count = 3;
-        buffer.points = points;
-        buffer.points[0] = out_position;
-        buffer.points[1] = GetWorldToScreen2D(inner_position, view->camera);
-        buffer.points[2] = in_position;
-      }
-    }
-    else {
-      Vector2 *points = push_array(arena, Vector2, 2);
-      if (points) {
-        buffer.point_count = 2;
-        buffer.points = points;
-        buffer.points[0] = out_position;
-        buffer.points[1] = in_position;
+        Vector2 *points = push_array(context->temp_arena, Vector2, 2);
+        if (points) {
+          result.controls.point_count = 2;
+          result.controls.points = points;
+          result.controls.points[0] = out_position;
+          result.controls.points[1] = in_position;
+        }
       }
     }
   }
 
-  return buffer;
-}
-
-
-
-
-function Buffer_V2 get_wire_bezier_points(
-  Context *context,
-  View *view,
-  Process *w,
-  B32 is_active
-  ) {
-  Buffer_V2 pre_buffer = get_wire_pre_bezier_points(context, view, w, is_active);
-  Buffer_V2 buffer = (Buffer_V2){0};
-
-  if (pre_buffer.point_count >= 2) {
-    U32 bez_curve_count = pre_buffer.point_count-1;
+  if (result.controls.point_count >= 2) {
+    U32 bez_curve_count = result.controls.point_count-1;
     Buffer_V2 *inner_bez_buffers = push_array(context->temp_arena, Buffer_V2, bez_curve_count);
     U32 total_bez_points = 0;
 
     if (inner_bez_buffers) {
       for (U32 i = 0; i < bez_curve_count; ++i) {
-        Vector2 out_position = pre_buffer.points[i];
-        Vector2 in_position = pre_buffer.points[i+1];
+        Vector2 out_position = result.controls.points[i];
+        Vector2 in_position = result.controls.points[i+1];
 
         // TODO: we need to handle inner-controls differently
         Vector2 out_control = out_position;
@@ -2215,14 +2205,14 @@ function Buffer_V2 get_wire_bezier_points(
 
     // fill out the resulting buffer's points
     if (total_bez_points) {
-      buffer.points = push_array(context->render_arena, Vector2, total_bez_points);
-      if (buffer.points) {
-        buffer.point_count = total_bez_points;
+      result.path.points = push_array(context->render_arena, Vector2, total_bez_points);
+      if (result.path.points) {
+        result.path.point_count = total_bez_points;
         U32 point_index = 0;
         for (U32 i = 0; i < bez_curve_count; ++i) {
           Buffer_V2 *inner_buffer = inner_bez_buffers + i;
           for (U32 j = 0; j < inner_buffer->point_count; ++j) {
-            buffer.points[point_index] = inner_buffer->points[j];
+            result.path.points[point_index] = inner_buffer->points[j];
             point_index += 1;
           }
         }
@@ -2242,10 +2232,10 @@ function Buffer_V2 get_wire_bezier_points(
     Vector2 in_control = in_position;
     in_control.y += view->camera.zoom * 30.0f;
 
-    buffer = get_bezier_points(context->render_arena, out_position, in_position, out_control, in_control);
+    result.path = get_bezier_points(context->render_arena, out_position, in_position, out_control, in_control);
   }
 
-  return buffer;
+  return result;
 }
 
 
@@ -2284,8 +2274,8 @@ function Process_Shape get_process_shape(
     F32 thickness = is_active ? global_active_line_thickness : global_line_thickness;
     thickness *= view->camera.zoom;
 
-    Buffer_V2 bez_points = get_wire_bezier_points(context, view, p, is_active);
-    Buffer_V2 strip_points = get_connected_path(context->render_arena, bez_points.points, bez_points.point_count, thickness, 0);
+    Bezier_Points bez_points = get_wire_bezier_points(context, view, p, is_active);
+    Buffer_V2 strip_points = get_connected_path(context->render_arena, bez_points.path.points, bez_points.path.point_count, thickness, 0);
 
     shape.kind = Process_Shape_TriangleStrip;
     shape.points_ptr = strip_points.points;
@@ -3267,9 +3257,19 @@ int main(void) {
               F32 thickness = is_active ? global_active_line_thickness : global_line_thickness;
               thickness *= view->camera.zoom;
 
-              Buffer_V2 bez_points = get_wire_bezier_points(&context, view, p, is_active);
-              Buffer_V2 strip = get_connected_path(context.render_arena, bez_points.points, bez_points.point_count, thickness, 0);
+              Bezier_Points bez_points = get_wire_bezier_points(&context, view, p, is_active);
+              Buffer_V2 strip = get_connected_path(context.render_arena, bez_points.path.points, bez_points.path.point_count, thickness, 0);
               render_DrawTriangleStrip_P(rc, strip.points, strip.point_count, stroke_color);
+
+              if (is_active) {
+                // draw bezier controls
+                for (U32 i = 0; i < bez_points.controls.point_count; ++i) {
+                  Vector2 center = bez_points.controls.points[i];
+                  F32 radius = 4.0f * view->camera.zoom;
+                  Color color = (Color){200, 20, 180, 255};
+                  render_DrawCircleLines(rc, center.x, center.y, radius, 2.0f, color);
+                }
+              }
 
               // draw out wire-box
               if (connected_out_active || is_active) {
