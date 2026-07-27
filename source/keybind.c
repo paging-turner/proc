@@ -389,7 +389,10 @@ Define_Keybind_And_Action(
             // TODO: save these changes into the proc-trie!!!!!
             Camera2D *camera = &env->view->camera;
             Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position, *camera);
-            a->inner_position = mouse_world_position;
+            Editable_Process new_a = get_editable_process(context->process_edit_list, a);
+            new_a.process.inner_position = mouse_world_position;
+            add_process_to_process_edit_list(context, a, Proc_Trie_Edit_Update, new_a.process);
+            updated = 1;
           }
           else {
             Vector2 new_position = get_process_position(context, &context->views[View_Kind_Procs], a);

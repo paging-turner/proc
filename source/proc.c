@@ -2127,10 +2127,14 @@ function Vector2 get_process_size(
 function Buffer_V2 get_wire_pre_bezier_points(
   Context *context,
   View *view,
-  Process *w
+  Process *w,
+  B32 is_active
   ) {
   Arena *arena = context->temp_arena;
   Buffer_V2 buffer = (Buffer_V2){0};
+  B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging) && is_active;
+  B32 hacky_inner_position_set = w->inner_position.x != 0.0f && w->inner_position.y != 0.0f;
+  B32 use_inner_position = is_dragging || hacky_inner_position_set;
 
   if (w->out && w->in) {
     Process_Shape out_shape = get_process_shape(context, view, w->out);
@@ -2138,14 +2142,22 @@ function Buffer_V2 get_wire_pre_bezier_points(
     Vector2 out_position = get_process_wire_position(context, view, w->out, out_shape, Process_Connection_Out, w->which_out);
     Vector2 in_position = get_process_wire_position(context, view, w->in, in_shape, Process_Connection_In, w->which_in);
 
-    if (w->inner_position.x != 0.0f && w->inner_position.y != 0.0f) {
+    if (use_inner_position) {
+      Vector2 inner_position;
+      if (is_dragging) {
+        inner_position = GetScreenToWorld2D(context->ui_state.mouse_position, view->camera);
+      }
+      else {
+        inner_position = w->inner_position;
+      }
+
       // TODO: this will need to eventually handle arbitrary inner-positions
       Vector2 *points = push_array(arena, Vector2, 3);
       if (points) {
         buffer.point_count = 3;
         buffer.points = points;
         buffer.points[0] = out_position;
-        buffer.points[1] = GetWorldToScreen2D(w->inner_position, view->camera);
+        buffer.points[1] = GetWorldToScreen2D(inner_position, view->camera);
         buffer.points[2] = in_position;
       }
     }
@@ -2169,9 +2181,10 @@ function Buffer_V2 get_wire_pre_bezier_points(
 function Buffer_V2 get_wire_bezier_points(
   Context *context,
   View *view,
-  Process *w
+  Process *w,
+  B32 is_active
   ) {
-  Buffer_V2 pre_buffer = get_wire_pre_bezier_points(context, view, w);
+  Buffer_V2 pre_buffer = get_wire_pre_bezier_points(context, view, w, is_active);
   Buffer_V2 buffer = (Buffer_V2){0};
 
   if (pre_buffer.point_count >= 2) {
@@ -2271,7 +2284,7 @@ function Process_Shape get_process_shape(
     F32 thickness = is_active ? global_active_line_thickness : global_line_thickness;
     thickness *= view->camera.zoom;
 
-    Buffer_V2 bez_points = get_wire_bezier_points(context, view, p);
+    Buffer_V2 bez_points = get_wire_bezier_points(context, view, p, is_active);
     Buffer_V2 strip_points = get_connected_path(context->render_arena, bez_points.points, bez_points.point_count, thickness, 0);
 
     shape.kind = Process_Shape_TriangleStrip;
@@ -3254,7 +3267,7 @@ int main(void) {
               F32 thickness = is_active ? global_active_line_thickness : global_line_thickness;
               thickness *= view->camera.zoom;
 
-              Buffer_V2 bez_points = get_wire_bezier_points(&context, view, p);
+              Buffer_V2 bez_points = get_wire_bezier_points(&context, view, p, is_active);
               Buffer_V2 strip = get_connected_path(context.render_arena, bez_points.points, bez_points.point_count, thickness, 0);
               render_DrawTriangleStrip_P(rc, strip.points, strip.point_count, stroke_color);
 
