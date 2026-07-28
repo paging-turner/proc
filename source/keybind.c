@@ -76,8 +76,8 @@ Define_Keybind_And_Action(
       if (Get_Flag(env->p->flags, Process_Flag_Wire)) {
         Process_Shape out_shape = get_process_shape(env->context, env->view, env->p->out);
         Process_Shape in_shape = get_process_shape(env->context, env->view, env->p->in);
-        Vector2 out_position = get_process_wire_position(env->context, env->view, env->p->out, out_shape, Process_Connection_Out, env->p->which_out);
-        Vector2 in_position = get_process_wire_position(env->context, env->view, env->p->in, in_shape, Process_Connection_In, env->p->which_in);
+        Vector2 out_position = get_wire_position_from_wire(env->context, env->view, env->p, out_shape, Process_Connection_Out);
+        Vector2 in_position = get_wire_position_from_wire(env->context, env->view, env->p, in_shape, Process_Connection_In);
 
         if (rectangle_contains_point(selection_rectangle, out_position) ||
             rectangle_contains_point(selection_rectangle, in_position)) {
@@ -338,7 +338,7 @@ Define_Keybind_And_Action(
       B32 out_selection = selection.type == Process_Selection_Out;
       if (in_selection || out_selection) {
         // select wire
-        Process *wire = get_process_wire_by_selection(context, selection);
+        Process *wire = get_wire_from_selection(context, selection);
         B32 is_active_wire = is_active_process(context, wire);
 
         if (wire) {
@@ -360,7 +360,8 @@ Define_Keybind_And_Action(
           SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, env->p, next_active, 0);
         }
       } else if (selection.type == Process_Selection_Process) {
-        if (Get_Flag(context->flags, Context_Flag_NewWire)) {
+        if (Get_Flag(context->flags, Context_Flag_NewWire) &&
+            !Get_Flag(env->p->flags, Process_Flag_Wire)) {
           // connect processes
           connect_processes(context, context->active_processes.first, env->p);
           exit_add_wire_mode(context);
@@ -461,7 +462,7 @@ Define_Keybind_And_Action(
   if (Test_Keybind(env, Enter)) {
     handled = 1;
     if (selection.type == Process_Selection_In || selection.type == Process_Selection_Out) {
-      Process *wire = get_process_wire_by_selection(context, selection);
+      Process *wire = get_wire_from_selection(context, selection);
       if (wire) {
         if (is_active_process(context, wire)) {
           remove_process_from_active_processes(context, wire);

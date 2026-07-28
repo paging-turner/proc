@@ -40,7 +40,6 @@ Define_Keybind_Action(
   ) {
   B32 handled = 0;
   Context *context = env->context;
-  /* Process_Selection selection = env->selection; */
 
   if (Test_Keybind(env, Enter)) {
     handled = 1;
@@ -72,7 +71,11 @@ Define_Keybind_Action(
       Connection_Result conn_res = (Connection_Result){0};
       conn_res.in = context->hot_process.process;
       for (U32 i = 0; i < active_count; ++i) {
-        conn_res = connect_processes_no_gather(context, sorted_processes[i], conn_res.in);
+        B32 out_is_not_wire = !Get_Flag(sorted_processes[i]->flags, Process_Flag_Wire);
+        B32 in_is_not_wire = !Get_Flag(conn_res.in->flags, Process_Flag_Wire);
+        if (out_is_not_wire && in_is_not_wire) {
+          conn_res = connect_processes_no_gather(context, sorted_processes[i], conn_res.in);
+        }
       }
     }
 

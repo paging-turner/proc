@@ -1560,13 +1560,13 @@ function Vector2 get_process_position(Context *context, View *view, Process *pro
 
 
 
-function Vector2 get_process_wire_position(
+function Vector2 get_wire_position_from_conn_index(
   Context *context,
   View *view,
-  Process *p,
+  Process *connected_process,
   Process_Shape shape,
   Process_Connection conn,
-  U32 wire_index
+  U32 conn_index
   ) {
   F32 padding = view->camera.zoom * global_process_wire_padding;
   Vector2 p0;
@@ -1599,12 +1599,36 @@ function Vector2 get_process_wire_position(
   Vector2 delta = Vector2Subtract(p0, p1);
   Vector2 delta_norm = Vector2Normalize(delta);
   F32 inner_distance = fmax(0.0f, Vector2Distance(p0, p1) - 2.0f*padding);
-  F32 chunk_size = inner_distance / (F32)(p->conn_count[conn]+1);
-  F32 distance_from_point = padding + chunk_size*(F32)(wire_index+1);
+  F32 chunk_size = inner_distance / (F32)(connected_process->conn_count[conn]+1);
+  F32 distance_from_point = padding + chunk_size*(F32)(conn_index+1);
 
   Vector2 wire_position = Vector2Add(p1, Vector2Scale(delta_norm, distance_from_point));
 
   return wire_position;
+}
+
+
+
+
+function Vector2 get_wire_position_from_wire(
+  Context *context,
+  View *view,
+  Process *wire,
+  Process_Shape shape,
+  Process_Connection conn
+  ) {
+  Process *connected_process = wire->conn[conn];
+  U32 conn_index = wire->which_conn[conn];
+
+  Vector2 pos = get_wire_position_from_conn_index(
+    context,
+    view,
+    connected_process,
+    shape,
+    conn,
+    conn_index);
+
+  return pos;
 }
 
 
@@ -1640,7 +1664,7 @@ function Rectangle get_selection_rectangle(Context *context) {
 }
 
 
-function Process *get_process_wire_by_selection(Context *context, Process_Selection selection) {
+function Process *get_wire_from_selection(Context *context, Process_Selection selection) {
   Process *wire = 0;
 
   for (Process *p = context->views[View_Kind_Procs].processes.first; p != 0; p = p->next) {
@@ -1798,7 +1822,6 @@ function void add_wire_connection(
 
 
 
-// TODO: inline this function since it's only used in `delete_process`
 function void handle_deleted_wire(
   Context *context,
   Process *wire,
@@ -2134,7 +2157,7 @@ function Bezier_Points get_wire_bezier_points(
   B32 is_active
   ) {
   Bezier_Points result = (Bezier_Points){0};
-  /* Buffer_V2 pre_buffer = (Buffer_V2){0}; */
+
   { // gather inner points into pre-buffer
     B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging) && is_active;
     B32 hacky_inner_position_set = w->inner_position.x != 0.0f && w->inner_position.y != 0.0f;
@@ -2143,8 +2166,8 @@ function Bezier_Points get_wire_bezier_points(
     if (w->out && w->in) {
       Process_Shape out_shape = get_process_shape(context, view, w->out);
       Process_Shape in_shape = get_process_shape(context, view, w->in);
-      Vector2 out_position = get_process_wire_position(context, view, w->out, out_shape, Process_Connection_Out, w->which_out);
-      Vector2 in_position = get_process_wire_position(context, view, w->in, in_shape, Process_Connection_In, w->which_in);
+      Vector2 out_position = get_wire_position_from_wire(context, view, w, out_shape, Process_Connection_Out);
+      Vector2 in_position = get_wire_position_from_wire(context, view, w, in_shape, Process_Connection_In);
 
       if (use_inner_position) {
         Vector2 inner_position;
@@ -2224,8 +2247,8 @@ function Bezier_Points get_wire_bezier_points(
     Process_Shape out_shape = get_process_shape(context, view, w->out);
     Process_Shape in_shape = get_process_shape(context, view, w->in);
 
-    Vector2 out_position = get_process_wire_position(context, view, w->out, out_shape, Process_Connection_Out, w->which_out);
-    Vector2 in_position = get_process_wire_position(context, view, w->in, in_shape, Process_Connection_In, w->which_in);
+    Vector2 out_position = get_wire_position_from_wire(context, view, w, out_shape, Process_Connection_Out);
+    Vector2 in_position = get_wire_position_from_wire(context, view, w, in_shape, Process_Connection_In);
 
     Vector2 out_control = out_position;
     out_control.y -= view->camera.zoom * 30.0f;
@@ -2493,12 +2516,12 @@ get_process_selection(Context *context, View *view, Process *p) {
     } else {
       // check in wire-boxes
       for (U32 i = 0; i < p->in_count; ++i) {
-        Vector2 in_position = get_process_wire_position(context, view, p, shape, Process_Connection_In, i);
+        Vector2 in_position = get_wire_position_from_conn_index(context, view, p, shape, Process_Connection_In, i);
         Rectangle r = get_wire_box(context, view, in_position);
         if (rectangle_contains_point(r, context->ui_state.mouse_position)) {
           selection.type = Process_Selection_In;
           selection.index = i;
-          Process *wire = get_process_wire_by_selection(context, selection);
+          Process *wire = get_wire_from_selection(context, selection);
           context->hot_process.process = wire;
           selection.hot_id_assigned = 1;
           break;
@@ -2508,12 +2531,12 @@ get_process_selection(Context *context, View *view, Process *p) {
       if (selection.type == 0) {
         // check out wire-boxes
         for (U32 i = 0; i < p->out_count; ++i) {
-          Vector2 out_position = get_process_wire_position(context, view, p, shape, Process_Connection_Out, i);
+          Vector2 out_position = get_wire_position_from_conn_index(context, view, p, shape, Process_Connection_Out, i);
           Rectangle r = get_wire_box(context, view, out_position);
           if (rectangle_contains_point(r, context->ui_state.mouse_position)) {
             selection.type = Process_Selection_Out;
             selection.index = i;
-            Process *wire = get_process_wire_by_selection(context, selection);
+            Process *wire = get_wire_from_selection(context, selection);
             context->hot_process.process = wire;
             selection.hot_id_assigned = 1;
             break;
@@ -3167,22 +3190,22 @@ int main(void) {
                 }
               } else if (Get_Flag(p->flags, Process_Flag_Cup)) {
                 // draw cup
-                Vector2 pos0 = get_process_wire_position(&context, view, p, shape, Process_Connection_Out, 0);
-                Vector2 pos1 = get_process_wire_position(&context, view, p, shape, Process_Connection_Out, 1);
+                Vector2 pos0 = get_wire_position_from_conn_index(&context, view, p, shape, Process_Connection_Out, 0);
+                Vector2 pos1 = get_wire_position_from_conn_index(&context, view, p, shape, Process_Connection_Out, 1);
                 Vector2 ctrl0 = (Vector2){pos0.x, pos0.y+cup_cap_control_offset};
                 Vector2 ctrl1 = (Vector2){pos1.x, pos1.y+cup_cap_control_offset};
                 render_DrawLineBezierCubic(rc, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color, 0);
               } else if (Get_Flag(p->flags, Process_Flag_Cap)) {
                 // draw cap
-                Vector2 pos0 = get_process_wire_position(&context, view, p, shape, Process_Connection_In, 0);
-                Vector2 pos1 = get_process_wire_position(&context, view, p, shape, Process_Connection_In, 1);
+                Vector2 pos0 = get_wire_position_from_conn_index(&context, view, p, shape, Process_Connection_In, 0);
+                Vector2 pos1 = get_wire_position_from_conn_index(&context, view, p, shape, Process_Connection_In, 1);
                 Vector2 ctrl0 = (Vector2){pos0.x, pos0.y-cup_cap_control_offset};
                 Vector2 ctrl1 = (Vector2){pos1.x, pos1.y-cup_cap_control_offset};
                 render_DrawLineBezierCubic(rc, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color ,0);
               } else if (Get_Flag(p->flags, Process_Flag_Identity)) {
                 // draw "identity" process (just a wire)
-                Vector2 pos0 = get_process_wire_position(&context, view, p, shape, Process_Connection_In, 0);
-                Vector2 pos1 = get_process_wire_position(&context, view, p, shape, Process_Connection_Out, 0);
+                Vector2 pos0 = get_wire_position_from_conn_index(&context, view, p, shape, Process_Connection_In, 0);
+                Vector2 pos1 = get_wire_position_from_conn_index(&context, view, p, shape, Process_Connection_Out, 0);
                 render_DrawLineBezierCubic(rc, pos0, pos1, pos1, pos0, thickness, stroke_color, 0);
               } else {
                 switch(shape.kind) {
@@ -3246,8 +3269,8 @@ int main(void) {
               Process_Shape out_shape = get_process_shape(&context, view, p->out);
               Process_Shape in_shape = get_process_shape(&context, view, p->in);
 
-              Vector2 out_position = get_process_wire_position(&context, view, p->out, out_shape, Process_Connection_Out, p->which_out);
-              Vector2 in_position = get_process_wire_position(&context, view, p->in, in_shape, Process_Connection_In, p->which_in);
+              Vector2 out_position = get_wire_position_from_wire(&context, view, p, out_shape, Process_Connection_Out);
+              Vector2 in_position = get_wire_position_from_wire(&context, view, p, in_shape, Process_Connection_In);
 
               B32 is_active = is_active_process(&context, p) || context.hot_process.process == p;
               B32 connected_in_active = (is_active_process(&context, p->in) ||
