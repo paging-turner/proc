@@ -131,3 +131,12 @@ For now, we will have to manually test a bunch of features. This file exists to 
     3. Select one of the processes AND the connected wire
     4. Deleted the process and wire
     EXPECT: There should only be the non-deleted process present.
+
+
+------------------------------------------
+015 Connect proc with multiple in-conns
+    1. Create three processes
+    2. Connect the first two processes to the third
+    3. Create a fourth process
+    4. Connect the third (the proc with two in connections) to the fourth
+    BUG: The two in connections get swapped.

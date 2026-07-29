@@ -279,9 +279,6 @@ Define_Keybind_And_Action(
       if (Get_Flag(view->flags, View_Flag_Active)) {
         for (Process *p = view->processes.first; p != 0; p = p->next) {
           // per-process environment
-          if (IsKeyPressed(KEY_GRAVE)) {
-            B32 hmmm = 0;
-          }
           env->selection = get_process_selection(env->context, view, p);
           env->view = view;
           env->is_active = is_active_process(env->context, p);
@@ -367,7 +364,6 @@ Define_Keybind_And_Action(
           exit_add_wire_mode(context);
         } else {
           // select process
-          context->hot_process.process = env->p;
           if (!env->is_active) {
             clear_active_processes(context);
             SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, env->p, next_active, 0);
@@ -427,23 +423,6 @@ Define_Keybind_And_Action(
 
 
 
-
-Define_Keybind_And_Action(
-  MaybeSetHotProcess, Default,
-  Keybind_Behavior_Alternate, OnlyOnce, 0, 0, 0,
-  "Maybe select another process, or maybe set the context's hot-process to the keybind-environment's process."
-  ) {
-  if (env->selection.type == Process_Selection_Process) {
-    // process hover
-    if (env->context) {
-      env->context->hot_process.process = env->p;
-    }
-  }
-
-  return 0;
-}
-
-Define_Keybind_Order(MaybeSetHotProcess_Default, Before, ForAllProcessInteractions_Default);
 
 
 

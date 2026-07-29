@@ -1617,16 +1617,28 @@ function Vector2 get_wire_position_from_wire(
   Process_Shape shape,
   Process_Connection conn
   ) {
-  Process *connected_process = wire->conn[conn];
-  U32 conn_index = wire->which_conn[conn];
+  Vector2 pos = (Vector2){0};
 
-  Vector2 pos = get_wire_position_from_conn_index(
-    context,
-    view,
-    connected_process,
-    shape,
-    conn,
-    conn_index);
+  B32 out_being_dragged = (conn == Process_Connection_Out &&
+                           Get_Flag(wire->flags, Process_Flag_Drag_Out));
+  B32 in_being_dragged = (conn == Process_Connection_In &&
+                           Get_Flag(wire->flags, Process_Flag_Drag_In));
+
+  if (out_being_dragged || in_being_dragged) {
+    pos = context->ui_state.mouse_position;
+  }
+  else {
+    Process *connected_process = wire->conn[conn];
+    U32 conn_index = wire->which_conn[conn];
+
+    pos = get_wire_position_from_conn_index(
+      context,
+      view,
+      connected_process,
+      shape,
+      conn,
+      conn_index);
+  }
 
   return pos;
 }
@@ -2150,6 +2162,7 @@ function Vector2 get_process_size(
 
 
 
+
 function Bezier_Points get_wire_bezier_points(
   Context *context,
   View *view,
@@ -2514,7 +2527,7 @@ get_process_selection(Context *context, View *view, Process *p) {
       context->hot_process.process = p;
       selection.hot_id_assigned = 1;
     } else {
-      // check in wire-boxes
+      // check in wire-boxes from proc
       for (U32 i = 0; i < p->in_count; ++i) {
         Vector2 in_position = get_wire_position_from_conn_index(context, view, p, shape, Process_Connection_In, i);
         Rectangle r = get_wire_box(context, view, in_position);
@@ -2529,7 +2542,7 @@ get_process_selection(Context *context, View *view, Process *p) {
       }
 
       if (selection.type == 0) {
-        // check out wire-boxes
+        // check out wire-boxes from proc
         for (U32 i = 0; i < p->out_count; ++i) {
           Vector2 out_position = get_wire_position_from_conn_index(context, view, p, shape, Process_Connection_Out, i);
           Rectangle r = get_wire_box(context, view, out_position);
@@ -2540,6 +2553,29 @@ get_process_selection(Context *context, View *view, Process *p) {
             context->hot_process.process = wire;
             selection.hot_id_assigned = 1;
             break;
+          }
+        }
+      }
+
+      if (Get_Flag(p->flags, Process_Flag_Wire)) {
+        // check out wire-box from wire
+        if (selection.type == 0) {
+          Vector2 out_position = get_wire_position_from_wire(context, view, p, shape, Process_Connection_Out);
+          Rectangle r = get_wire_box(context, view, out_position);
+          if (rectangle_contains_point(r, context->ui_state.mouse_position)) {
+            selection.type = Process_Selection_Out;
+            context->hot_process.process = p;
+            selection.hot_id_assigned = 1;
+          }
+        }
+        // check in wire-box from wire
+        if (selection.type == 0) {
+          Vector2 in_position = get_wire_position_from_wire(context, view, p, shape, Process_Connection_In);
+          Rectangle r = get_wire_box(context, view, in_position);
+          if (rectangle_contains_point(r, context->ui_state.mouse_position)) {
+            selection.type = Process_Selection_In;
+            context->hot_process.process = p;
+            selection.hot_id_assigned = 1;
           }
         }
       }
