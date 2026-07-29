@@ -1596,6 +1596,11 @@ function Vector2 get_wire_position_from_conn_index(
   } break;
   }
 
+  // HACK: ensure that delta will point to the right
+  if (p0.x < p1.x) {
+    Swap(Vector2, p0, p1);
+  }
+
   Vector2 delta = Vector2Subtract(p0, p1);
   Vector2 delta_norm = Vector2Normalize(delta);
   F32 inner_distance = fmax(0.0f, Vector2Distance(p0, p1) - 2.0f*padding);
