@@ -57,7 +57,6 @@ Freeze_Member(Cold_Process, unused_bytes , 56);
 // Saves Functions
 //////////////////////////////////////
 function void write_save_file(Context *context, Arena *arena, String_Chunk_List file_name);
-function void open_file_and_replace_processes(Context *context, String_Chunk_List file_name_list);
 
 
 
@@ -68,6 +67,7 @@ function void set_as_current_file(Context *context, String_Chunk_List file_name)
 }
 
 function void write_save_file_v1(Context *context, Arena *arena, String_Chunk_List file_name) {
+#if 0
   // TODO: ensure that the Saves_Filepath directory exists before writing a file into it.
   os_set_current_directory(Saves_Filepath);
 
@@ -131,6 +131,7 @@ function void write_save_file_v1(Context *context, Arena *arena, String_Chunk_Li
     String8 file_name_str8 = string8_from_string_chunk_list(context->temp_arena, &file_name);
     os_file_write(file_name_str8, save_file_data);
   }
+#endif
 }
 
 function void write_save_file(Context *context, Arena *arena, String_Chunk_List file_name) {
@@ -138,6 +139,7 @@ function void write_save_file(Context *context, Arena *arena, String_Chunk_List 
 }
 
 function void open_file_and_replace_processes_v1(Context *context, String_Chunk_List file_name_list) {
+#if 0
   os_set_current_directory(Saves_Filepath);
   String8 file_name = string8_from_string_chunk_list(context->temp_arena, &file_name_list);
   String8 file_data = os_file_read(context->temp_arena, file_name);
@@ -195,6 +197,7 @@ function void open_file_and_replace_processes_v1(Context *context, String_Chunk_
       printf("[ Error ] Expected save file magic number of 0x%x but got 0x%x instead.\n", Save_File_Magic_Number, header->magic_number);
     }
   }
+#endif
 }
 
 

@@ -383,11 +383,19 @@ Define_Keybind_And_Action(
         B32 updated = 0;
         for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
           if (Get_Flag(a->flags, Process_Flag_Wire)) {
-            // TODO: save these changes into the proc-trie!!!!!
             Camera2D *camera = &env->view->camera;
             Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position, *camera);
             Editable_Process new_a = get_editable_process(context->process_edit_list, a);
-            new_a.process.inner_position = mouse_world_position;
+            {
+              // TODO: don't just update the first inner-position
+              if (new_a.process.inner_positions == 0) {
+                new_a.process.inner_positions = create_v2_chunk(context);
+              }
+              if (new_a.process.inner_positions) {
+                new_a.process.inner_positions->e[0] = mouse_world_position;
+                new_a.process.inner_positions->count = 1;
+              }
+            }
             add_process_to_process_edit_list(context, a, Proc_Trie_Edit_Update, new_a.process);
             updated = 1;
           }

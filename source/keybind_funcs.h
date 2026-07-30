@@ -57,13 +57,6 @@ function void clear_active_processes(Context *context) {
 
 
 
-function Process *push_permanent_process(Context *context) {
-  Process *p = push_struct(context->permanent_arena, Process);
-
-  return p;
-}
-
-
 
 function Process *create_detached_process(Context *context) {
   Process *p = context->free_processes.first;

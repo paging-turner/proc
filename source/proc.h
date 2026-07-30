@@ -43,10 +43,10 @@ struct Process {
   // Members that need to be saved when serializing.
   //////////////
   B32 flags;
+  U64 gen_id;
   Vector2 position;
 
-  Vector2 inner_position; // TODO: start of with just one inner position, to figure out some details. BUT, we should eventually allow an arbitrary amount of inner-positions.
-  /* Buffer_V2 *inner_positions; // NOTE: used for extra points in a wire's curve */
+  V2_Chunk *inner_positions; // NOTE: used for extra points in a wire's curve
 
   Piece_Table *label;
 
@@ -82,7 +82,6 @@ struct Process {
 
   Vector2 size;
   Vector2 margin;
-  U32 cold_index;
   Process *to_copied;
 
   Process *next;
@@ -168,10 +167,14 @@ typedef struct Keybind Keybind;
 function              void clear_process_list(Context *context, Process_List *list);
 function              void clear_active_processes(Context *context);
 function              void clear_ds_view_process_list(Context *context);
+function          Process *push_permanent_process(Context *context);
 function          Process *create_detached_process(Context *context);
 function          Process *create_process(Context *context);
 function     String_Chunk *create_string_chunk(Context *context);
 function String_Chunk_List string_chunk_list_from_string8(Context *context, String8 string8);
+function         V2_Chunk *create_v2_chunk(Context *context);
+function              void free_v2_chunk(Context *context, V2_Chunk *chunk);
+function          Vector2 *get_fresh_v2_from_v2_chunk(Context *context, V2_Chunk *chunk);
 function               S32 collect_save_files(Context *context);
 function               B32 rectangle_contains_point(Rectangle r, Vector2 p);
 function           Vector2 get_wire_position_from_wire(Context *context, View *view, Process *wire, Process_Shape shape, Process_Connection conn);
@@ -475,11 +478,13 @@ struct Context {
   U32 keybind_count;
 
   U32 flags;
+  U64 proc_gen_id;
 
   Proc_Trie_Trie *proc_trie;
   Process_List free_processes;
   Process_List free_ui_elements;
   String_Chunk_List free_strings;
+  V2_Chunk *free_v2_chunks;
 
   Process_Loc hot_process;
   // TODO: do active/copy_processes need to be per-view? What about hot_process?

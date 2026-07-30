@@ -47,7 +47,7 @@ Define_Cycle_Detector_Function(
 #include "../source/keybind.c"
 
 #include "../source/standard_keybinds.h"
-/* #include "../source/saves.h" */
+#include "../source/saves.h"
 
 #include "../source/piece_table.h"
 
@@ -338,6 +338,57 @@ function Process *create_ui_element(Context *context) {
 
   return e;
 }
+
+
+
+
+
+function V2_Chunk *create_v2_chunk(Context *context) {
+  V2_Chunk *chunk = context->free_v2_chunks;
+
+  if (chunk) {
+    SLLStackPop(context->free_v2_chunks);
+    *chunk = (V2_Chunk){0};
+  }
+  else {
+    chunk = push_struct(context->permanent_arena, V2_Chunk);
+  }
+
+  return chunk;
+}
+
+
+function void free_v2_chunk(Context *context, V2_Chunk *chunk) {
+  if (chunk) {
+    SLLStackPush(context->free_v2_chunks, chunk);
+  }
+}
+
+
+function Vector2 *get_fresh_v2_from_v2_chunk(Context *context, V2_Chunk *chunk) {
+  Vector2 *result = 0;
+
+  if (chunk) {
+    if (chunk->count >= V2_Chunk_Size) {
+      // TODO: push new chunk
+      V2_Chunk *new_chunk = create_v2_chunk(context);
+      if (new_chunk) {
+        result = new_chunk->e;
+        new_chunk->count = 1;
+      }
+    }
+    else {
+      result = chunk->e + chunk->count;
+      chunk->count += 1;
+    }
+  }
+
+  return result;
+}
+
+
+
+
 
 
 
@@ -646,6 +697,16 @@ function void gather_processes_from_trie(Context *context) {
 
 
 
+
+
+function Process *push_permanent_process(Context *context) {
+  Process *p = push_struct(context->permanent_arena, Process);
+  p->gen_id = context->proc_gen_id++;
+
+  return p;
+}
+
+
 function Process *create_process(Context *context) {
   Process *p = push_permanent_process(context);
 
@@ -660,12 +721,11 @@ function Process *create_process(Context *context) {
 
 function Process *create_processes(Context *context, U32 process_count) {
   Process *ps = push_array(context->permanent_arena, Process, process_count);
-  Proc_Trie_Key *keys = push_array(context->temp_arena, Proc_Trie_Key, process_count);
 
-  if (ps && keys) {
+  if (ps) {
     for (U32 i = 0; i < process_count; ++i) {
       Process *p = ps + i;
-      keys[i] = (Proc_Trie_Key)(p);
+      p->gen_id = context->proc_gen_id++;
       add_process_to_process_edit_list(context, p, Proc_Trie_Edit_Insert, (Process){0});
     }
 
@@ -2178,7 +2238,7 @@ function Bezier_Points get_wire_bezier_points(
 
   { // gather inner points into pre-buffer
     B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging) && is_active;
-    B32 hacky_inner_position_set = w->inner_position.x != 0.0f && w->inner_position.y != 0.0f;
+    B32 hacky_inner_position_set = w->inner_positions && w->inner_positions->count;
     B32 use_inner_position = is_dragging || hacky_inner_position_set;
 
     if (w->out && w->in) {
@@ -2188,12 +2248,13 @@ function Bezier_Points get_wire_bezier_points(
       Vector2 in_position = get_wire_position_from_wire(context, view, w, in_shape, Process_Connection_In);
 
       if (use_inner_position) {
+        // TODO: don't just use the first inner-position
         Vector2 inner_position;
         if (is_dragging) {
           inner_position = GetScreenToWorld2D(context->ui_state.mouse_position, view->camera);
         }
-        else {
-          inner_position = w->inner_position;
+        else if (w->inner_positions) {
+          inner_position = w->inner_positions->e[0];
         }
 
         // TODO: this will need to eventually handle arbitrary inner-positions

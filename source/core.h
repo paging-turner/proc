@@ -112,6 +112,13 @@ typedef struct Buffer_V2 {
   Vector2 *points;
 } Buffer_V2;
 
+#define V2_Chunk_Size 32
+
+typedef struct V2_Chunk {
+  struct V2_Chunk *next;
+  Vector2 e[V2_Chunk_Size];
+  U32 count;
+} V2_Chunk;
 
 
 ////////////////
