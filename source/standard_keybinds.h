@@ -141,7 +141,7 @@ Define_Keybind_And_Action(
         if (selection.process->ref) {
           handled = 1;
 
-          context->proc_trie->current_root = selection.process->ref;
+          context->proc_do_undo.trie->current_root = selection.process->ref;
           gather_processes_from_trie(context);
         }
       }

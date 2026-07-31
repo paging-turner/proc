@@ -385,7 +385,7 @@ Define_Keybind_And_Action(
           if (Get_Flag(a->flags, Process_Flag_Wire)) {
             Camera2D *camera = &env->view->camera;
             Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position, *camera);
-            Editable_Process new_a = get_editable_process(context->process_edit_list, a);
+            Editable_Process new_a = get_editable_process(context->proc_do_undo.edit_list, a);
             {
               // TODO: don't just update the first inner-position
               if (new_a.process.inner_positions == 0) {
@@ -401,7 +401,7 @@ Define_Keybind_And_Action(
           }
           else {
             Vector2 new_position = get_process_position(context, &context->views[View_Kind_Procs], a);
-            Editable_Process new_a = get_editable_process(context->process_edit_list, a);
+            Editable_Process new_a = get_editable_process(context->proc_do_undo.edit_list, a);
             new_a.process.position = new_position;
             add_process_to_process_edit_list(context, a, Proc_Trie_Edit_Update, new_a.process);
             updated = 1;
@@ -669,7 +669,7 @@ Define_Keybind_And_Action(
   if (check_keybind(env) == Keybind_Result_Enter) {
     handled = 1;
     Set_Flag(env->context->ui_state.flags, Ui_State_Flag_action_occured);
-    proc_trie_undo(context->proc_trie);
+    proc_trie_undo(context->proc_do_undo.trie);
     gather_processes_from_trie(context);
   }
 
@@ -690,7 +690,7 @@ Define_Keybind_And_Action(
 
   if (check_keybind(env) == Keybind_Result_Enter) {
     handled = 1;
-    proc_trie_redo(context->proc_trie);
+    proc_trie_redo(context->proc_do_undo.trie);
     gather_processes_from_trie(context);
   }
 

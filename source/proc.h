@@ -470,6 +470,11 @@ typedef struct Process_Loc {
   Process *process;
 } Process_Loc;
 
+typedef struct Process_Do_Undo {
+  Proc_Trie_Trie *trie;
+  Process_Edit_List edit_list;
+} Process_Do_Undo;
+
 struct Context {
   Arena *render_arena;
   Arena *permanent_arena;
@@ -483,7 +488,9 @@ struct Context {
   U32 flags;
   U64 proc_gen_id;
 
-  Proc_Trie_Trie *proc_trie;
+  Process_Do_Undo proc_do_undo;
+  Process_Do_Undo ui_do_undo;
+
   Process_List free_processes;
   Process_List free_ui_elements;
   String_Chunk_List free_strings;
@@ -508,8 +515,6 @@ struct Context {
   U8 *save_file_name;
 
   View views[View_Count];
-
-  Process_Edit_List process_edit_list;
 
   Piece_Table_Memory piece_table_memory;
 
