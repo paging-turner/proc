@@ -63,6 +63,7 @@ function Process *create_detached_process(Context *context) {
 
   if (p) {
     SLLQueuePop(context->free_processes.first, context->free_processes.last);
+    // TODO: do we need to update the gen-id here??
   } else {
     p = push_permanent_process(context);
   }

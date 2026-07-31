@@ -47,9 +47,9 @@ Define_Cycle_Detector_Function(
 #include "../source/keybind.c"
 
 #include "../source/standard_keybinds.h"
+#include "../source/piece_table.h"
 #include "../source/saves.h"
 
-#include "../source/piece_table.h"
 
 
 
@@ -644,6 +644,7 @@ function void gather_processes_from_trie(Context *context) {
 
   clear_process_list(context, &context->views[View_Kind_Procs].processes);
 
+  view->process_count = 0;
   for (Proc_Trie_Iterator *iter = proc_trie_iter_init(arena, trie->current_root->node);
        proc_trie_iter_test(iter);
        proc_trie_iter_next(iter)) {
@@ -651,6 +652,7 @@ function void gather_processes_from_trie(Context *context) {
     p->ref_kind = Ref_Kind_ProcTrieNode;
     p->ref = iter->stack->node;
     SLLQueuePush(view->processes.first, view->processes.last, p);
+    view->process_count += 1;
   }
 
   // Update data-structure view processes
@@ -1056,6 +1058,7 @@ function void set_menu_state_as_save_file_as(Context *context, Process *element)
 
 
 function void handle_label_editing(Context *context, Process_List ps) {
+  Assert(!"TODO: When editing labels for UI elements, we should use a separate trie and maybe a separate edit-list");
   // TODO: we need more than ascii text editing at some point.....
   U32 key = 0;
   U32 k = 0;
@@ -1509,15 +1512,15 @@ function S32 collect_save_files(Context *context) {
 }
 
 
-#if 0
 function void save_file(Context *context, Process *element) {
-  if (context->save_file_name.first && context->save_file_name.last) {
+  if (context->save_file_name) {
     write_save_file(context, context->temp_arena, context->save_file_name);
   }
 }
 
 
 
+#if 0
 function void do_open_file(Context *context, B32 sizing) {
   F32 padding = 2.0f;
 
@@ -1551,6 +1554,7 @@ function void do_open_file(Context *context, B32 sizing) {
   }
   ui_box_end(context, &open_file_box, sizing);
 }
+#endif
 
 
 
@@ -1565,7 +1569,7 @@ function void do_save_file_as(Context *context, B32 sizing) {
       B32 cancel_clicked = do_ui_element(context, &cancel_button, sizing);
 
       if (save_clicked) {
-        set_as_current_file(context, save_file_as_text_input.label);
+        set_as_current_file(context, save_file_as_text_input.label_c_string);
         save_file(context, &save_file_as_text_input);
         set_menu_state(context, 0);
       } else if (cancel_clicked) {
@@ -1576,7 +1580,6 @@ function void do_save_file_as(Context *context, B32 sizing) {
   }
   ui_box_end(context, &save_file_as_box, sizing);
 }
-#endif
 
 
 function void handle_copy(Context *context, Process *element) {
@@ -2977,6 +2980,8 @@ int main(void) {
       context.process_render_context.arena = context.render_arena;
       prc = &context.process_render_context;
 
+      context.proc_gen_id = 1;
+
       // init views
       {
         for (U32 i = 0; i < View_Kind__Count; ++i) {
@@ -3146,8 +3151,8 @@ int main(void) {
           /* do_open_file(&context, 0); */
         } break;
         case Menu_State_SaveFileAs: {
-          /* do_save_file_as(&context, 1); */
-          /* do_save_file_as(&context, 0); */
+          do_save_file_as(&context, 1);
+          do_save_file_as(&context, 0);
         } break;
         }
 
@@ -3359,6 +3364,10 @@ int main(void) {
                 Color color = new_wire_box_is_active ? box_hover_color : box_color;
                 render_DrawRectangleRec(rc, new_wire_box, color);
               }
+
+              {/* delete this */
+                render_DrawText(rc, TextFormat("%llu", p->gen_id), shape.center.x, shape.center.y, 12, (Color){0, 255, 255, 255}, 1);
+              }
             }
           }
 
@@ -3408,6 +3417,10 @@ int main(void) {
                 Rectangle box = get_wire_box(&context, view, in_position);
                 Color c = is_active ? box_hover_color : box_color;
                 render_DrawRectangleRec(rc, box, c);
+              }
+
+              {/* delete this */
+                render_DrawText(rc, TextFormat("%llu", p->gen_id), out_position.x, out_position.y, 12, (Color){0, 255, 255, 255}, 1);
               }
             }
           }

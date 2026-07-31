@@ -92,6 +92,8 @@ struct Process {
 
   Ref_Kind ref_kind;
   void *ref;
+
+  U64 cold_id;
 };
 
 // Process Trie
@@ -459,6 +461,7 @@ struct View {
   Rectangle screen_region;
   Camera2D camera;
   Process_List processes;
+  U64 process_count;
   Process_List active_processes;
 };
 
@@ -502,7 +505,7 @@ struct Context {
   Menu_State menu_state;
   Vector2 copy_center;
 
-  String_Chunk_List save_file_name;
+  U8 *save_file_name;
 
   View views[View_Count];
 

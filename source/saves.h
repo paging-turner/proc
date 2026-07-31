@@ -13,9 +13,9 @@ typedef struct {
 
 typedef U64 Cold_Process_Id;
 
-// TODO: Begin to use specialized "cold" process struct.
 typedef struct {
   B32 flags;
+  Cold_Process_Id id; // TODO: DELETE THIS
   Vector2 position;
   U64 string_offset;
   U64 string_size;
@@ -25,21 +25,19 @@ typedef struct {
 
   U32 which_in;
   U32 which_out;
-
-  U8 unused_bytes[8];
 } Cold_Process;
 
 // "Freeze" Cold_Process
 StaticAssert(sizeof(Cold_Process) == 64, cold_process_should_be_64_bytes);
 Freeze_Member(Cold_Process, flags        ,  0);
-Freeze_Member(Cold_Process, position     ,  4);
-Freeze_Member(Cold_Process, string_offset, 16);
-Freeze_Member(Cold_Process, string_size  , 24);
-Freeze_Member(Cold_Process, in           , 32);
-Freeze_Member(Cold_Process, out          , 40);
-Freeze_Member(Cold_Process, which_in     , 48);
-Freeze_Member(Cold_Process, which_out    , 52);
-Freeze_Member(Cold_Process, unused_bytes , 56);
+Freeze_Member(Cold_Process, id           ,  8);
+Freeze_Member(Cold_Process, position     , 16);
+Freeze_Member(Cold_Process, string_offset, 24);
+Freeze_Member(Cold_Process, string_size  , 32);
+Freeze_Member(Cold_Process, in           , 40);
+Freeze_Member(Cold_Process, out          , 48);
+Freeze_Member(Cold_Process, which_in     , 56);
+Freeze_Member(Cold_Process, which_out    , 60);
 
 
 #define Save_File_Size_V1(process_count, string_size)\
@@ -56,87 +54,103 @@ Freeze_Member(Cold_Process, unused_bytes , 56);
 //////////////////////////////////////
 // Saves Functions
 //////////////////////////////////////
-function void write_save_file(Context *context, Arena *arena, String_Chunk_List file_name);
+function void write_save_file(Context *context, Arena *arena, U8 *file_name);
 
 
 
 
 
-function void set_as_current_file(Context *context, String_Chunk_List file_name) {
+function void set_as_current_file(Context *context, U8 *file_name) {
   context->save_file_name = file_name;
 }
 
-function void write_save_file_v1(Context *context, Arena *arena, String_Chunk_List file_name) {
-#if 0
+function void write_save_file_v1(Context *context, Arena *arena, U8 *file_name) {
   // TODO: ensure that the Saves_Filepath directory exists before writing a file into it.
   os_set_current_directory(Saves_Filepath);
 
-  // save-file sizing and cold-indexing
-  U64 process_cold_index = 0;
   U64 string_cold_size = 0;
-  U64 string_cold_offset = 0;
-  for (Process *p = context->views[View_Kind_Procs].processes.first; p != 0; p = p->next) {
-    p->cold_index = process_cold_index+1;
-    process_cold_index += 1;
-    for (String_Chunk *s = p->label.first; s != 0; s = s->next) {
-      string_cold_size += String_Chunk_Size; // TODO: At the last chunk, we can save space if the whole chunk is not used (if there are zeroes at the end).
+  U64 process_count = context->views[View_Kind_Procs].process_count;
+
+  { // string sizing and fill out id_lookup
+    U64 process_index = 0;
+
+    for (Process *p = context->views[View_Kind_Procs].processes.first; p != 0; p = p->next) {
+      if (process_index+1 > process_count) {
+        goto error;
+      }
+      if (p->label) {
+        string_cold_size += p->label->text_size;
+      }
+      p->cold_id = process_index;
+      process_index += 1;
     }
+
+    Assert(process_count == process_index);
   }
 
   String8 save_file_data;
-  save_file_data.size = Save_File_Size_V1(process_cold_index, string_cold_size);
+  save_file_data.size = Save_File_Size_V1(process_count, string_cold_size);
   save_file_data.str = arena_push(arena, save_file_data.size);
+  if (save_file_data.str == 0) goto error;
 
-  if (save_file_data.str) {
-    Save_File_Header *header = (Save_File_Header *)save_file_data.str;
-    header->magic_number = Save_File_Magic_Number;
-    header->version = 1;
-    header->process_count = process_cold_index;
-    header->string_size = string_cold_size;
+  Save_File_Header *header = (Save_File_Header *)save_file_data.str;
+  header->magic_number = Save_File_Magic_Number;
+  header->version = 1;
+  header->process_count = process_count;
+  header->string_size = string_cold_size;
 
-    Cold_Process *first_cold_process = Save_File_Start_Of_Processes_V1(save_file_data.str);
-    U8 *start_of_cold_string = Save_File_Start_Of_Strings_V1(save_file_data.str, process_cold_index);
+  Cold_Process *first_cold_process = Save_File_Start_Of_Processes_V1(save_file_data.str);
+  U8 *start_of_cold_string = Save_File_Start_Of_Strings_V1(save_file_data.str, process_count);
 
-    process_cold_index = 0;
+  { // write cold processes
+    U64 process_index = 0;
+    U64 string_cold_offset = 0;
+
     for (Process *p = context->views[View_Kind_Procs].processes.first; p != 0; p = p->next) {
-      Cold_Process *cold_process = first_cold_process + process_cold_index;
+      Cold_Process *cold_process = first_cold_process + process_index;
 
       cold_process->flags = p->flags;
       cold_process->position = p->position;
       cold_process->string_offset = string_cold_offset;
 
       if (p->in) {
-        cold_process->in = p->in->cold_index;
+        cold_process->in = p->in->cold_id;
       }
       if (p->out) {
-        cold_process->out = p->out->cold_index;
+        cold_process->out = p->out->cold_id;
       }
 
       cold_process->which_in = p->which_in;
       cold_process->which_out = p->which_out;
 
-      // store string chunks
-      for (String_Chunk *s = p->label.first; s != 0; s = s->next) {
-        U8 *string_location = start_of_cold_string + string_cold_offset;
-        memory_move(string_location, s->str_array, String_Chunk_Size);
-        string_cold_offset += String_Chunk_Size;
-        cold_process->string_size += String_Chunk_Size;
+      // store label
+      if (p->label) {
+        String8 string = piece_table_get_string(context->temp_arena, p->label);
+        if (string.str && string.size) {
+          if (string_cold_offset >= string_cold_size) goto error;
+          U8 *string_location = start_of_cold_string + string_cold_offset;
+          memory_move(string_location, string.str, string.size);
+          string_cold_offset += string.size;
+          cold_process->string_size = string.size;
+        }
       }
 
-      process_cold_index += 1;
+      process_index += 1;
     }
-
-    set_as_current_file(context, file_name);
-
-    String8 file_name_str8 = string8_from_string_chunk_list(context->temp_arena, &file_name);
-    os_file_write(file_name_str8, save_file_data);
   }
-#endif
+
+  set_as_current_file(context, file_name);
+
+  String8 file_name_str8 = str8_lit(file_name);
+  os_file_write(file_name_str8, save_file_data);
+error:;
 }
 
-function void write_save_file(Context *context, Arena *arena, String_Chunk_List file_name) {
+
+function void write_save_file(Context *context, Arena *arena, U8 *file_name) {
   write_save_file_v1(context, arena, file_name);
 }
+
 
 function void open_file_and_replace_processes_v1(Context *context, String_Chunk_List file_name_list) {
 #if 0
