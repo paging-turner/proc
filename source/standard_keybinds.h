@@ -79,7 +79,8 @@ Define_Keybind_Action(
       }
     }
 
-    gather_processes_from_trie(context);
+    // TODO: ensure that procs are from main-procs, or allow connected procs from ui or other places???
+    gather_processes_from_trie(context, &context->proc_do_undo);
   }
 
   return handled;
@@ -142,7 +143,8 @@ Define_Keybind_And_Action(
           handled = 1;
 
           context->proc_do_undo.trie->current_root = selection.process->ref;
-          gather_processes_from_trie(context);
+          // TODO: if we ever display undo trie from other than main procs, we need to switch on that here......
+          gather_processes_from_trie(context, &context->proc_do_undo);
         }
       }
     }

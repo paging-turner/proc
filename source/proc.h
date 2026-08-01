@@ -134,6 +134,7 @@ typedef struct Process_Shape Process_Shape;
 typedef struct Process_Selection Process_Selection;
 typedef struct Process_List Process_List;
 typedef struct Process_Ref Process_Ref;
+typedef struct Process_Do_Undo Process_Do_Undo;
 
 typedef struct Editable_Process {
   B32 is_being_edited;
@@ -153,6 +154,33 @@ typedef struct Process_Edit_List {
   Process_Edit *last;
 } Process_Edit_List;
 
+#define Process_Do_Undo_Kind_Xlist(X)\
+  X(Proc) X(Ui)
+
+typedef enum Process_Do_Undo_Kind {
+  Process_Do_Undo_Kind__Null,
+#define X(kind)\
+  Process_Do_Undo_Kind_##kind,
+  Process_Do_Undo_Kind_Xlist(X)
+#undef X
+  Process_Do_Undo_Kind__Count,
+} Process_Do_Undo_Kind;
+
+#define Process_Do_Undo_Kind_Flag_From_Kind(kind)\
+  (((kind) > 0 && (kind) < Process_Do_Undo_Kind__Count) ? (1<<(kind)) : 0)
+
+typedef enum Process_Do_Undo_Kind_Flag {
+#define X(kind)\
+  Process_Do_Undo_Kind_Flag_##kind = (1 << Process_Do_Undo_Kind_##kind),
+  Process_Do_Undo_Kind_Xlist(X)
+#undef X
+} Process_Do_Undo_Kind_Flag;
+
+struct Process_Do_Undo {
+  Proc_Trie_Trie *trie;
+  Process_Edit_List edit_list;
+};
+
 enum Keybind_Result {
   Keybind_Result__Null,
   Keybind_Result_Enter,
@@ -171,7 +199,7 @@ function              void clear_active_processes(Context *context);
 function              void clear_ds_view_process_list(Context *context);
 function          Process *push_permanent_process(Context *context);
 function          Process *create_detached_process(Context *context);
-function          Process *create_process(Context *context);
+function          Process *create_process(Context *context, Process_Do_Undo_Kind do_undo_kind);
 function     String_Chunk *create_string_chunk(Context *context);
 function String_Chunk_List string_chunk_list_from_string8(Context *context, String8 string8);
 function         V2_Chunk *create_v2_chunk(Context *context);
@@ -191,11 +219,17 @@ function              void remove_process_from_active_processes(Context *context
 function    Keybind_Result check_keybind(Keybind_Environment *keybind_env);
 function              void exit_add_wire_mode(Context *context);
 function  Editable_Process get_editable_process(Process_Edit_List edit_list, Process *p);
-function               B32 add_process_to_process_edit_list(Context *context, Process *p, Proc_Trie_Edit_Kind edit_kind, Process new_process);
+function  Process_Do_Undo *get_process_do_undo_from_process(Context *context, Process *p);
+function  Process_Do_Undo *get_process_do_undo_from_kind(Context *context, Process_Do_Undo_Kind kind);
+function       Process_Do_Undo_Kind get_process_do_undo_kind(Context *context, Process *p);
+function  Process_Do_Undo_Kind_Flag get_process_do_undo_kind_flag(Context *context, Process *p);
+function void              gather_processes_from_trie_from_do_undo_flags(Context *context, Process_Do_Undo_Kind_Flag kind_flags);
+
+function               B32 add_process_to_process_edit_list(Context *context, Process_Do_Undo *do_undo, Process *p, Proc_Trie_Edit_Kind edit_kind, Process new_process);
 function              void delete_process(Context *context, Process *p, Process_Connection_Flag which_conn_flags);
 function              void copy_active_processes(Context *context);
 function              void paste_processes(Context *context);
-function              void gather_processes_from_trie(Context *context);
+function              void gather_processes_from_trie(Context *context, Process_Do_Undo *do_undo);
 
 function              void remove_process_from_process_list(Context *context, Process_List *list, Process *p);
 function          Process *connect_detached_processes(Context *context, Process *out, Process *in);
@@ -469,11 +503,6 @@ typedef struct Process_Loc {
   View *view;
   Process *process;
 } Process_Loc;
-
-typedef struct Process_Do_Undo {
-  Proc_Trie_Trie *trie;
-  Process_Edit_List edit_list;
-} Process_Do_Undo;
 
 struct Context {
   Arena *render_arena;

@@ -131,10 +131,14 @@ Define_Keybind_And_Action(
   ) {
   if (env->moved_wire && env->context) {
     Process *hot_process = env->context->hot_process.process;
+    Process_Do_Undo *do_undo = get_process_do_undo_from_process(env->context, hot_process);
+
     if (hot_process) {
       if (Get_Flag(hot_process->flags, Process_Flag_Wire)) {
         Process *connected_process = hot_process->conn[env->moved_wire_conn];
-        if (connected_process) {
+        Process_Do_Undo *test_do_undo = get_process_do_undo_from_process(env->context, connected_process);
+        B32 same_do_undo = do_undo == test_do_undo;
+        if (same_do_undo && connected_process) {
           // move wire to hovered wire
           U32 which_conn = hot_process->which_conn[env->moved_wire_conn];
           if (env->moved_wire != hot_process) {
@@ -142,18 +146,22 @@ Define_Keybind_And_Action(
             B32 wire_moved_to_same_place = env->moved_wire->which_conn[env->moved_wire_conn] == (which_conn - 1);
             if (wire_moved_to_new_process || !wire_moved_to_same_place) {
               add_wire_connection(env->context, env->moved_wire, connected_process, env->moved_wire_conn, which_conn);
-              gather_processes_from_trie(env->context);
+              gather_processes_from_trie(env->context, do_undo);
             }
           }
         }
       } else {
-        Process *connected_process = hot_process;
         // move wire to last wire of process
+        Process *connected_process = hot_process;
+        Process_Do_Undo *test_do_undo = get_process_do_undo_from_process(env->context, connected_process);
+        B32 same_do_undo = do_undo == test_do_undo;
         U32 which_conn = connected_process->conn_count[env->moved_wire_conn];
-        if (env->moved_wire->conn[env->moved_wire_conn] != connected_process ||
-            env->moved_wire->which_conn[env->moved_wire_conn] != which_conn) {
+        B32 not_moving_to_the_same_place =
+          (env->moved_wire->conn[env->moved_wire_conn] != connected_process ||
+           env->moved_wire->which_conn[env->moved_wire_conn] != which_conn);
+        if (same_do_undo && not_moving_to_the_same_place) {
           add_wire_connection(env->context, env->moved_wire, connected_process, env->moved_wire_conn, which_conn);
-          gather_processes_from_trie(env->context);
+          gather_processes_from_trie(env->context, do_undo);
         }
       }
     }
@@ -381,7 +389,12 @@ Define_Keybind_And_Action(
       if (context->ui_state.mouse_moved) {
         // update positions of active processes
         B32 updated = 0;
+        U32 do_undo_kind_flags = 0;
         for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
+          Process_Do_Undo_Kind do_undo_kind = get_process_do_undo_kind(context, a);
+          Process_Do_Undo_Kind_Flag do_undo_kind_flag = Process_Do_Undo_Kind_Flag_From_Kind(do_undo_kind);
+          Process_Do_Undo *do_undo = get_process_do_undo_from_kind(context, do_undo_kind);
+          do_undo_kind_flags |= do_undo_kind_flag;
           if (Get_Flag(a->flags, Process_Flag_Wire)) {
             Camera2D *camera = &env->view->camera;
             Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position, *camera);
@@ -396,19 +409,19 @@ Define_Keybind_And_Action(
                 new_a.process.inner_positions->count = 1;
               }
             }
-            add_process_to_process_edit_list(context, a, Proc_Trie_Edit_Update, new_a.process);
+            add_process_to_process_edit_list(context, do_undo, a, Proc_Trie_Edit_Update, new_a.process);
             updated = 1;
           }
           else {
             Vector2 new_position = get_process_position(context, &context->views[View_Kind_Procs], a);
             Editable_Process new_a = get_editable_process(context->proc_do_undo.edit_list, a);
             new_a.process.position = new_position;
-            add_process_to_process_edit_list(context, a, Proc_Trie_Edit_Update, new_a.process);
+            add_process_to_process_edit_list(context, do_undo, a, Proc_Trie_Edit_Update, new_a.process);
             updated = 1;
           }
         }
         if (updated) {
-          gather_processes_from_trie(context);
+          gather_processes_from_trie_from_do_undo_flags(context, do_undo_kind_flags);
         }
       }
       Unset_Flag(env->context->flags, Context_Flag_Dragging);
@@ -509,7 +522,7 @@ Define_Keybind_And_Action(
     // TODO: do bounds check to see if we should add process
     if (Get_Flag(view->flags, View_Flag_Active) &&
         Get_Flag(view->flags, View_Flag_Editable)) {
-      Process *new_p = create_process(context);
+      Process *new_p = create_process(context, Process_Do_Undo_Kind_Proc);
       if (new_p) {
         Set_Flag(new_p->flags, Process_Flag_TextEdit);
         new_p->position = GetScreenToWorld2D(context->ui_state.mouse_position, view->camera);
@@ -518,7 +531,7 @@ Define_Keybind_And_Action(
       }
     }
 
-    gather_processes_from_trie(context);
+    gather_processes_from_trie(context, &context->proc_do_undo);
   }
 
   return handled;
@@ -538,13 +551,15 @@ Define_Keybind_And_Action(
 
   if (check_keybind(env)) {
     handled = 1;
+    Process_Do_Undo_Kind_Flag do_undo_flags = 0;
     // delete processes
     for (Process *a = context->active_processes.first; a != 0;) {
+      do_undo_flags |= get_process_do_undo_kind_flag(context, a);
       Process *next_active = a->next_active;
       delete_process(context, a, 0);
       a = next_active;
     }
-    gather_processes_from_trie(context);
+    gather_processes_from_trie_from_do_undo_flags(context, do_undo_flags);
     clear_active_processes(context);
   }
 
@@ -669,8 +684,9 @@ Define_Keybind_And_Action(
   if (check_keybind(env) == Keybind_Result_Enter) {
     handled = 1;
     Set_Flag(env->context->ui_state.flags, Ui_State_Flag_action_occured);
-    proc_trie_undo(context->proc_do_undo.trie);
-    gather_processes_from_trie(context);
+    /* TODO: figure out what do_undo to use!!!!! */Process_Do_Undo *do_undo = &context->proc_do_undo;
+    proc_trie_undo(do_undo->trie);
+    gather_processes_from_trie(context, do_undo);
   }
 
   return handled;
@@ -690,8 +706,9 @@ Define_Keybind_And_Action(
 
   if (check_keybind(env) == Keybind_Result_Enter) {
     handled = 1;
-    proc_trie_redo(context->proc_do_undo.trie);
-    gather_processes_from_trie(context);
+    /* TODO: figure out what do_undo to use!!!!! */Process_Do_Undo *do_undo = &context->proc_do_undo;
+    proc_trie_redo(do_undo->trie);
+    gather_processes_from_trie(context, do_undo);
   }
 
   return handled;
