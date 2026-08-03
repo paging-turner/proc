@@ -149,6 +149,7 @@ global_variable Process global_ui_procs[] = {
   }
 };
 
+
 global_variable Process *menu_buttons[] = {
     [Top_Menu_Index(Menu_State_FileMenu)] = &global_ui_procs[Global_Ui_Proc_Id_file_menu_button],
     [Top_Menu_Index(Menu_State_EditMenu)] = &global_ui_procs[Global_Ui_Proc_Id_edit_menu_button],
@@ -169,55 +170,69 @@ global_variable Process **sub_menus[] = {
 global_variable U32 sub_menu_counts[] = { ArrayCount(file_submenu), ArrayCount(edit_submenu) };
 
 
-global_variable Ui_Box top_menu_box = (Ui_Box){
-  .align = Ui_Align_TopLeft,
-  .layout = Ui_Layout_Horizontal,
+global_variable Process top_menu_box = (Process){
+  .ui_box = {
+    .align = Ui_Align_TopLeft,
+    .layout = Ui_Layout_Horizontal,
+  }
 };
 
-global_variable Ui_Box sub_menu_box =  (Ui_Box){
-  .align = Ui_Align_TopLeft,
-  .layout = Ui_Layout_Vertical,
-  .sizing = Ui_Sizing_FitContentsX,
+global_variable Process sub_menu_box = (Process){
+  .ui_box = {
+    .align = Ui_Align_TopLeft,
+    .layout = Ui_Layout_Vertical,
+    .sizing = Ui_Sizing_FitContentsX,
+  }
 };
 
 // Open File UI
-global_variable Ui_Box open_file_box = (Ui_Box){
+global_variable Process open_file_box = (Process){
   .position = (Vector2){100.0f, 100.0f},
-  .min_size = (Vector2){300.0f, 0.0f},
-  .align = Ui_Align_TopLeft,
-  .layout = Ui_Layout_Vertical,
-  .sizing = Ui_Sizing_FitContents,
-  .flags = Ui_Box_Flag_ShouldDraw,
-  .color = (Color){200.0f, 200.0f, 200.0f, 255.0f},
+  .ui_box = {
+    .min_size = (Vector2){300.0f, 0.0f},
+    .align = Ui_Align_TopLeft,
+    .layout = Ui_Layout_Vertical,
+    .sizing = Ui_Sizing_FitContents,
+    .flags = Ui_Box_Flag_ShouldDraw,
+    .color = (Color){200.0f, 200.0f, 200.0f, 255.0f},
+  }
 };
-global_variable Ui_Box file_list_box = (Ui_Box){
-  .align = Ui_Align_TopLeft,
-  .layout = Ui_Layout_Vertical,
-  .sizing = Ui_Sizing_FitContents,
-  .flags = Ui_Box_Flag_Clip|Ui_Box_Flag_ScrollY|Ui_Box_Flag_Stretch,
-  .max_size = (Vector2){0.0f, 100.0f},
+global_variable Process file_list_box = (Process){
+  .ui_box = {
+    .align = Ui_Align_TopLeft,
+    .layout = Ui_Layout_Vertical,
+    .sizing = Ui_Sizing_FitContents,
+    .flags = Ui_Box_Flag_Clip|Ui_Box_Flag_ScrollY|Ui_Box_Flag_Stretch,
+    .max_size = (Vector2){0.0f, 100.0f},
+  }
 };
-global_variable Ui_Box open_file_confirm_box = (Ui_Box){
-  .align = Ui_Align_TopRight, // TODO: The right-alignment is broken... should fix that at some point...
-  .layout = Ui_Layout_Horizontal,
-  .sizing = Ui_Sizing_FitContents,
+global_variable Process open_file_confirm_box = (Process){
+  .ui_box = {
+    .align = Ui_Align_TopRight, // TODO: The right-alignment is broken... should fix that at some point...
+    .layout = Ui_Layout_Horizontal,
+    .sizing = Ui_Sizing_FitContents,
+  }
 };
 
 
 // Save File As UI
-global_variable Ui_Box save_file_as_box = (Ui_Box){
+global_variable Process save_file_as_box = (Process){
   .position = (Vector2){100.0f, 100.0f},
-  .min_size = (Vector2){300.0f, 0.0f},
-  .align = Ui_Align_TopLeft,
-  .layout = Ui_Layout_Vertical,
-  .sizing = Ui_Sizing_FitContents,
-  .flags = Ui_Box_Flag_ShouldDraw,
-  .color = (Color){200.0f, 200.0f, 200.0f, 255.0f},
+  .ui_box = {
+    .min_size = (Vector2){300.0f, 0.0f},
+    .align = Ui_Align_TopLeft,
+    .layout = Ui_Layout_Vertical,
+    .sizing = Ui_Sizing_FitContents,
+    .flags = Ui_Box_Flag_ShouldDraw,
+    .color = (Color){200.0f, 200.0f, 200.0f, 255.0f},
+  }
 };
-global_variable Ui_Box save_file_as_confirm_box = (Ui_Box){
-  .align = Ui_Align_TopRight, // TODO: The right-alignment is broken... should fix that at some point...
-  .layout = Ui_Layout_Horizontal,
-  .sizing = Ui_Sizing_FitContents,
+global_variable Process save_file_as_confirm_box = (Process){
+  .ui_box = {
+    .align = Ui_Align_TopRight, // TODO: The right-alignment is broken... should fix that at some point...
+    .layout = Ui_Layout_Horizontal,
+    .sizing = Ui_Sizing_FitContents,
+  }
 };
 
 
@@ -560,14 +575,24 @@ function void apply_process_edits_by_kind(
   B32 handle_wires
   ) {
   Assert(handle_wires == 0 || handle_wires == 1);
-  Arena *arena = context->permanent_arena;
-
+  B32 is_proc_do_undo = do_undo == &context->ui_do_undo;
   B32 is_ui_do_undo = do_undo == &context->ui_do_undo;
+  Arena *arena;
+  if (is_proc_do_undo) {
+    arena = context->permanent_arena;
+  }
+  else if (is_ui_do_undo) {
+    arena = context->ui_arena;
+  }
+  else {
+    goto error;
+  }
 
   // TODO: @Speed
   for (Process_Edit *proc_edit = do_undo->edit_list.first;
        proc_edit != 0;
        proc_edit = proc_edit->next) {
+    Assert(!"TODO: If this is a ui-do-undo proc, we need to point to the ref or something like that...");
     B32 is_wire = Get_Flag(proc_edit->process->flags, Process_Flag_Wire) ? 1 : 0;
     B32 should_edit = !(handle_wires ^ is_wire);
 
@@ -681,6 +706,7 @@ function void apply_process_edits_by_kind(
       }
     }
   }
+error:;
 }
 
 
@@ -1264,73 +1290,73 @@ function Vector2 get_ui_element_size(Context *context, Process *element, B32 fit
 }
 
 
-function Vector2 get_ui_box_inner_position(Context *context, Ui_Box *box) {
-  Vector2 position = Vector2Add(Vector2Add(box->position, box->offset), box->scroll_offset);
+function Vector2 get_ui_box_inner_position(Context *context, Process *box) {
+  Vector2 position = Vector2Add(Vector2Add(box->position, box->ui_box.offset), box->ui_box.scroll_offset);
   return position;
 }
 
 
-function Vector2 get_box_size(Ui_Box *box) {
-  Ui_Box *parent_box = box->next;
+function Vector2 get_box_size(Process *box) {
+  Process *parent_box = box->next;
   B32 stretch = Get_Flag(box->flags, Ui_Box_Flag_Stretch);
-  Vector2 size = box->raw_size;
+  Vector2 size = box->size;
 
   if (stretch && parent_box) {
     Vector2 parent_size = get_box_size(parent_box);
     // TODO: Do we need to recursively call get_box_size here??
-    if (box->layout == Ui_Layout_Vertical) {
+    if (box->ui_box.layout == Ui_Layout_Vertical) {
       size.x = parent_size.x;
-    } else if (box->layout == Ui_Layout_Horizontal) {
+    } else if (box->ui_box.layout == Ui_Layout_Horizontal) {
       size.y = parent_size.y;
     }
   }
 
-  if (box->min_size.x > 0.0f) {
-    size.x = Max(size.x, box->min_size.x);
+  if (box->ui_box.min_size.x > 0.0f) {
+    size.x = Max(size.x, box->ui_box.min_size.x);
   }
-  if (box->min_size.y > 0.0f) {
-    size.y = Max(size.y, box->min_size.y);
+  if (box->ui_box.min_size.y > 0.0f) {
+    size.y = Max(size.y, box->ui_box.min_size.y);
   }
-  if (box->max_size.x > 0.0f) {
-    size.x = Min(size.x, box->max_size.x);
+  if (box->ui_box.max_size.x > 0.0f) {
+    size.x = Min(size.x, box->ui_box.max_size.x);
   }
-  if (box->max_size.y > 0.0f) {
-    size.y = Min(size.y, box->max_size.y);
+  if (box->ui_box.max_size.y > 0.0f) {
+    size.y = Min(size.y, box->ui_box.max_size.y);
   }
 
   return size;
 }
 
 
-function B32 ui_box_should_set_x(Ui_Box *box) {
-  B32 result = (box->sizing == Ui_Sizing_FitContents ||
-                box->sizing == Ui_Sizing_FitContentsX);
+function B32 ui_box_should_set_x(Process *box) {
+  B32 result = (box->ui_box.sizing == Ui_Sizing_FitContents ||
+                box->ui_box.sizing == Ui_Sizing_FitContentsX);
 
   return result;
 }
 
 
-function B32 ui_box_should_set_y(Ui_Box *box) {
-  B32 result = (box->sizing == Ui_Sizing_FitContents ||
-                box->sizing == Ui_Sizing_FitContentsY);
+function B32 ui_box_should_set_y(Process *box) {
+  B32 result = (box->ui_box.sizing == Ui_Sizing_FitContents ||
+                box->ui_box.sizing == Ui_Sizing_FitContentsY);
 
   return result;
 }
 
 
-function void set_ui_box_size(Ui_Box *box, Vector2 size, B32 set_box_x, B32 set_box_y) {
+function void set_ui_box_size(Process *box, Vector2 size, B32 set_box_x, B32 set_box_y) {
   if (set_box_x) {
-    if (box->layout == Ui_Layout_Horizontal) {
-      box->raw_size.x += size.x;
+    if (box->ui_box.layout == Ui_Layout_Horizontal) {
+      box->size.x += size.x;
     } else {
-      box->raw_size.x = Max(box->raw_size.x, size.x);
+      box->size.x = Max(box->size.x, size.x);
     }
   }
   if (set_box_y) {
-    if (box->layout == Ui_Layout_Vertical) {
-      box->raw_size.y += size.y;
+    if (box->ui_box.layout == Ui_Layout_Vertical) {
+      box->size.y += size.y;
     } else {
-      box->raw_size.y = Max(box->raw_size.y, size.y);
+      box->size.y = Max(box->size.y, size.y);
     }
   }
 }
@@ -1349,11 +1375,11 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
   Color hot_bg_color = global_button_hot_bg_color;
   Color font_color = global_button_font_color;
 
-  Ui_Box *box = context->ui_box_stack.first;
-  Ui_Align align = (box == 0) ? Ui_Default_Align : box->align;
-  Ui_Layout layout = (box == 0) ? Ui_Default_Layout : box->layout;
+  Process *box = context->ui_box_stack.first;
+  Ui_Align align = (box == 0) ? Ui_Default_Align : box->ui_box.align;
+  Ui_Layout layout = (box == 0) ? Ui_Default_Layout : box->ui_box.layout;
   Vector2 box_position = (box == 0) ? Ui_Default_Position : box->position;
-  Vector2 box_offset = (box == 0) ? Ui_Default_Offset : box->offset;
+  Vector2 box_offset = (box == 0) ? Ui_Default_Offset : box->ui_box.offset;
 
   B32 set_box_x = box && ui_box_should_set_x(box);
   B32 set_box_y = box && ui_box_should_set_y(box);
@@ -1415,7 +1441,7 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
     } break;
     }
 
-    box->offset = Vector2Add(box->offset, next_offset);
+    box->ui_box.offset = Vector2Add(box->ui_box.offset, next_offset);
     Vector2 box_size = get_box_size(box);
 
     if (set_box_x && layout == Ui_Layout_Vertical) {
@@ -1497,20 +1523,20 @@ function Process *create_button(Arena *arena, Vector2 position, String_Chunk_Lis
 }
 
 
-function void ui_box_begin(Context *context, Ui_Box *box, B32 sizing) {
+function void ui_box_begin(Context *context, Process *box, B32 sizing) {
   Render_Context *rc = &context->ui_render_context;
   Ui_State *ui_state = &context->ui_state;
-  Ui_Box *parent_box = context->ui_box_stack.first;
+  Process *parent_box = context->ui_box_stack.first;
 
   SLLQueuePushFront(context->ui_box_stack.first, context->ui_box_stack.last, box);
 
   if (sizing) {
-    box->offset = (Vector2){0.0f, 0.0f};
-    if (box->sizing == Ui_Sizing_FitContents || box->sizing == Ui_Sizing_FitContentsX) {
-      box->raw_size.x = 0;
+    box->ui_box.offset = (Vector2){0.0f, 0.0f};
+    if (box->ui_box.sizing == Ui_Sizing_FitContents || box->ui_box.sizing == Ui_Sizing_FitContentsX) {
+      box->size.x = 0;
     }
-    if (box->sizing == Ui_Sizing_FitContents || box->sizing == Ui_Sizing_FitContentsY) {
-      box->raw_size.y = 0;
+    if (box->ui_box.sizing == Ui_Sizing_FitContents || box->ui_box.sizing == Ui_Sizing_FitContentsY) {
+      box->size.y = 0;
     }
   }
 
@@ -1522,16 +1548,16 @@ function void ui_box_begin(Context *context, Ui_Box *box, B32 sizing) {
       box->position = get_ui_box_inner_position(context, parent_box);
     }
     if (Get_Flag(box->flags, Ui_Box_Flag_ShouldDraw)) {
-      render_DrawRectangle(rc, box_rect.x, box_rect.y, box_rect.width, box_rect.height, box->color);
+      render_DrawRectangle(rc, box_rect.x, box_rect.y, box_rect.width, box_rect.height, box->ui_box.color);
     }
     if (rectangle_contains_point(box_rect, ui_state->mouse_position)) {
       // handle scrolling
       if (Get_Flag(box->flags, Ui_Box_Flag_ScrollY) &&
           ui_state->mouse_wheel_movement.y != 0) {
         Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
-        F32 max_scroll_offset = box->raw_size.y - size.y;
-        box->scroll_offset.y += ui_state->mouse_wheel_movement.y;
-        box->scroll_offset.y = Clamp(box->scroll_offset.y, -max_scroll_offset, 0.0f);
+        F32 max_scroll_offset = box->size.y - size.y;
+        box->ui_box.scroll_offset.y += ui_state->mouse_wheel_movement.y;
+        box->ui_box.scroll_offset.y = Clamp(box->ui_box.scroll_offset.y, -max_scroll_offset, 0.0f);
       }
     }
     if (Get_Flag(box->flags, Ui_Box_Flag_Clip)) {
@@ -1541,7 +1567,7 @@ function void ui_box_begin(Context *context, Ui_Box *box, B32 sizing) {
 }
 
 
-function void ui_box_end(Context *context, Ui_Box *box, B32 sizing) {
+function void ui_box_end(Context *context, Process *box, B32 sizing) {
   Render_Context *rc = &context->ui_render_context;
 
   if (box != context->ui_box_stack.first) {
@@ -1550,7 +1576,7 @@ function void ui_box_end(Context *context, Ui_Box *box, B32 sizing) {
 
   SLLQueuePop(context->ui_box_stack.first, context->ui_box_stack.last);
 
-  Ui_Box *parent_box = context->ui_box_stack.first;
+  Process *parent_box = context->ui_box_stack.first;
 
   if (sizing && parent_box) {
     B32 set_box_x = ui_box_should_set_x(parent_box);
@@ -1565,7 +1591,7 @@ function void ui_box_end(Context *context, Ui_Box *box, B32 sizing) {
       // @Copypasta do_ui_element
       Vector2 box_size = get_box_size(box);
       Vector2 next_offset;
-      switch (parent_box->layout) {
+      switch (parent_box->ui_box.layout) {
       default:
       case Ui_Layout_None: {
         next_offset = Zero_Struct(Vector2);
@@ -1577,7 +1603,7 @@ function void ui_box_end(Context *context, Ui_Box *box, B32 sizing) {
         next_offset = (Vector2){box_size.x, 0.0f};
       } break;
       }
-      parent_box->offset = Vector2Add(parent_box->offset, next_offset);
+      parent_box->ui_box.offset = Vector2Add(parent_box->ui_box.offset, next_offset);
     }
     if (Get_Flag(box->flags, Ui_Box_Flag_Clip)) {
       render_EndScissorMode(rc);
@@ -3222,8 +3248,6 @@ int main(void) {
   // Main Loop
   //////////////////////////////////////////
   while (!WindowShouldClose()) {
-    /* printf("menu state %d\n", context.menu_state); */
-    printf("first active proc %p\n", context.active_processes.first);
     ryn_BeginProfile();
     ryn_BEGIN_TIMED_BLOCK(main_loop);
 
@@ -3280,7 +3304,7 @@ int main(void) {
 
       // handle ui
       {
-        sub_menu_box.raw_size = Zero_Struct(Vector2);
+        sub_menu_box.size = Zero_Struct(Vector2);
 
         switch(context.menu_state) {
         case Menu_State_OpenFile: {

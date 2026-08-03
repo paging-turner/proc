@@ -10,6 +10,76 @@ struct Piece_Table_Memory {
   Piece_Table_Chunk *free_chunks;
 };
 
+
+
+
+
+//////////////////////////////////////
+// UI
+//////////////////////////////////////
+
+typedef U8 Ui_Align;
+enum Ui_Align {
+  Ui_Align_Top         = (U8)0,
+  Ui_Align_TopLeft     = (U8)1,
+  Ui_Align_Left        = (U8)2,
+  Ui_Align_BottomLeft  = (U8)3,
+  Ui_Align_Bottom      = (U8)4,
+  Ui_Align_BottomRight = (U8)5,
+  Ui_Align_Right       = (U8)6,
+  Ui_Align_TopRight    = (U8)7,
+};
+
+typedef U8 Ui_Layout;
+enum Ui_Layout {
+  Ui_Layout_None       = (U8)0,
+  Ui_Layout_Vertical   = (U8)1,
+  Ui_Layout_Horizontal = (U8)2,
+};
+
+typedef U8 Ui_Sizing;
+enum Ui_Sizing {
+  Ui_Sizing_None         = (U8)0,
+  Ui_Sizing_FitContents  = (U8)1,
+  Ui_Sizing_FitContentsX = (U8)2,
+  Ui_Sizing_FitContentsY = (U8)3,
+};
+
+typedef enum {
+  Ui_Box_Flag_ShouldDraw = (1 << 0),
+  Ui_Box_Flag_Clip       = (1 << 1),
+  Ui_Box_Flag_ScrollY    = (1 << 2),
+  Ui_Box_Flag_Stretch    = (1 << 3),
+} Ui_Box_Flag;
+
+typedef struct Ui_Box {
+  Vector2 offset;
+  Vector2 scroll_offset;
+  Vector2 min_size;
+  Vector2 max_size;
+  U32 flags;
+  Color color;
+  Ui_Align align;
+  Ui_Layout layout;
+  Ui_Sizing sizing;
+} Ui_Box;
+
+typedef struct {
+  Ui_Box *first;
+  Ui_Box *last;
+} Ui_Box_List;
+
+
+#define Ui_Default_Position (Vector2){0.0f, 0.0f}
+#define Ui_Default_Offset   (Vector2){0.0f, 0.0f}
+#define Ui_Default_Align    Ui_Align_TopLeft
+#define Ui_Default_Layout   Ui_Layout_None
+#define Ui_Default_Sizing   Ui_Sizing_None
+
+
+
+
+
 #define Process_Connection_Xlist\
   X(In, 0) X(Out, 1)
 
@@ -82,6 +152,8 @@ struct Process {
 
   Vector2 size;
   Vector2 margin;
+  Ui_Box ui_box;
+
   Process *to_copied;
 
   Process *next;
@@ -347,70 +419,6 @@ typedef struct Bezier_Points {
 } Bezier_Points;
 
 
-//////////////////////////////////////
-// UI
-//////////////////////////////////////
-
-typedef enum {
-  Ui_Align_Top,
-  Ui_Align_TopLeft,
-  Ui_Align_Left,
-  Ui_Align_BottomLeft,
-  Ui_Align_Bottom,
-  Ui_Align_BottomRight,
-  Ui_Align_Right,
-  Ui_Align_TopRight,
-} Ui_Align;
-
-typedef enum {
-  Ui_Layout_None,
-  Ui_Layout_Vertical,
-  Ui_Layout_Horizontal,
-} Ui_Layout;
-
-typedef enum {
-  Ui_Sizing_None,
-  Ui_Sizing_FitContents,
-  Ui_Sizing_FitContentsX,
-  Ui_Sizing_FitContentsY,
-} Ui_Sizing;
-
-typedef enum {
-  Ui_Box_Flag_ShouldDraw = (1 << 0),
-  Ui_Box_Flag_Clip       = (1 << 1),
-  Ui_Box_Flag_ScrollY    = (1 << 2),
-  Ui_Box_Flag_Stretch    = (1 << 3),
-} Ui_Box_Flag;
-
-typedef struct Ui_Box Ui_Box;
-struct Ui_Box {
-  Ui_Box *next;
-  Vector2 position;
-  Vector2 offset;
-  Vector2 scroll_offset;
-  Vector2 raw_size;
-  Vector2 min_size;
-  Vector2 max_size;
-  U32 flags;
-  Color color;
-  Ui_Align align;
-  Ui_Layout layout;
-  Ui_Sizing sizing;
-};
-
-typedef struct {
-  Ui_Box *first;
-  Ui_Box *last;
-} Ui_Box_List;
-
-
-#define Ui_Default_Position (Vector2){0.0f, 0.0f}
-#define Ui_Default_Offset   (Vector2){0.0f, 0.0f}
-#define Ui_Default_Align    Ui_Align_TopLeft
-#define Ui_Default_Layout   Ui_Layout_None
-#define Ui_Default_Sizing   Ui_Sizing_None
-
-
 
 //////////////////////////////////////
 // Context
@@ -532,7 +540,7 @@ struct Context {
 
   Process_List save_file_list;
   Process *selected_element; // Use this for things like picking (button click) a file to open.
-  Ui_Box_List ui_box_stack;
+  Process_List ui_box_stack;
 
   Render_Context ui_render_context;
   Render_Context process_render_context;
