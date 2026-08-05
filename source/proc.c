@@ -506,11 +506,13 @@ done:;
   return kind;
 }
 
+
 function Process_Do_Undo_Kind_Flag get_process_do_undo_kind_flag(Context *context, Process *p) {
   Process_Do_Undo_Kind kind = get_process_do_undo_kind(context, p);
   Process_Do_Undo_Kind_Flag flag = Process_Do_Undo_Kind_Flag_From_Kind(kind);
   return flag;
 }
+
 
 function Process_Do_Undo *get_process_do_undo_from_kind(
   Context *context,
@@ -575,7 +577,7 @@ function void apply_process_edits_by_kind(
   B32 handle_wires
   ) {
   Assert(handle_wires == 0 || handle_wires == 1);
-  B32 is_proc_do_undo = do_undo == &context->ui_do_undo;
+  B32 is_proc_do_undo = do_undo == &context->proc_do_undo;
   B32 is_ui_do_undo = do_undo == &context->ui_do_undo;
   Arena *arena;
   if (is_proc_do_undo) {
@@ -592,7 +594,7 @@ function void apply_process_edits_by_kind(
   for (Process_Edit *proc_edit = do_undo->edit_list.first;
        proc_edit != 0;
        proc_edit = proc_edit->next) {
-    Assert(!"TODO: If this is a ui-do-undo proc, we need to point to the ref or something like that...");
+    /* Assert(!"TODO: If this is a ui-do-undo proc, we need to point to the ref or something like that..."); */
     B32 is_wire = Get_Flag(proc_edit->process->flags, Process_Flag_Wire) ? 1 : 0;
     B32 should_edit = !(handle_wires ^ is_wire);
 
@@ -605,15 +607,26 @@ function void apply_process_edits_by_kind(
           update_edited_wire_pointers(context, proc_edit, 1);
         }
 
-
-#if Proc_Trie_Use_Key_Value
-        proc_trie_set(arena, do_undo->trie, IntFromPtr(proc_edit->process), proc_edit->process);
+#if Use_Gen_Id_For_Trie_Key
+# if Proc_Trie_Use_Key_Value_Pair
+        proc_trie_set(arena, do_undo->trie, proc_edit->process->gen_id, proc_edit->process);
+# else
+        Assert(!"This should not happen.....");
+# endif
 #else
+# if Proc_Trie_Use_Key_Value_Pair
+        Assert(!"This should not happen.....");
+# else
         proc_trie_insert(arena, do_undo->trie, IntFromPtr(proc_edit->process));
+# endif
 #endif
       } break;
       case Proc_Trie_Edit_Delete: {
+#if Use_Gen_Id_For_Trie_Key
+        proc_trie_delete(arena, do_undo->trie, proc_edit->process->gen_id);
+#else
         proc_trie_delete(arena, do_undo->trie, IntFromPtr(proc_edit->process));
+#endif
       } break;
       case Proc_Trie_Edit_Update: {
         Process *new_p = push_struct(arena, Process);
@@ -694,11 +707,20 @@ function void apply_process_edits_by_kind(
             }
           }
 
-          proc_trie_delete(arena, do_undo->trie, IntFromPtr(proc_edit->process));
-#if Proc_Trie_Use_Key_Value
-          proc_trie_set(arena, do_undo->trie, IntFromPtr(new_p), new_p);
+#if Use_Gen_Id_For_Trie_Key
+          proc_trie_delete(arena, do_undo->trie, proc_edit->process->gen_id);
+# if Proc_Trie_Use_Key_Value_Pair
+          proc_trie_set(arena, do_undo->trie, new_p->gen_id, new_p);
+# else
+          Assert(!"This should not happen");
+# endif
 #else
+          proc_trie_delete(arena, do_undo->trie, IntFromPtr(proc_edit->process));
+# if Proc_Trie_Use_Key_Value_Pair
+          Assert(!"This should not happen");
+# else
           proc_trie_insert(arena, do_undo->trie, IntFromPtr(new_p));
+# endif
 #endif
         }
       } break;
@@ -726,7 +748,6 @@ function void gather_processes_from_trie(Context *context, Process_Do_Undo *do_u
   }
 
   // transfer active, edited procs
-  /* if (is_proc_do_undo) { */
   Process_List new_active_procs = (Process_List){0};
   for (Process_Edit *proc_edit = do_undo->edit_list.first;
        proc_edit != 0;
@@ -738,10 +759,6 @@ function void gather_processes_from_trie(Context *context, Process_Do_Undo *do_u
     }
   }
   context->active_processes = new_active_procs;
-  /* } */
-  /* else if (is_ui_do_undo) { */
-    /* Assert(!"TODO"); */
-  /* } */
 
   do_undo->edit_list = (Process_Edit_List){0};
   proc_trie_commit(trie);
@@ -755,11 +772,15 @@ function void gather_processes_from_trie(Context *context, Process_Do_Undo *do_u
     for (Proc_Trie_Iterator *iter = proc_trie_iter_init(arena, trie->current_root->node);
          proc_trie_iter_test(iter);
          proc_trie_iter_next(iter)) {
+#if Use_Gen_Id_For_Trie_Key
+      Process *p = iter->value;
+#else
       Process *p = (Process *)iter->key;
-      /* p->ref_kind = Ref_Kind_ProcTrieNode; */
-      /* p->ref = iter->stack->node; */
-      SLLQueuePush(view->processes.first, view->processes.last, p);
-      view->process_count += 1;
+#endif
+      if (p) {
+        SLLQueuePush(view->processes.first, view->processes.last, p);
+        view->process_count += 1;
+      }
     }
   }
   else if (is_ui_do_undo) {

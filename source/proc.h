@@ -168,10 +168,17 @@ struct Process {
   U64 cold_id;
 };
 
+#define Use_Gen_Id_For_Trie_Key 1
+
 // Process Trie
 #define Proc_Trie_Key_Bits               64
 #define Proc_Trie_Slot_Bits              2
-#define Proc_Trie_Use_Key_Value          0
+#if Use_Gen_Id_For_Trie_Key
+# define Proc_Trie_Use_Key_Value_Pair    1
+#else
+# define Proc_Trie_Use_Key_Value_Pair    0
+#endif
+#define Steady_Trie_Use_Key_Value_Pair  Proc_Trie_Use_Key_Value_Pair
 #define Steady_Trie(ident)               Proc_Trie_##ident
 #define steady_trie(ident)               proc_trie_##ident
 #define Steady_Trie_Root_Is_Least_Significant_Byte 1

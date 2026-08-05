@@ -250,6 +250,9 @@ typedef struct Steady_Trie(Iterator) {
   Steady_Trie(Stack_Node) *free_stack; // TODO: Use free stack-nodes!
 
   Steady_Trie(Key) key;
+#if Steady_Trie_Use_Key_Value_Pair
+  Steady_Trie_Value_Type *value;
+#endif
   S32 indent;
 } Steady_Trie(Iterator);
 
@@ -348,6 +351,10 @@ Steady_Function void steady_trie(iter_next)(Steady_Trie(Iterator) *iter) {
           key = key << ((Steady_Trie_Max_Depth - depth) * Steady_Trie_Slot_Bits);
 #endif
           iter->key = key;
+#if Proc_Trie_Use_Key_Value_Pair
+          iter->value = &iter->stack->node->values[iter->stack->index];
+#endif
+
           iter->stack->visited_plus_one = iter->stack->index+1;
           break;
         }
@@ -609,19 +616,11 @@ Steady_Function Steady_Trie(Edit_Result) steady_trie(edit)(
             }
 #endif
           }
-          else if (edit_kind == Steady_Trie(Edit_Delete)) {
-            // TODO: We do *NOT* want to set the occupied value here to 0!!!!!!!
-            //       Insteady, we need to introduce the idea of generations or something, in order to determing whether or not to take a branch when crawling the proc-trie!!!!!
-            /* node->occupied[slot_value] = 0; */
-          }
           else if (edit_kind == Steady_Trie(Edit_Search)) {
 #if Steady_Trie_Use_Key_Value_Pair
             if (node->occupied[slot_value]) {
               result.value = &node->values[slot_value];
             }
-#else
-            // TODO: Similar to delete above!!!! We do *NOT* want to set the occupied value to zero! We need generational indices or something.....
-            /* result.found = node->occupied[slot_value] ? 1 : 0; */
 #endif
           }
           break;
