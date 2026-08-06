@@ -629,7 +629,7 @@ function void apply_process_edits_by_kind(
 #endif
       } break;
       case Proc_Trie_Edit_Update: {
-        Process *new_p = push_struct(arena, Process);
+        Process *new_p = push_permanent_process(context);
         if (new_p) {
           proc_edit->new_process_ptr = new_p;
 
@@ -674,7 +674,9 @@ function void apply_process_edits_by_kind(
           }
 
           // copy proc
+          U64 new_gen_id = new_p->gen_id;
           *new_p = proc_edit->new_process;
+          new_p->gen_id = new_gen_id;
           // copy proc label
           if (new_p->label) {
             B32 error = 0;
@@ -3546,10 +3548,6 @@ int main(void) {
                 Color color = new_wire_box_is_active ? box_hover_color : box_color;
                 render_DrawRectangleRec(rc, new_wire_box, color);
               }
-
-              {/* delete this */
-                render_DrawText(rc, TextFormat("%llu", p->gen_id), shape.center.x, shape.center.y, 12, (Color){0, 255, 255, 255}, 1);
-              }
             }
           }
 
@@ -3599,10 +3597,6 @@ int main(void) {
                 Rectangle box = get_wire_box(&context, view, in_position);
                 Color c = is_active ? box_hover_color : box_color;
                 render_DrawRectangleRec(rc, box, c);
-              }
-
-              {/* delete this */
-                render_DrawText(rc, TextFormat("%llu", p->gen_id), out_position.x, out_position.y, 12, (Color){0, 255, 255, 255}, 1);
               }
             }
           }

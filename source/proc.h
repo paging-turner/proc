@@ -183,7 +183,8 @@ struct Process {
 #define steady_trie(ident)               proc_trie_##ident
 #define Steady_Trie_Root_Is_Least_Significant_Byte 1
 #define Steady_Trie_Value_Type           Process
-#define Steady_Trie_Default_Value        (Process){0}
+Process global_default_steady_trie_process;
+#define Steady_Trie_Default_Value        (&global_default_steady_trie_process)
 #define Steady_Trie_Use_Debug_Log        0
 #include "../libraries/steady_trie.h"
 #define Proc_Trie_Iterate(iter_name, arena, trie)\
