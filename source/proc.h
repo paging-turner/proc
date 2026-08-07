@@ -585,7 +585,7 @@ global_variable Process global_null_process;
 #define List_For(t, n, i)\
   List_For_N(t, n, i, next)
 
-#define Robust_Assertions 0
+#define Robust_Assertions 1
 
 #if Robust_Assertions
 # define Assert_If(exp)   if(!(exp))

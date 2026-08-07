@@ -280,6 +280,7 @@ function void piece_table_delete(
         }
         else {
           row->size -= amount_to_the_left_of_text_offset;
+          row->offset += amount_to_the_left_of_text_offset;
         }
         Assert(table->text_size >= amount_to_the_left_of_text_offset);
         table->text_size -= amount_to_the_left_of_text_offset;

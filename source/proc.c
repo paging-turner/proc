@@ -1211,7 +1211,6 @@ function void set_menu_state_as_save_file_as(Context *context, Process *element)
 
 
 function void handle_label_editing(Context *context, Process_List ps) {
-  /* Assert(!"TODO: When editing labels for UI elements, we should use a separate trie and maybe a separate edit-list"); */
   // TODO: we need more than ascii text editing at some point.....
   U32 key = 0;
   U32 k = 0;
