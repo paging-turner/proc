@@ -170,7 +170,7 @@ global_variable Process **sub_menus[] = {
 global_variable U32 sub_menu_counts[] = { ArrayCount(file_submenu), ArrayCount(edit_submenu) };
 
 
-global_variable Process top_menu_box = (Process){
+global_variable Process global_top_menu_box = (Process){
   .ui_box = {
     .align = Ui_Align_TopLeft,
     .layout = Ui_Layout_Horizontal,
@@ -1367,8 +1367,9 @@ function void set_ui_box_size(Process *box, Vector2 size, B32 set_box_x, B32 set
 }
 
 
-function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
+function B32 do_ui_element(Context *context, Process_Stack *stack, Process *element, B32 sizing) {
   B32 interacted = 0;
+  if (stack == 0) goto error;
   B32 is_hot = 0;
 
   Render_Context *rc = &context->ui_render_context;
@@ -1380,13 +1381,12 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
   Color hot_bg_color = global_button_hot_bg_color;
   Color font_color = global_button_font_color;
 
-  Process *box = context->ui_box_stack.first;
-  Ui_Align align = (box == 0) ? Ui_Default_Align : box->ui_box.align;
-  Ui_Layout layout = (box == 0) ? Ui_Default_Layout : box->ui_box.layout;
-  Vector2 box_position = (box == 0) ? Ui_Default_Position : box->position;
+  Ui_Align align = (stack->process == 0) ? Ui_Default_Align : stack->process->ui_box.align;
+  Ui_Layout layout = (stack->process == 0) ? Ui_Default_Layout : stack->process->ui_box.layout;
+  Vector2 box_position = (stack->process == 0) ? Ui_Default_Position : stack->process->position;
 
-  B32 set_box_x = box && ui_box_should_set_x(box);
-  B32 set_box_y = box && ui_box_should_set_y(box);
+  B32 set_box_x = stack->process && ui_box_should_set_x(stack->process);
+  B32 set_box_y = stack->process && ui_box_should_set_y(stack->process);
 
   if (sizing) {
     if (element->label_c_string == 0 && element->label) {
@@ -1397,7 +1397,7 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
     B32 fit_to_text = Get_Flag(element->flags, Process_Flag_FitToText);
     element->size = get_ui_element_size(context, element, fit_to_text, element->label_c_string);
 
-    set_ui_box_size(box, element->size, set_box_x, set_box_y);
+    set_ui_box_size(stack->process, element->size, set_box_x, set_box_y);
 
     switch (align) {
     case Ui_Align_Top: {
@@ -1437,16 +1437,16 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
     } break;
     case Ui_Layout_Vertical: {
       next_offset = (Vector2){0.0f, element->size.y};
-      element->position = get_ui_box_inner_position(context, box);
+      element->position = get_ui_box_inner_position(context, stack->process);
     } break;
     case Ui_Layout_Horizontal: {
-      element->position = get_ui_box_inner_position(context, box);
+      element->position = get_ui_box_inner_position(context, stack->process);
       next_offset = (Vector2){element->size.x, 0.0f};
     } break;
     }
 
-    box->ui_box.offset = Vector2Add(box->ui_box.offset, next_offset);
-    Vector2 box_size = get_box_size(box);
+    stack->process->ui_box.offset = Vector2Add(stack->process->ui_box.offset, next_offset);
+    Vector2 box_size = get_box_size(stack->process);
 
     if (set_box_x && layout == Ui_Layout_Vertical) {
       element->size.x = box_size.x;
@@ -1461,15 +1461,15 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
       element->size.x-2.0f*element->margin.x,
       element->size.y-2.0f*element->margin.y,
     };
-    Rectangle box_rect = (Rectangle){box->position.x, box->position.y, box_size.x, box_size.y};
+    Rectangle box_rect = (Rectangle){stack->process->position.x, stack->process->position.y, box_size.x, box_size.y};
     B32 in_bounds = 1;
-    if (Get_Flag(box->flags, Ui_Box_Flag_Clip)) {
+    if (Get_Flag(stack->process->flags, Ui_Box_Flag_Clip)) {
       in_bounds = CheckCollisionRecs(element_rect, box_rect);
     }
 
     if (in_bounds) {
       B32 hover_element = rectangle_contains_point(element_rect, context->ui_state.mouse_position);
-      B32 hover_box = (!Get_Flag(box->flags, Ui_Box_Flag_Clip) ||
+      B32 hover_box = (!Get_Flag(stack->process->flags, Ui_Box_Flag_Clip) ||
                        rectangle_contains_point(box_rect, context->ui_state.mouse_position));
       if (Get_Flag(element->flags, Process_Flag_Clickable) &&
           !Get_Flag(ui_state->flags, Ui_State_Flag_action_occured) &&
@@ -1502,6 +1502,7 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
     }
   }
 
+error:;
   return interacted;
 }
 
@@ -1527,12 +1528,20 @@ function Process *create_button(Arena *arena, Vector2 position, String_Chunk_Lis
 }
 
 
-function void ui_box_begin(Context *context, Process *box, B32 sizing) {
+function void ui_box_begin(Context *context, Process_Stack *stack, Process *box, B32 sizing) {
   Render_Context *rc = &context->ui_render_context;
   Ui_State *ui_state = &context->ui_state;
-  Process *parent_box = context->ui_box_stack.first;
 
-  SLLQueuePushFront(context->ui_box_stack.first, context->ui_box_stack.last, box);
+  // @Speed
+  Process_Stack *parent = stack;
+  for (Process_Stack *s = parent; parent != 0; parent = parent->next) {
+    parent = s;
+  }
+
+  Process_Stack *new_stack = push_struct(context->temp_arena, Process_Stack);
+  if (new_stack == 0) goto error;
+  new_stack->process = box;
+  SLLStackPush(stack, new_stack);
 
   if (sizing) {
     box->ui_box.offset = (Vector2){0.0f, 0.0f};
@@ -1548,8 +1557,8 @@ function void ui_box_begin(Context *context, Process *box, B32 sizing) {
     Vector2 size = get_box_size(box);
     Rectangle box_rect = (Rectangle){box->position.x, box->position.y, size.x, size.y};
     // positioning
-    if (parent_box) {
-      box->position = get_ui_box_inner_position(context, parent_box);
+    if (parent && parent->process) {
+      box->position = get_ui_box_inner_position(context, parent->process);
     }
     if (Get_Flag(box->flags, Ui_Box_Flag_ShouldDraw)) {
       render_DrawRectangle(rc, box_rect.x, box_rect.y, box_rect.width, box_rect.height, box->ui_box.color);
@@ -1568,34 +1577,36 @@ function void ui_box_begin(Context *context, Process *box, B32 sizing) {
       render_BeginScissorMode(rc, box->position, size);
     }
   }
+error:;
 }
 
 
-function void ui_box_end(Context *context, Process *box, B32 sizing) {
+function void ui_box_end(Context *context, Process_Stack *stack, Process *box, B32 sizing) {
   Render_Context *rc = &context->ui_render_context;
+  if (stack == 0 || box == 0) goto error;
 
-  if (box != context->ui_box_stack.first) {
-    printf("[ Error ] Popping ui-box off of stack but given box does not match. Box passed in is %p while the box popped of the stack is %p .\n", box, context->ui_box_stack.first);
+  if (box != stack->process) {
+    printf("[ Error ] Popping ui-box off of stack but given box does not match. Box passed in is %p while the box popped of the stack is %p .\n", box, stack?stack->process:0);
   }
 
-  SLLQueuePop(context->ui_box_stack.first, context->ui_box_stack.last);
+  SLLStackPop(stack);
 
-  Process *parent_box = context->ui_box_stack.first;
+  Process_Stack *parent_box = stack;
 
-  if (sizing && parent_box) {
-    B32 set_box_x = ui_box_should_set_x(parent_box);
-    B32 set_box_y = ui_box_should_set_y(parent_box);
+  if (sizing && parent_box && parent_box->process) {
+    B32 set_box_x = ui_box_should_set_x(parent_box->process);
+    B32 set_box_y = ui_box_should_set_y(parent_box->process);
     Vector2 box_size = get_box_size(box);
 
-    set_ui_box_size(parent_box, box_size, set_box_x, set_box_y);
+    set_ui_box_size(parent_box->process, box_size, set_box_x, set_box_y);
   }
 
   if (!sizing) {
-    if (parent_box) {
+    if (parent_box && parent_box->process) {
       // @Copypasta do_ui_element
       Vector2 box_size = get_box_size(box);
       Vector2 next_offset;
-      switch (parent_box->ui_box.layout) {
+      switch (parent_box->process->ui_box.layout) {
       default:
       case Ui_Layout_None: {
         next_offset = Zero_Struct(Vector2);
@@ -1607,12 +1618,14 @@ function void ui_box_end(Context *context, Process *box, B32 sizing) {
         next_offset = (Vector2){box_size.x, 0.0f};
       } break;
       }
-      parent_box->ui_box.offset = Vector2Add(parent_box->ui_box.offset, next_offset);
+      parent_box->process->ui_box.offset =
+        Vector2Add(parent_box->process->ui_box.offset, next_offset);
     }
     if (Get_Flag(box->flags, Ui_Box_Flag_Clip)) {
       render_EndScissorMode(rc);
     }
   }
+error:;
 }
 
 
@@ -1696,7 +1709,7 @@ function void do_open_file(Context *context, B32 sizing) {
 #endif
 
 
-
+#if 0
 function void do_save_file_as(Context *context, B32 sizing) {
   ui_box_begin(context, &save_file_as_box, sizing);
   {
@@ -1719,6 +1732,7 @@ function void do_save_file_as(Context *context, B32 sizing) {
   }
   ui_box_end(context, &save_file_as_box, sizing);
 }
+#endif
 
 
 function void handle_copy(Context *context, Process *element) {
@@ -2848,12 +2862,12 @@ function Process create_lit_button(Context *context, String8 label, F32 x_pos, F
 
 
 
-
+#if 0
 function void do_menu_ui(Context *context, B32 sizing) {
   S32 clicked_active_menu_button = -1;
   S32 hot_active_menu_button = -1;
 
-  ui_box_begin(context, &top_menu_box, sizing);
+  ui_box_begin(context, &global_top_menu_box, sizing);
   {
     for (U32 i = 0; i < Top_Menu_Count; ++i) {
       Process *menu_button = menu_buttons[i];
@@ -2889,7 +2903,7 @@ function void do_menu_ui(Context *context, B32 sizing) {
       }
     }
   }
-  ui_box_end(context, &top_menu_box, sizing);
+  ui_box_end(context, &global_top_menu_box, sizing);
 
   // update active-menu-element
   if (clicked_active_menu_button > -1) {
@@ -2902,6 +2916,7 @@ function void do_menu_ui(Context *context, B32 sizing) {
     set_menu_state(context, Menu_State_From_Top_Menu_Index(hot_active_menu_button));
   }
 }
+#endif
 
 
 
@@ -3205,7 +3220,30 @@ int main(void) {
 
 
       // init ui elements
-      // TODO: Turn these into struct literal declarations if we can.
+      {
+        View *ui_view = &context.views[View_Kind_Ui];
+        Process_Do_Undo *ui_do_undo = &context.views[View_Kind_Ui].do_undo;
+
+        // @Copypasta all below....
+        Process *top_menu_box = create_process(&context, Process_Do_Undo_Kind_Ui);
+        if (top_menu_box == 0) goto init_ui_elements_error;
+        U64 top_menu_box_gen_id = top_menu_box->gen_id;
+        *top_menu_box = global_top_menu_box;
+        top_menu_box->gen_id = top_menu_box_gen_id;
+
+        ui_view->root_process = top_menu_box;
+
+        Process *file_menu_button = create_process(&context, Process_Do_Undo_Kind_Ui);
+        if (file_menu_button == 0) goto init_ui_elements_error;
+        U64 file_menu_button_gen_id = file_menu_button->gen_id;
+        *file_menu_button = global_ui_procs[Global_Ui_Proc_Id_file_menu_button];
+        file_menu_button->gen_id = file_menu_button_gen_id;
+
+        SLLStackPush_N(top_menu_box, file_menu_button, child);
+
+        gather_processes_from_trie(&context, ui_do_undo);
+      init_ui_elements_error:;
+      }
       global_ui_procs[Global_Ui_Proc_Id_file_menu_button] =
         create_lit_button(&context, str8_lit("File"), 0, 0);
       global_ui_procs[Global_Ui_Proc_Id_open_file_button] =
@@ -3309,6 +3347,7 @@ int main(void) {
       }
 
       // handle ui
+#if 0
       {
         sub_menu_box.size = Zero_Struct(Vector2);
 
@@ -3328,6 +3367,42 @@ int main(void) {
         do_menu_ui(&context, 1);
         do_menu_ui(&context, 0);
       }
+#else
+      {
+        Arena *temp_arena = context.temp_arena;
+        U64 arena_pop_pos = arena_current_pos(context.temp_arena);
+
+        Process_Stack *stack = push_struct(temp_arena, Process_Stack);
+        if (stack) {
+          stack->process = context.views[View_Kind_Ui].root_process;
+
+          for (; stack && stack->process;) {
+            do_ui_element(&context, stack, stack->process, 1);
+            B32 interacted = do_ui_element(&context, stack, stack->process, 0);
+            SLLStackPop(stack);
+
+            if (stack && stack->process) {
+              if (stack->process->child) {
+                Process_Stack *new_stack = push_struct(temp_arena, Process_Stack);
+                if (new_stack) {
+                  new_stack->process = stack->process->child;
+                  SLLStackPush(stack, new_stack);
+                }
+                else {
+                  // Arena error :(
+                  break;
+                }
+              }
+              else if (stack->process->sibling) {
+                stack->process = stack->process->sibling;
+              }
+            }
+          }
+        }
+
+        arena_pop_to(context.temp_arena, arena_pop_pos);
+      }
+#endif
 
       if (!Get_Flag(context.ui_state.flags, Ui_State_Flag_action_occured)) {
         // environment

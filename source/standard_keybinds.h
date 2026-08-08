@@ -135,16 +135,16 @@ Define_Keybind_And_Action(
 
   if (Test_Keybind(env, Enter)) {
     if (selection.view == context->views + View_Kind_Trie) {
-      B32 in_selection = selection.type == Process_Selection_In;
-      B32 out_selection = selection.type == Process_Selection_Out;
-
       if (selection.type == Process_Selection_Process) {
         if (selection.process->ref) {
           handled = 1;
 
-          env->view->do_undo.trie->current_root = selection.process->ref;
-          // TODO: if we ever display undo trie from other than main procs, we need to switch on that here......
-          gather_processes_from_trie(context, &env->view->do_undo);
+          Process_Do_Undo *do_undo = &context->views[View_Kind_Procs].do_undo;
+          if (do_undo->trie) {
+            do_undo->trie->current_root = selection.process->ref;
+            // TODO: if we ever display undo trie from other than main procs, we need to switch on that here......
+            gather_processes_from_trie(context, do_undo);
+          }
         }
       }
     }

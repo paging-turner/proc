@@ -83,6 +83,9 @@ typedef struct {
 #define Process_Connection_Xlist\
   X(In, 0) X(Out, 1)
 
+#define Process_Branch_Xlist\
+  X(Child, 0) X(Sibling, 1)
+
 enum Process_Connection {
 #define X(conn, ...)\
   Process_Connection_##conn,
@@ -98,6 +101,17 @@ enum Process_Connection_Flag {
 #undef X
 };
 
+typedef enum Process_Branch {
+#define X(conn, ...)\
+  Process_Branch_##conn,
+  Process_Branch_Xlist
+#undef X
+  Process_Branch__Count,
+} Process_Branch;
+
+StaticAssert((U32)Process_Connection__Count == (U32)Process_Branch__Count,
+             process_connection_and_process_branch_index_the_same_pointers_in_process_struct);
+
 typedef struct Process Process;
 typedef struct Context Context;
 
@@ -107,6 +121,41 @@ typedef enum Ref_Kind {
   Ref_Kind_ProcTrieNode,
   Ref_Kind_ProcTrieRoot,
 } Ref_Kind;
+
+
+#define Process_Flag_Xlist(X)\
+  X( Wire        )\
+  X( Empty       )\
+  X( Cup         )\
+  X( Cap         )\
+  X( Identity    )\
+  X( Drag_In     )\
+  X( Drag_Out    )\
+  X( Invisible   )\
+  X( AsBox       )\
+  X( RefIsActive )\
+  X( TextEdit    )\
+  X( CanBeActive )\
+  X( Clickable   )\
+  X( FitToText   )\
+  X( IsDetached  )\
+  X( Line        )\
+  X( UiOpen      )
+
+typedef enum {
+#define X(name, ...)\
+  Process_Flag_Kind_##name,
+  Process_Flag_Xlist(X)
+#undef X
+} Process_Flag_Kind;
+
+typedef enum {
+#define X(name, ...)\
+  Process_Flag_##name = 1 << (Process_Flag_Kind_##name),
+  Process_Flag_Xlist(X)
+#undef X
+} Process_Flag;
+
 
 struct Process {
   //////////////
@@ -125,7 +174,11 @@ struct Process {
       Process *in;
       Process *out;
     };
-    Process *conn[Process_Connection__Count];
+    struct {
+      Process *child;
+      Process *sibling;
+    };
+    Process *conn[Process_Connection__Count]; // NOTE: also indexed by Process_Branch
   };
 
   union {
@@ -168,9 +221,14 @@ struct Process {
   U64 cold_id;
 };
 
-#define Use_Gen_Id_For_Trie_Key 1
+typedef struct Process_Stack {
+  Process *process;
+  struct Process_Stack *next;
+} Process_Stack;
+
 
 // Process Trie
+#define Use_Gen_Id_For_Trie_Key 1
 #define Proc_Trie_Key_Bits               64
 #define Proc_Trie_Slot_Bits              2
 #if Use_Gen_Id_For_Trie_Key
@@ -297,43 +355,7 @@ function          Process *find_process_connection(Context *context, Process *p,
 
 
 
-//////////////////////////////////////
-// Process
-//////////////////////////////////////
 
-#define Process_Flag_Xlist(X)\
-  /* Name               Shift */\
-  X( Wire            ,  0      )\
-  X( Empty           ,  1      )\
-  X( Cup             ,  2      )\
-  X( Cap             ,  3      )\
-  X( Identity        ,  4      )\
-  X( Drag_In         ,  5      )\
-  X( Drag_Out        ,  6      )\
-  X( Invisible       ,  7      )\
-  X( AsBox           ,  8      )\
-  X( RefIsActive     ,  9      )\
-  X( TextEdit        , 10      )\
-  X( CanBeActive     , 11      )\
-  X( Clickable       , 12      )\
-  X( FitToText       , 13      )\
-  X( IsDetached      , 14      )\
-  X( Line            , 15      )
-
-
-typedef enum {
-#define X(name, shift, ...)\
-  Process_Flag_##name        = 1 << (shift),
-  Process_Flag_Xlist(X)
-#undef X
-} Process_Flag;
-
-typedef enum {
-#define X(name, shift, ...)\
-  Process_Flag_Kind_##name        = (shift),
-  Process_Flag_Xlist(X)
-#undef X
-} Process_Flag_Kind;
 
 struct Connection_Result {
   Process *out;
@@ -522,6 +544,7 @@ struct View {
   Process_List processes;
   U64 process_count;
   Process_List active_processes;
+  Process *root_process;
   Process_Do_Undo do_undo;
 };
 
@@ -544,7 +567,6 @@ struct Context {
   U64 proc_gen_id;
 
   Process_List free_processes;
-  Process_List free_ui_elements;
   String_Chunk_List free_strings;
   V2_Chunk *free_v2_chunks;
 
@@ -555,13 +577,13 @@ struct Context {
 
   Process_List save_file_list;
   Process *selected_element; // Use this for things like picking (button click) a file to open.
-  Process_List ui_box_stack;
+  /* Process_List ui_box_stack; */
 
   Render_Context ui_render_context;
   Render_Context process_render_context;
 
   Ui_State ui_state;
-  Menu_State menu_state;
+  Menu_State menu_state; // TODO: delete this once we do the new way of handling UI
   Vector2 copy_center;
 
   U8 *save_file_name;
@@ -570,7 +592,7 @@ struct Context {
 
   Piece_Table_Memory piece_table_memory;
 
-  F32 time_to_wait_for_label_edit;
+  F32 time_to_wait_for_label_edit; // TODO: move edit-timeout stuff to ui_state?
   F32 edit_timeout;
 };
 
