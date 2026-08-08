@@ -140,3 +140,13 @@ For now, we will have to manually test a bunch of features. This file exists to 
     3. Create a fourth process
     4. Connect the third (the proc with two in connections) to the fourth
     BUG: The two in connections get swapped.
+
+
+------------------------------------------
+016 Two quick label edits
+    1. Create two processes
+    2. Add text to one process
+    3. Very quickly (before text-edit timeout) edit other process
+    4. Undo to the beginning
+    EXPECT: The second label should clear out and then the first label.
+    VARIATION: Make the text-edit timeout very long to make it easier to test.

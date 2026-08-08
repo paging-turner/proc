@@ -521,8 +521,8 @@ function Process_Do_Undo *get_process_do_undo_from_kind(
   Process_Do_Undo *do_undo = 0;
 
   switch(kind) {
-  case Process_Do_Undo_Kind_Proc: { do_undo = &context->proc_do_undo; } break;
-  case Process_Do_Undo_Kind_Ui: { do_undo = &context->ui_do_undo; } break;
+  case Process_Do_Undo_Kind_Proc: { do_undo = &context->views[View_Kind_Procs].do_undo; } break;
+  case Process_Do_Undo_Kind_Ui: { do_undo = &context->views[View_Kind_Ui].do_undo; } break;
   }
 
   return do_undo;
@@ -541,7 +541,7 @@ function Process_Do_Undo *get_process_do_undo_from_process(Context *context, Pro
 
 function void update_edited_wire_pointers(Context *context, Process_Edit *proc_edit, B32 inserting) {
   // update the pointers of the wire if the connected processes have been updated
-  for (Process_Edit *test_edit = context->proc_do_undo.edit_list.first;
+  for (Process_Edit *test_edit = context->views[View_Kind_Procs].do_undo.edit_list.first;
        test_edit != 0;
        test_edit = test_edit->next) {
     if (!Get_Flag(test_edit->process->flags, Process_Flag_Wire)) {
@@ -577,8 +577,8 @@ function void apply_process_edits_by_kind(
   B32 handle_wires
   ) {
   Assert(handle_wires == 0 || handle_wires == 1);
-  B32 is_proc_do_undo = do_undo == &context->proc_do_undo;
-  B32 is_ui_do_undo = do_undo == &context->ui_do_undo;
+  B32 is_proc_do_undo = do_undo == &context->views[View_Kind_Procs].do_undo;
+  B32 is_ui_do_undo = do_undo == &context->views[View_Kind_Ui].do_undo;
   Arena *arena;
   if (is_proc_do_undo) {
     arena = context->permanent_arena;
@@ -741,8 +741,8 @@ error:;
 function void gather_processes_from_trie(Context *context, Process_Do_Undo *do_undo) {
   Proc_Trie_Trie *trie = do_undo->trie;
 
-  B32 is_proc_do_undo = do_undo == &context->proc_do_undo;
-  B32 is_ui_do_undo = do_undo == &context->ui_do_undo;
+  B32 is_proc_do_undo = do_undo == &context->views[View_Kind_Procs].do_undo;
+  B32 is_ui_do_undo = do_undo == &context->views[View_Kind_Ui].do_undo;
 
   { // apply process edits
     apply_process_edits_by_kind(context, do_undo, 0);
@@ -834,11 +834,11 @@ function void gather_processes_from_trie_from_do_undo_flags(
   Process_Do_Undo_Kind_Flag kind_flags
   ) {
   if (Get_Flag(kind_flags, Process_Do_Undo_Kind_Flag_Proc)) {
-    Process_Do_Undo *proc_do_undo = &context->proc_do_undo;
+    Process_Do_Undo *proc_do_undo = &context->views[View_Kind_Procs].do_undo;
     gather_processes_from_trie(context, proc_do_undo);
   }
   if (Get_Flag(kind_flags, Process_Do_Undo_Kind_Flag_Ui)) {
-    Process_Do_Undo *ui_do_undo = &context->ui_do_undo;
+    Process_Do_Undo *ui_do_undo = &context->views[View_Kind_Ui].do_undo;
     gather_processes_from_trie(context, ui_do_undo);
   }
 }
@@ -1176,8 +1176,8 @@ function void clear_ui_state(Context *context) {
   context->save_file_list.last = 0;
 
   arena_pop_to(context->ui_arena, 0);
-  context->ui_do_undo.trie = proc_trie_create_trie(context->ui_arena);
-  gather_processes_from_trie(context, &context->ui_do_undo);
+  context->views[View_Kind_Ui].do_undo.trie = proc_trie_create_trie(context->ui_arena);
+  gather_processes_from_trie(context, &context->views[View_Kind_Ui].do_undo);
 }
 
 
@@ -2002,7 +2002,7 @@ function void add_wire_connection(
         B32 wire_moved_to_same_process = wire->conn[conn] == process;
         B32 wire_is_to_the_left_of_itself = which_conn > wire->which_conn[conn];
 
-        Editable_Process new_wire = get_editable_process(context->proc_do_undo.edit_list, wire);
+        Editable_Process new_wire = get_editable_process(context->views[View_Kind_Procs].do_undo.edit_list, wire);
         new_wire.process.conn[conn] = process;
         if (wire_moved_to_same_process && wire_is_to_the_left_of_itself) {
           new_wire.process.which_conn[conn] = which_conn - 1;
@@ -2015,14 +2015,14 @@ function void add_wire_connection(
 
       // decrement currently connected process' conn-count
       {
-        Editable_Process new_process = get_editable_process(context->proc_do_undo.edit_list, wire->conn[conn]);
+        Editable_Process new_process = get_editable_process(context->views[View_Kind_Procs].do_undo.edit_list, wire->conn[conn]);
         new_process.process.conn_count[conn] -= 1;
         add_process_to_process_edit_list(context, do_undo, wire->conn[conn], Proc_Trie_Edit_Update, new_process.process);
       }
 
       // increment newly connected process' conn-count
       {
-        Editable_Process new_process = get_editable_process(context->proc_do_undo.edit_list, process);
+        Editable_Process new_process = get_editable_process(context->views[View_Kind_Procs].do_undo.edit_list, process);
         new_process.process.conn_count[conn] += 1;
         add_process_to_process_edit_list(context, do_undo, process, Proc_Trie_Edit_Update, new_process.process);
       }
@@ -2042,7 +2042,7 @@ function void add_wire_connection(
             // decrement which_conn
             if (test_wire_connected_to_old_process &&
                 test_wire_to_the_right_of_old_process) {
-              Editable_Process new_test_wire = get_editable_process(context->proc_do_undo.edit_list, test_wire);
+              Editable_Process new_test_wire = get_editable_process(context->views[View_Kind_Procs].do_undo.edit_list, test_wire);
               new_test_wire.process.which_conn[conn] -= 1;
               add_process_to_process_edit_list(context, do_undo, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
             }
@@ -2050,7 +2050,7 @@ function void add_wire_connection(
             // increment which_conn
             if (test_wire_connected_to_new_process &&
                 test_wire_to_the_right_of_new_process) {
-              Editable_Process new_test_wire = get_editable_process(context->proc_do_undo.edit_list, test_wire);
+              Editable_Process new_test_wire = get_editable_process(context->views[View_Kind_Procs].do_undo.edit_list, test_wire);
               new_test_wire.process.which_conn[conn] += 1;
               add_process_to_process_edit_list(context, do_undo, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
             }
@@ -2088,7 +2088,7 @@ function void handle_deleted_wire(
       B32 is_wire = Get_Flag(test_wire->flags, Process_Flag_Wire);
 
       if (is_wire && test_wire != wire) {
-        Editable_Process new_test_wire = get_editable_process(context->proc_do_undo.edit_list, test_wire);
+        Editable_Process new_test_wire = get_editable_process(context->views[View_Kind_Procs].do_undo.edit_list, test_wire);
 
         // adjust in-connections that come after deleted wire
         if (remove_in && test_wire->in == wire->in) {
@@ -2120,7 +2120,7 @@ function void handle_deleted_wire(
     // decrement process' in-count
     if (remove_in && (in_matched || only_in_conn)) {
       if (wire->in) {
-        Editable_Process new_in = get_editable_process(context->proc_do_undo.edit_list, wire->in);
+        Editable_Process new_in = get_editable_process(context->views[View_Kind_Procs].do_undo.edit_list, wire->in);
         new_in.process.in_count -= 1;
         add_process_to_process_edit_list(context, do_undo, wire->in, Proc_Trie_Edit_Update, new_in.process);
       }
@@ -2129,7 +2129,7 @@ function void handle_deleted_wire(
     // decrement process' out-count
     if (remove_out && (out_matched || only_out_conn)) {
       if (wire->out) {
-        Editable_Process new_out = get_editable_process(context->proc_do_undo.edit_list, wire->out);
+        Editable_Process new_out = get_editable_process(context->views[View_Kind_Procs].do_undo.edit_list, wire->out);
         new_out.process.out_count -= 1;
         add_process_to_process_edit_list(context, do_undo, wire->out, Proc_Trie_Edit_Update, new_out.process);
       }
@@ -2144,7 +2144,7 @@ function void handle_deleted_wire(
 
 
 function void delete_process(Context *context, Process *p, U32 which_conn_flags) {
-  Proc_Trie_Trie *trie = context->proc_do_undo.trie;
+  Proc_Trie_Trie *trie = context->views[View_Kind_Procs].do_undo.trie;
   Process_Do_Undo *do_undo = get_process_do_undo_from_process(context, p);
 
   B32 p_overwritten = add_process_to_process_edit_list(context, do_undo, p, Proc_Trie_Edit_Delete, (Process){0});
@@ -2225,15 +2225,15 @@ function Connection_Result connect_processes_no_gather(
       result.new_wire = create_process(context, do_undo_kind);
 
       if (result.new_wire) {
-        Process_Edit *out_edit_proc = process_edit_list_contains_process(context, context->proc_do_undo.edit_list, out);
-        Process_Edit *in_edit_proc = process_edit_list_contains_process(context, context->proc_do_undo.edit_list, in);
+        Process_Edit *out_edit_proc = process_edit_list_contains_process(context, context->views[View_Kind_Procs].do_undo.edit_list, out);
+        Process_Edit *in_edit_proc = process_edit_list_contains_process(context, context->views[View_Kind_Procs].do_undo.edit_list, in);
 
         if (out_edit_proc) {
           result.new_wire->which_out = out_edit_proc->new_process.out_count;
           out_edit_proc->new_process.out_count += 1;
         }
         else {
-          Editable_Process new_out = get_editable_process(context->proc_do_undo.edit_list, out);
+          Editable_Process new_out = get_editable_process(context->views[View_Kind_Procs].do_undo.edit_list, out);
           result.new_wire->which_out = new_out.process.out_count;
           new_out.process.out_count += 1;
           add_process_to_process_edit_list(context, do_undo, out, Proc_Trie_Edit_Update, new_out.process);
@@ -2244,7 +2244,7 @@ function Connection_Result connect_processes_no_gather(
           in_edit_proc->new_process.in_count += 1;
         }
         else {
-          Editable_Process new_in = get_editable_process(context->proc_do_undo.edit_list, in);
+          Editable_Process new_in = get_editable_process(context->views[View_Kind_Procs].do_undo.edit_list, in);
           result.new_wire->which_in = new_in.process.in_count;
           new_in.process.in_count += 1;
           add_process_to_process_edit_list(context, do_undo, in, Proc_Trie_Edit_Update, new_in.process);
@@ -2272,7 +2272,7 @@ function Connection_Result connect_processes(
   Connection_Result result = connect_processes_no_gather(context, out, in);
 
   // TODO: don't assume we are connecting main procs......
-  gather_processes_from_trie(context, &context->proc_do_undo);
+  gather_processes_from_trie(context, &context->views[View_Kind_Procs].do_undo);
 
   return result;
 }
@@ -3172,8 +3172,8 @@ int main(void) {
       Set_Flag(context.flags, Context_Flag_DataStructureView);
 
       // init do-undo tries
-      context.proc_do_undo.trie = proc_trie_create_trie(context.permanent_arena);
-      gather_processes_from_trie(&context, &context.proc_do_undo);
+      context.views[View_Kind_Procs].do_undo.trie = proc_trie_create_trie(context.permanent_arena);
+      gather_processes_from_trie(&context, &context.views[View_Kind_Procs].do_undo);
       clear_ui_state(&context);
     }
 
@@ -3359,6 +3359,7 @@ int main(void) {
         for (U32 i = 0; i < env->context->keybind_count; ++i) {
           Keybind *keybind = env->context->keybinds + i;
           env->keybind = keybind;
+          env->view = &env->context->views[View_Kind_Procs];
           keybind->handle(env);
         }
       }

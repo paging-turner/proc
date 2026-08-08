@@ -234,33 +234,6 @@ typedef struct Process_Edit_List {
   Process_Edit *last;
 } Process_Edit_List;
 
-#define Process_Do_Undo_Kind_Xlist(X)\
-  X(Proc) X(Ui)
-
-typedef enum Process_Do_Undo_Kind {
-  Process_Do_Undo_Kind__Null,
-#define X(kind)\
-  Process_Do_Undo_Kind_##kind,
-  Process_Do_Undo_Kind_Xlist(X)
-#undef X
-  Process_Do_Undo_Kind__Count,
-} Process_Do_Undo_Kind;
-
-#define Process_Do_Undo_Kind_Flag_From_Kind(kind)\
-  (((kind) > 0 && (kind) < Process_Do_Undo_Kind__Count) ? (1<<(kind)) : 0)
-
-typedef enum Process_Do_Undo_Kind_Flag {
-#define X(kind)\
-  Process_Do_Undo_Kind_Flag_##kind = (1 << Process_Do_Undo_Kind_##kind),
-  Process_Do_Undo_Kind_Xlist(X)
-#undef X
-} Process_Do_Undo_Kind_Flag;
-
-struct Process_Do_Undo {
-  Proc_Trie_Trie *trie;
-  Process_Edit_List edit_list;
-};
-
 enum Keybind_Result {
   Keybind_Result__Null,
   Keybind_Result_Enter,
@@ -273,6 +246,8 @@ typedef enum Process_Connection Process_Connection;
 typedef enum Process_Connection_Flag Process_Connection_Flag;
 typedef struct Connection_Result Connection_Result;
 typedef enum Keybind_Result Keybind_Result;
+typedef enum Process_Do_Undo_Kind Process_Do_Undo_Kind;
+typedef enum Process_Do_Undo_Kind_Flag Process_Do_Undo_Kind_Flag;
 typedef struct Keybind Keybind;
 function              void clear_process_list(Context *context, Process_List *list);
 function              void clear_active_processes(Context *context);
@@ -491,10 +466,44 @@ typedef enum {
   ((context)->menu_state >= Menu_State_FileMenu &&\
    (context)->menu_state <= Menu_State_EditMenu)
 
+
+
+
+#define Process_Do_Undo_Kind_Xlist(X)\
+  X(Proc) X(Ui)
+
+enum Process_Do_Undo_Kind {
+  Process_Do_Undo_Kind__Null,
+#define X(kind)\
+  Process_Do_Undo_Kind_##kind,
+  Process_Do_Undo_Kind_Xlist(X)
+#undef X
+  Process_Do_Undo_Kind__Count,
+};
+
+#define Process_Do_Undo_Kind_Flag_From_Kind(kind)\
+  (((kind) > 0 && (kind) < Process_Do_Undo_Kind__Count) ? (1<<(kind)) : 0)
+
+enum Process_Do_Undo_Kind_Flag {
+#define X(kind)\
+  Process_Do_Undo_Kind_Flag_##kind = (1 << Process_Do_Undo_Kind_##kind),
+  Process_Do_Undo_Kind_Xlist(X)
+#undef X
+};
+
+struct Process_Do_Undo {
+  Proc_Trie_Trie *trie;
+  Process_Edit_List edit_list;
+};
+
+
+
+
 #define View_Count  5
 
 typedef enum View_Kind {
   View_Kind_Procs,
+  View_Kind_Ui,
   View_Kind_Trie,
   View_Kind__Count,
 } View_Kind;
@@ -513,6 +522,7 @@ struct View {
   Process_List processes;
   U64 process_count;
   Process_List active_processes;
+  Process_Do_Undo do_undo;
 };
 
 typedef struct Process_Loc {
@@ -532,9 +542,6 @@ struct Context {
 
   U32 flags;
   U64 proc_gen_id;
-
-  Process_Do_Undo proc_do_undo;
-  Process_Do_Undo ui_do_undo;
 
   Process_List free_processes;
   Process_List free_ui_elements;
