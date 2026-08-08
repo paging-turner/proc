@@ -38,7 +38,6 @@ Define_Keybind_And_Action(
   ) {
   B32 handled = 0;
   Context *context = env->context;
-  Process_Selection selection = env->selection;
   Keybind_Result kb_res = Check_Keybind(env);
 
   if (kb_res == Keybind_Result_Enter) {

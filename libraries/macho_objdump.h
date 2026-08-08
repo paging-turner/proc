@@ -514,10 +514,6 @@ static void macho_print_symbol_table(String8 object_file, struct symtab_command 
   for (U32 i = 0; i < table->nsyms; ++i) {
     struct nlist_64 *symbol = symbol_table + i;
     if (!macho_symbol_table_entry_is_zero(*symbol)) {
-      char *symbol_type = macho_get_symbol_type_name(*symbol);
-      String8 description = macho_get_symbol_description(*symbol);
-      B32 is_unknown = symbol_type[0] == '<'; // @HACK macho_get_symbol_type_name
-
       if (macho_symbol_table_entry_has_only_value(*symbol)) {
         /* printf("\"%s\" ", object_file.str + (table->stroff + symbol->n_value)); */
       }

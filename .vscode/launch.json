@@ -5,7 +5,7 @@
             "name": "ARM launch",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/proc.out",
+            "program": "${workspaceFolder}/build/proc.o",
             "args": [],
             "cwd": "${fileDirname}"
         },
@@ -13,7 +13,7 @@
             "name": "(lldb) Launch",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/proc.out",
+            "program": "${workspaceFolder}/build/proc.o",
             "args": [""],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build",

@@ -100,7 +100,7 @@ global_variable String_Chunk global_null_string_chunk;
 // UI Globals
 ////////////////////////
 
-// TODO: turn into a symbol-set?
+// TODO: Once we do the tree version of UI layout, we won't need this enum
 typedef enum Global_Ui_Proc_Id {
   Global_Ui_Proc_Id_file_menu_button,
   Global_Ui_Proc_Id_open_file_button,
@@ -338,29 +338,6 @@ function String_Chunk_List string_chunk_list_from_string8(Context *context, Stri
 }
 
 
-function void free_ui_element(Context *context, Process *e) {
-  SLLQueuePush(context->free_ui_elements.first, context->free_ui_elements.last, e);
-  e->next = 0;
-}
-
-
-function Process *create_ui_element(Context *context) {
-  Process *e = context->free_ui_elements.first;
-
-  if (e) {
-    SLLQueuePop(context->free_ui_elements.first, context->free_ui_elements.last);
-  } else {
-    e = push_struct(context->permanent_arena, Process);
-  }
-
-  if (e) {
-    *e = (Process){0};
-  } else {
-    e = The_Null_Process();
-  }
-
-  return e;
-}
 
 
 
@@ -846,8 +823,14 @@ function void gather_processes_from_trie_from_do_undo_flags(
 
 
 function Process *push_permanent_process(Context *context) {
-  Process *p = push_struct(context->permanent_arena, Process);
-  p->gen_id = context->proc_gen_id++;
+  Process *p = 0;
+
+  if (context) {
+    p = push_struct(context->permanent_arena, Process);
+    if (p) {
+      p->gen_id = context->proc_gen_id++;
+    }
+  }
 
   return p;
 }
@@ -1401,7 +1384,6 @@ function B32 do_ui_element(Context *context, Process *element, B32 sizing) {
   Ui_Align align = (box == 0) ? Ui_Default_Align : box->ui_box.align;
   Ui_Layout layout = (box == 0) ? Ui_Default_Layout : box->ui_box.layout;
   Vector2 box_position = (box == 0) ? Ui_Default_Position : box->position;
-  Vector2 box_offset = (box == 0) ? Ui_Default_Offset : box->ui_box.offset;
 
   B32 set_box_x = box && ui_box_should_set_x(box);
   B32 set_box_y = box && ui_box_should_set_y(box);
@@ -1992,7 +1974,7 @@ function void add_wire_connection(
   Process_Connection conn,
   U32 which_conn
   ) {
-  if (wire && process) {
+  if (context && wire && process) {
     Process_Do_Undo *do_undo = get_process_do_undo_from_process(context, wire);
     Process_Do_Undo *test_do_undo = get_process_do_undo_from_process(context, wire);
     B32 is_same_do_undo = do_undo == test_do_undo;
@@ -2034,7 +2016,6 @@ function void add_wire_connection(
           B32 not_the_moved_wire = wire != test_wire;
           B32 test_wire_to_the_right_of_old_process = test_wire->which_conn[conn] >= wire->which_conn[conn];
           B32 test_wire_to_the_right_of_new_process = test_wire->which_conn[conn] >= which_conn;
-          B32 wire_moved_to_same_process = wire->conn[conn] == process;
           B32 test_wire_connected_to_old_process = test_wire->conn[conn] == wire->conn[conn];
           B32 test_wire_connected_to_new_process = test_wire->conn[conn] == process;
 
@@ -2144,7 +2125,6 @@ function void handle_deleted_wire(
 
 
 function void delete_process(Context *context, Process *p, U32 which_conn_flags) {
-  Proc_Trie_Trie *trie = context->views[View_Kind_Procs].do_undo.trie;
   Process_Do_Undo *do_undo = get_process_do_undo_from_process(context, p);
 
   B32 p_overwritten = add_process_to_process_edit_list(context, do_undo, p, Proc_Trie_Edit_Delete, (Process){0});
@@ -2291,7 +2271,6 @@ function Half_Circle_Points get_half_circle_points(
   F32 padding = view->camera.zoom * global_process_wire_padding;
   F32 spacing = view->camera.zoom * global_process_wire_spacing;
 
-  F32 height = view->camera.zoom * global_shape_size;
   F32 half_height = view->camera.zoom * global_shape_half_size;
 
   F32 conn_count = (F32)(downward ? p->out_count : p->in_count);
@@ -2433,6 +2412,9 @@ function Bezier_Points get_wire_bezier_points(
         else if (w->inner_positions) {
           inner_position = w->inner_positions->e[0];
         }
+        else {
+          inner_position = (Vector2){0};
+        }
 
         // TODO: this will need to eventually handle arbitrary inner-positions
         Vector2 *points = push_array(context->temp_arena, Vector2, 3);
@@ -2528,6 +2510,7 @@ function Process_Shape get_process_shape(
   // TODO: process wire shapes, so that we can make wires hot by hovering
   Process_Shape shape = {0};
   U64 arena_pop_pos = arena_current_pos(context->temp_arena);
+  if (p == 0) goto error;
 
   F32 font_size = view->camera.zoom * global_process_font_size;
   String8 string = piece_table_get_string(context->temp_arena, p->label);
@@ -2663,6 +2646,7 @@ function Process_Shape get_process_shape(
     }
   }
 
+error:;
   arena_pop_to(context->temp_arena, arena_pop_pos);
 
   return shape;
@@ -3388,8 +3372,6 @@ int main(void) {
         Color text_color = (Color){0, 0, 0, 255};
         Color box_color = (Color){10, 190, 40, 255};
         Color box_hover_color = (Color){5, 250, 20, 255};
-        F32 padding = global_process_wire_padding;
-        F32 spacing = global_process_wire_spacing;
         B32 rounded = Get_Flag(context.flags, Context_Flag_RoundedShapes);
 
         for (U32 v = 0; v < View_Kind__Count; ++v) {

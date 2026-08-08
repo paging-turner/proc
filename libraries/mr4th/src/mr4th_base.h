@@ -459,7 +459,7 @@ __attribute__((constructor)) static void n(void)
 // Macros: Linked Lists
 
 #define DLLPushBack_NPZ(f,l,n,next,prev,nil)\
-(((f) == (nil))?\
+(((f) == (nil) || (l) == (nil))?\
 ((f)=(l)=(n),(n)->next=(n)->prev=(nil)):\
 ((n)->prev=(l),(l)->next=(n),(l)=(n),(n)->next=(nil)))
 

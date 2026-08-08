@@ -327,10 +327,11 @@ function String8 piece_table_get_string(Arena *arena, Piece_Table *table) {
     string.str = arena_push(arena, table->text_size+1);
     string.size = table->text_size;
     if (string.str) {
+      B32 error = 0;
       List_For(Piece_Table_Row *, row, table->first_row) {
         if (amount_written + row->size > table->text_size) {
           printf("[ Error ] Amount of text in piece-table is greater than the given piece-table's text-size. Getting c-string from piece-table.\n");
-          string = (String8){0};
+          error = 1;
           break;
         }
         else {
@@ -340,7 +341,12 @@ function String8 piece_table_get_string(Arena *arena, Piece_Table *table) {
           amount_written += row->size;
         }
       }
-      string.str[amount_written] = 0;
+      if (error) {
+        string = (String8){0};
+      }
+      else {
+        string.str[amount_written] = 0;
+      }
     }
     else {
       printf("[ Error ] Pushing c-string while getting c-string for piece-table.\n");

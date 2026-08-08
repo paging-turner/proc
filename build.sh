@@ -64,7 +64,7 @@ fi
 
 Base_Object_File="$Base_File_Name.o"
 Custom_Object_File="custom.o"
-Executable_File="$Source_File_Name.out"
+Executable_File="$Source_File_Name.o"
 
 Graphics_Frameworks="-framework CoreVideo -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL"
 Graphics_Lib="../libraries/raylib-5.5_macos/lib/libraylib.a"
@@ -79,6 +79,8 @@ Settings="$Settings -Wno-unused-variable"
 Settings="$Settings -Wno-char-subscripts"
 Settings="$Settings -Wno-sign-compare"
 Settings="$Settings -fno-inline-functions"
+# Settings="$Settings --coverage"
+
 
 if [ -e $Custom_File ]; then
     Settings="$Settings -DCustom_Keybinds"

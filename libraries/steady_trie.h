@@ -331,7 +331,7 @@ Steady_Function void steady_trie(delete_stack_node)(
 Steady_Function void steady_trie(iter_next)(Steady_Trie(Iterator) *iter) {
   // Do a depth-first search until we find the next occupied key.
   for (;;) {
-    if (iter->stack && iter->stack->node) {
+    if (iter && iter->stack && iter->stack->node) {
       if (iter->stack->index < Steady_Trie_Slot_Count) {
         B32 not_visited = ((iter->stack->visited_plus_one == 0) ||
                            (iter->stack->visited_plus_one-1 < iter->stack->index));
@@ -815,7 +815,6 @@ Steady_Function void steady_trie(print_trie)(
   Steady_Trie(Trie) *trie
   ) {
   printf("digraph Trie {\n");
-  char *ref_format = "%llx_%llx";
   for (Steady_Trie(Root) *root = trie->root; root != 0; root = root->next_edit) {
     Steady_Trie_Print_Connection(trie, root);
     Steady_Trie(Node) *prev_node = 0;
