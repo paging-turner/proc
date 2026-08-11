@@ -222,6 +222,7 @@ struct Process {
 };
 
 typedef struct Process_Stack {
+  B32 visited;
   Process *process;
   struct Process_Stack *next;
 } Process_Stack;

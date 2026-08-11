@@ -171,6 +171,7 @@ global_variable U32 sub_menu_counts[] = { ArrayCount(file_submenu), ArrayCount(e
 
 
 global_variable Process global_top_menu_box = (Process){
+  .flags = Process_Flag_AsBox,
   .ui_box = {
     .align = Ui_Align_TopLeft,
     .layout = Ui_Layout_Horizontal,
@@ -178,6 +179,7 @@ global_variable Process global_top_menu_box = (Process){
 };
 
 global_variable Process sub_menu_box = (Process){
+  .flags = Process_Flag_AsBox,
   .ui_box = {
     .align = Ui_Align_TopLeft,
     .layout = Ui_Layout_Vertical,
@@ -187,6 +189,7 @@ global_variable Process sub_menu_box = (Process){
 
 // Open File UI
 global_variable Process open_file_box = (Process){
+  .flags = Process_Flag_AsBox,
   .position = (Vector2){100.0f, 100.0f},
   .ui_box = {
     .min_size = (Vector2){300.0f, 0.0f},
@@ -198,6 +201,7 @@ global_variable Process open_file_box = (Process){
   }
 };
 global_variable Process file_list_box = (Process){
+  .flags = Process_Flag_AsBox,
   .ui_box = {
     .align = Ui_Align_TopLeft,
     .layout = Ui_Layout_Vertical,
@@ -207,6 +211,7 @@ global_variable Process file_list_box = (Process){
   }
 };
 global_variable Process open_file_confirm_box = (Process){
+  .flags = Process_Flag_AsBox,
   .ui_box = {
     .align = Ui_Align_TopRight, // TODO: The right-alignment is broken... should fix that at some point...
     .layout = Ui_Layout_Horizontal,
@@ -217,6 +222,7 @@ global_variable Process open_file_confirm_box = (Process){
 
 // Save File As UI
 global_variable Process save_file_as_box = (Process){
+  .flags = Process_Flag_AsBox,
   .position = (Vector2){100.0f, 100.0f},
   .ui_box = {
     .min_size = (Vector2){300.0f, 0.0f},
@@ -228,6 +234,7 @@ global_variable Process save_file_as_box = (Process){
   }
 };
 global_variable Process save_file_as_confirm_box = (Process){
+  .flags = Process_Flag_AsBox,
   .ui_box = {
     .align = Ui_Align_TopRight, // TODO: The right-alignment is broken... should fix that at some point...
     .layout = Ui_Layout_Horizontal,
@@ -3117,6 +3124,32 @@ function void create_keybind_array(Context *context) {
 
 
 
+function void initialize_ui_elements(Context *context) {
+  View *ui_view = &context->views[View_Kind_Ui];
+  Process_Do_Undo *ui_do_undo = &context->views[View_Kind_Ui].do_undo;
+
+  // @Copypasta all below....
+  Process *top_menu_box = create_process(context, Process_Do_Undo_Kind_Ui);
+  if (top_menu_box == 0) goto init_ui_elements_error;
+  U64 top_menu_box_gen_id = top_menu_box->gen_id;
+  *top_menu_box = global_top_menu_box;
+  top_menu_box->gen_id = top_menu_box_gen_id;
+
+  ui_view->root_process = top_menu_box;
+
+  Process *file_menu_button = create_process(context, Process_Do_Undo_Kind_Ui);
+  if (file_menu_button == 0) goto init_ui_elements_error;
+  U64 file_menu_button_gen_id = file_menu_button->gen_id;
+  *file_menu_button = global_ui_procs[Global_Ui_Proc_Id_file_menu_button];
+  file_menu_button->gen_id = file_menu_button_gen_id;
+
+  top_menu_box->child = file_menu_button;
+
+  gather_processes_from_trie(context, ui_do_undo);
+init_ui_elements_error:;
+}
+
+
 
 
 
@@ -3220,30 +3253,6 @@ int main(void) {
 
 
       // init ui elements
-      {
-        View *ui_view = &context.views[View_Kind_Ui];
-        Process_Do_Undo *ui_do_undo = &context.views[View_Kind_Ui].do_undo;
-
-        // @Copypasta all below....
-        Process *top_menu_box = create_process(&context, Process_Do_Undo_Kind_Ui);
-        if (top_menu_box == 0) goto init_ui_elements_error;
-        U64 top_menu_box_gen_id = top_menu_box->gen_id;
-        *top_menu_box = global_top_menu_box;
-        top_menu_box->gen_id = top_menu_box_gen_id;
-
-        ui_view->root_process = top_menu_box;
-
-        Process *file_menu_button = create_process(&context, Process_Do_Undo_Kind_Ui);
-        if (file_menu_button == 0) goto init_ui_elements_error;
-        U64 file_menu_button_gen_id = file_menu_button->gen_id;
-        *file_menu_button = global_ui_procs[Global_Ui_Proc_Id_file_menu_button];
-        file_menu_button->gen_id = file_menu_button_gen_id;
-
-        SLLStackPush_N(top_menu_box, file_menu_button, child);
-
-        gather_processes_from_trie(&context, ui_do_undo);
-      init_ui_elements_error:;
-      }
       global_ui_procs[Global_Ui_Proc_Id_file_menu_button] =
         create_lit_button(&context, str8_lit("File"), 0, 0);
       global_ui_procs[Global_Ui_Proc_Id_open_file_button] =
@@ -3265,6 +3274,7 @@ int main(void) {
       global_ui_procs[Global_Ui_Proc_Id_paste_button].func = handle_paste;
       Assert(ArrayCount(menu_buttons) == ArrayCount(sub_menus) &&
              ArrayCount(sub_menus) == ArrayCount(sub_menu_counts));
+      initialize_ui_elements(&context);
 
       // init common filepaths
 #if OS_WINDOWS
@@ -3347,62 +3357,53 @@ int main(void) {
       }
 
       // handle ui
-#if 0
-      {
-        sub_menu_box.size = Zero_Struct(Vector2);
-
-        switch(context.menu_state) {
-        case Menu_State_OpenFile: {
-          /* do_open_file(&context, 1); */
-          /* do_open_file(&context, 0); */
-        } break;
-        case Menu_State_SaveFileAs: {
-          do_save_file_as(&context, 1);
-          do_save_file_as(&context, 0);
-        } break;
-        }
-
-        // TODO: Having the switch above, and then calling do_menu_ui... just feels off. Like maybe it should all be unified.
-        // NOTE: @Speed We have to call UI code twice... once for sizing and once for rendering/interaction.
-        do_menu_ui(&context, 1);
-        do_menu_ui(&context, 0);
-      }
-#else
       {
         Arena *temp_arena = context.temp_arena;
         U64 arena_pop_pos = arena_current_pos(context.temp_arena);
 
         Process_Stack *stack = push_struct(temp_arena, Process_Stack);
-        if (stack) {
-          stack->process = context.views[View_Kind_Ui].root_process;
 
-          for (; stack && stack->process;) {
-            do_ui_element(&context, stack, stack->process, 1);
-            B32 interacted = do_ui_element(&context, stack, stack->process, 0);
-            SLLStackPop(stack);
+        if (stack == 0) goto ui_crawl_error;
+        stack->process = context.views[View_Kind_Ui].root_process;
 
-            if (stack && stack->process) {
-              if (stack->process->child) {
-                Process_Stack *new_stack = push_struct(temp_arena, Process_Stack);
-                if (new_stack) {
-                  new_stack->process = stack->process->child;
-                  SLLStackPush(stack, new_stack);
-                }
-                else {
-                  // Arena error :(
-                  break;
-                }
-              }
-              else if (stack->process->sibling) {
-                stack->process = stack->process->sibling;
-              }
+        /* StaticAssert(0, TODO); */
+        for (; stack && stack->process;) {
+          B32 not_visited = stack->visited == 0;
+
+          if (not_visited) {
+            if (Get_Flag(stack->process->flags, Process_Flag_AsBox)) {
+              ui_box_begin(&context, stack, stack->process, 1);
+              ui_box_begin(&context, stack, stack->process, 0);
             }
+            else {
+              do_ui_element(&context, stack, stack->process, 1);
+              do_ui_element(&context, stack, stack->process, 0);
+            }
+            stack->visited = 1;
+          }
+
+          if (not_visited && stack->process->child) {
+            Process_Stack *new_stack = push_struct(temp_arena, Process_Stack);
+            if (stack == 0) goto ui_crawl_error;
+            new_stack->process = stack->process->child;
+            SLLStackPush(stack, new_stack);
+          }
+          else if (stack->process->sibling) {
+            stack->process = stack->process->sibling;
+            stack->visited = 0;
+          }
+          else {
+            if (Get_Flag(stack->process->flags, Process_Flag_AsBox)) {
+              ui_box_end(&context, stack, stack->process, 1);
+              ui_box_end(&context, stack, stack->process, 0);
+            }
+            SLLStackPop(stack);
           }
         }
 
+      ui_crawl_error:;
         arena_pop_to(context.temp_arena, arena_pop_pos);
       }
-#endif
 
       if (!Get_Flag(context.ui_state.flags, Ui_State_Flag_action_occured)) {
         // environment
