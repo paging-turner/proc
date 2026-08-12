@@ -45,6 +45,12 @@ enum Ui_Sizing {
   Ui_Sizing_FitContentsY = (U8)3,
 };
 
+typedef enum Ui_Box_Kind {
+  Ui_Box_Kind__Null,
+  Ui_Box_Kind_OpenFile,
+  Ui_Box_Kind_SaveFileAs,
+} Ui_Box_Kind;
+
 typedef enum {
   Ui_Box_Flag_ShouldDraw = (1 << 0),
   Ui_Box_Flag_Clip       = (1 << 1),
@@ -53,6 +59,7 @@ typedef enum {
 } Ui_Box_Flag;
 
 typedef struct Ui_Box {
+  Ui_Box_Kind kind;
   Vector2 offset;
   Vector2 scroll_offset;
   Vector2 min_size;
@@ -124,23 +131,24 @@ typedef enum Ref_Kind {
 
 
 #define Process_Flag_Xlist(X)\
-  X( Wire        )\
-  X( Empty       )\
-  X( Cup         )\
-  X( Cap         )\
-  X( Identity    )\
-  X( Drag_In     )\
-  X( Drag_Out    )\
-  X( Invisible   )\
-  X( AsBox       )\
-  X( RefIsActive )\
-  X( TextEdit    )\
-  X( CanBeActive )\
-  X( Clickable   )\
-  X( FitToText   )\
-  X( IsDetached  )\
-  X( Line        )\
-  X( UiOpen      )
+  X( Wire              )\
+  X( Empty             )\
+  X( Cup               )\
+  X( Cap               )\
+  X( Identity          )\
+  X( Drag_In           )\
+  X( Drag_Out          )\
+  X( Invisible         )\
+  X( AsBox             )\
+  X( RefIsActive       )\
+  X( TextEdit          )\
+  X( CanBeActive       )\
+  X( Clickable         )\
+  X( FitToText         )\
+  X( IsDetached        )\
+  X( Line              )\
+  X( UiDescendIfActive )\
+  X( UiShowIfActive    )
 
 typedef enum {
 #define X(name, ...)\
@@ -471,23 +479,6 @@ typedef struct {
   U32 key_presses[Max_Key_Presses_Per_Frame];
 } Ui_State;
 
-typedef enum {
-  Menu_State__Null,
-  // top menu states
-  Menu_State_FileMenu,
-  Menu_State_EditMenu,
-  // other menu states
-  Menu_State_OpenFile,
-  Menu_State_SaveFileAs,
-} Menu_State;
-
-#define Top_Menu_Index(menu_state) ((menu_state) - Menu_State_FileMenu)
-#define Menu_State_From_Top_Menu_Index(index) ((index) + Menu_State_FileMenu)
-#define Top_Menu_Count  (Top_Menu_Index(Menu_State_EditMenu)+1)
-
-#define Has_Active_Menu_Element(context)\
-  ((context)->menu_state >= Menu_State_FileMenu &&\
-   (context)->menu_state <= Menu_State_EditMenu)
 
 
 
@@ -584,7 +575,6 @@ struct Context {
   Render_Context process_render_context;
 
   Ui_State ui_state;
-  Menu_State menu_state; // TODO: delete this once we do the new way of handling UI
   Vector2 copy_center;
 
   U8 *save_file_name;
