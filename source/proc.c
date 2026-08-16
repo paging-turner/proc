@@ -1366,6 +1366,23 @@ function void set_ui_box_size(Process *box, Vector2 size, B32 set_box_x, B32 set
 }
 
 
+function Process_Stack *get_parent_box_stack(Context *context, Process_Stack *stack) {
+  Process_Stack *parent_box_stack = 0;
+
+  if (stack) {
+    // NOTE: this skips over the current stack-node
+    List_For(Process_Stack *, s, stack->next) {
+      if (s->process && Get_Flag(s->process->flags, Process_Flag_AsBox)) {
+        parent_box_stack = s;
+        break;
+      }
+    }
+  }
+
+  return parent_box_stack;
+}
+
+
 function B32 do_ui_element(Context *context, Process_Stack *stack, Process *element, B32 sizing) {
   B32 interacted = 0;
   if (stack == 0) goto error;
@@ -1374,13 +1391,8 @@ function B32 do_ui_element(Context *context, Process_Stack *stack, Process *elem
   Render_Context *rc = &context->ui_render_context;
   Ui_State *ui_state = &context->ui_state;
 
-  Process *box_parent = 0;
-  List_For(Process_Stack *, s, stack) {
-    if (s->process && Get_Flag(s->process->flags, Process_Flag_AsBox)) {
-      box_parent = s->process;
-      break;
-    }
-  }
+  Process_Stack *parent_box_stack = get_parent_box_stack(context, stack);
+  Process *box_parent = parent_box_stack->process;
 
   F32 font_size = global_panel_font_size;
   Vector2 padding = global_button_padding;
@@ -1560,20 +1572,19 @@ function Process *create_button(Arena *arena, Vector2 position, String_Chunk_Lis
 }
 
 
-function void ui_box_begin(Context *context, Process_Stack *stack, Process *box, B32 sizing) {
+function void ui_box_begin(Context *context, Process_Stack *stack, B32 sizing) {
   Render_Context *rc = &context->ui_render_context;
   Ui_State *ui_state = &context->ui_state;
 
-  // @Speed
-  Process_Stack *parent = stack;
-  for (Process_Stack *s = parent; s != 0; s = s->next) {
-    parent = s;
+  if (stack == 0 || stack->process == 0) return;
+
+  Assert_If(Get_Flag(stack->process->flags, Process_Flag_AsBox)) {
+    return;
   }
 
-  Process_Stack *new_stack = push_struct(context->temp_arena, Process_Stack);
-  if (new_stack == 0) goto error;
-  new_stack->process = box;
-  SLLStackPush(stack, new_stack);
+  Process *box = stack->process;
+  Process_Stack *parent_box_stack = get_parent_box_stack(context, stack);
+  Process *parent_box = parent_box_stack ? parent_box_stack->process : 0;
 
   if (sizing) {
     box->ui_box.offset = (Vector2){0.0f, 0.0f};
@@ -1589,8 +1600,8 @@ function void ui_box_begin(Context *context, Process_Stack *stack, Process *box,
     Vector2 size = get_box_size(box);
     Rectangle box_rect = (Rectangle){box->position.x, box->position.y, size.x, size.y};
     // positioning
-    if (parent && parent->process) {
-      box->position = get_ui_box_inner_position(context, parent->process);
+    if (parent_box) {
+      box->position = get_ui_box_inner_position(context, parent_box);
     }
     if (Get_Flag(box->flags, Ui_Box_Flag_ShouldDraw)) {
       render_DrawRectangle(rc, box_rect.x, box_rect.y, box_rect.width, box_rect.height, box->ui_box.color);
@@ -1609,36 +1620,36 @@ function void ui_box_begin(Context *context, Process_Stack *stack, Process *box,
       render_BeginScissorMode(rc, box->position, size);
     }
   }
-error:;
 }
 
 
-function void ui_box_end(Context *context, Process_Stack *stack, Process *box, B32 sizing) {
+function void ui_box_end(Context *context, Process_Stack *stack, B32 sizing) {
   Render_Context *rc = &context->ui_render_context;
-  if (stack == 0 || box == 0) goto error;
 
-  if (box != stack->process) {
-    printf("[ Error ] Popping ui-box off of stack but given box does not match. Box passed in is %p while the box popped of the stack is %p .\n", box, stack?stack->process:0);
+  if (stack == 0 || stack->process == 0) return;
+
+  Assert_If(Get_Flag(stack->process->flags, Process_Flag_AsBox)) {
+    return;
   }
 
-  SLLStackPop(stack);
+  Process *box = stack->process;
+  Process_Stack *parent_box_stack = get_parent_box_stack(context, stack);
+  Process *parent_box = parent_box_stack ? parent_box_stack->process : 0;
 
-  Process_Stack *box_parent = stack;
-
-  if (sizing && box_parent && box_parent->process) {
-    B32 set_box_x = ui_box_should_set_x(box_parent->process);
-    B32 set_box_y = ui_box_should_set_y(box_parent->process);
+  if (sizing && parent_box) {
+    B32 set_box_x = ui_box_should_set_x(parent_box);
+    B32 set_box_y = ui_box_should_set_y(parent_box);
     Vector2 box_size = get_box_size(box);
 
-    set_ui_box_size(box_parent->process, box_size, set_box_x, set_box_y);
+    set_ui_box_size(parent_box, box_size, set_box_x, set_box_y);
   }
 
   if (!sizing) {
-    if (box_parent && box_parent->process) {
+    if (parent_box) {
       // @Copypasta do_ui_element
       Vector2 box_size = get_box_size(box);
       Vector2 next_offset;
-      switch (box_parent->process->ui_box.layout) {
+      switch (parent_box->ui_box.layout) {
       default:
       case Ui_Layout_None: {
         next_offset = Zero_Struct(Vector2);
@@ -1650,14 +1661,13 @@ function void ui_box_end(Context *context, Process_Stack *stack, Process *box, B
         next_offset = (Vector2){box_size.x, 0.0f};
       } break;
       }
-      box_parent->process->ui_box.offset =
-        Vector2Add(box_parent->process->ui_box.offset, next_offset);
+      parent_box->ui_box.offset =
+        Vector2Add(parent_box->ui_box.offset, next_offset);
     }
     if (Get_Flag(box->flags, Ui_Box_Flag_Clip)) {
       render_EndScissorMode(rc);
     }
   }
-error:;
 }
 
 
@@ -1703,68 +1713,6 @@ function void save_file(Context *context, Process *element) {
 }
 
 
-
-#if 0
-function void do_open_file(Context *context, B32 sizing) {
-  F32 padding = 2.0f;
-
-  ui_box_begin(context, &open_file_box, sizing);
-  {
-    do_ui_element(context, &open_file_label, sizing);
-    ui_box_begin(context, &file_list_box, sizing);
-    {
-      for (Process *file = context->save_file_list.first; file != 0; file = file->next) {
-        if (do_ui_element(context, file, sizing)) {
-          context->selected_element = file;
-        }
-      }
-    }
-    ui_box_end(context, &file_list_box, sizing);
-    ui_box_begin(context, &open_file_confirm_box, sizing);
-    {
-      B32 open_clicked = do_ui_element(context, &open_button, sizing);
-      B32 cancel_clicked = do_ui_element(context, &cancel_button, sizing);
-
-      if (open_clicked) {
-        if (context->selected_element) {
-          open_file_and_replace_processes(context, context->selected_element->label);
-        }
-        set_menu_state(context, 0);
-      } else if (cancel_clicked) {
-        set_menu_state(context, 0);
-      }
-    }
-    ui_box_end(context, &open_file_confirm_box, sizing);
-  }
-  ui_box_end(context, &open_file_box, sizing);
-}
-#endif
-
-
-#if 0
-function void do_save_file_as(Context *context, B32 sizing) {
-  ui_box_begin(context, &save_file_as_box, sizing);
-  {
-    do_ui_element(context, &global_ui_procs[Global_Ui_Proc_Id_save_file_as_text_input], sizing);
-
-    ui_box_begin(context, &save_file_as_confirm_box, sizing);
-    {
-      B32 save_clicked = do_ui_element(context, &global_ui_procs[Global_Ui_Proc_Id_save_button], sizing);
-      B32 cancel_clicked = do_ui_element(context, &global_ui_procs[Global_Ui_Proc_Id_cancel_button], sizing);
-
-      if (save_clicked) {
-        set_as_current_file(context, global_ui_procs[Global_Ui_Proc_Id_save_file_as_text_input].label_c_string);
-        save_file(context, &global_ui_procs[Global_Ui_Proc_Id_save_file_as_text_input]);
-        set_menu_state(context, 0);
-      } else if (cancel_clicked) {
-        set_menu_state(context, 0);
-      }
-    }
-    ui_box_end(context, &save_file_as_confirm_box, sizing);
-  }
-  ui_box_end(context, &save_file_as_box, sizing);
-}
-#endif
 
 
 function void handle_copy(Context *context, Process *element) {
@@ -3356,54 +3304,55 @@ int main(void) {
       // handle ui
       {
         Arena *temp_arena = context.temp_arena;
-        U64 arena_pop_pos = arena_current_pos(context.temp_arena);
 
-        Process_Stack *stack = push_struct(temp_arena, Process_Stack);
+        // TODO: this whole sizing/not-sizing thing is awkward....
+        for (S32 sizing = 1; sizing >= 0; --sizing) {
+          U64 arena_pop_pos = arena_current_pos(context.temp_arena);
 
-        if (stack == 0) goto ui_crawl_error;
-        stack->process = context.views[View_Kind_Ui].root_process;
+          Process_Stack *stack = push_struct(temp_arena, Process_Stack);
 
-        /* StaticAssert(0, TODO); */
-        for (; stack && stack->process;) {
-          B32 not_visited = stack->visited == 0;
+          if (stack == 0) goto ui_crawl_error;
+          stack->process = context.views[View_Kind_Ui].root_process;
 
-          if (not_visited) {
-            if (Get_Flag(stack->process->flags, Process_Flag_AsBox)) {
-              ui_box_begin(&context, stack, stack->process, 1);
-              ui_box_begin(&context, stack, stack->process, 0);
+          for (; stack && stack->process;) {
+            B32 not_visited = stack->visited == 0;
+
+            if (not_visited) {
+              if (Get_Flag(stack->process->flags, Process_Flag_AsBox)) {
+                ui_box_begin(&context, stack, sizing);
+              }
+              else {
+                do_ui_element(&context, stack, stack->process, sizing);
+                /* B32 interacted = do_ui_element(&context, stack, stack->process, 0); */
+              }
+              stack->visited = 1;
+            }
+
+            B32 is_active = is_active_process(&context, stack->process);
+            B32 can_descend = (!Get_Flag(stack->process->flags, Process_Flag_UiDescendIfActive) ||
+                               is_active);
+
+            if (not_visited && can_descend && stack->process->child) {
+              Process_Stack *new_stack = push_struct(temp_arena, Process_Stack);
+              if (stack == 0) goto ui_crawl_error;
+              new_stack->process = stack->process->child;
+              SLLStackPush(stack, new_stack);
+            }
+            else if (stack->process->sibling) {
+              stack->process = stack->process->sibling;
+              stack->visited = 0;
             }
             else {
-              do_ui_element(&context, stack, stack->process, 1);
-              B32 interacted = do_ui_element(&context, stack, stack->process, 0);
+              if (Get_Flag(stack->process->flags, Process_Flag_AsBox)) {
+                ui_box_end(&context, stack, sizing);
+              }
+              SLLStackPop(stack);
             }
-            stack->visited = 1;
           }
 
-          B32 is_active = is_active_process(&context, stack->process);
-          B32 can_descend = (!Get_Flag(stack->process->flags, Process_Flag_UiDescendIfActive) ||
-                             is_active);
-
-          if (not_visited && can_descend && stack->process->child) {
-            Process_Stack *new_stack = push_struct(temp_arena, Process_Stack);
-            if (stack == 0) goto ui_crawl_error;
-            new_stack->process = stack->process->child;
-            SLLStackPush(stack, new_stack);
-          }
-          else if (stack->process->sibling) {
-            stack->process = stack->process->sibling;
-            stack->visited = 0;
-          }
-          else {
-            if (Get_Flag(stack->process->flags, Process_Flag_AsBox)) {
-              ui_box_end(&context, stack, stack->process, 1);
-              ui_box_end(&context, stack, stack->process, 0);
-            }
-            SLLStackPop(stack);
-          }
+        ui_crawl_error:;
+          arena_pop_to(context.temp_arena, arena_pop_pos);
         }
-
-      ui_crawl_error:;
-        arena_pop_to(context.temp_arena, arena_pop_pos);
       }
 
       if (!Get_Flag(context.ui_state.flags, Ui_State_Flag_action_occured)) {

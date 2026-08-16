@@ -607,6 +607,7 @@ global_variable Process global_null_process;
 
 #define Robust_Assertions 1
 
+// NOTE: It's a little confusing that we do the if on the negation... maybe there's a better way to word this construct.
 #if Robust_Assertions
 # define Assert_If(exp)   if(!(exp))
 #else
