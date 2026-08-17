@@ -204,7 +204,7 @@ global_variable Process file_list_box = (Process){
     .max_size = (Vector2){0.0f, 100.0f},
   }
 };
-global_variable Process open_file_confirm_box = (Process){
+global_variable Process global_open_file_confirm_box = (Process){
   .flags = Process_Flag_AsBox,
   .ui_box = {
     .align = Ui_Align_TopRight, // TODO: The right-alignment is broken... should fix that at some point...
@@ -216,7 +216,9 @@ global_variable Process open_file_confirm_box = (Process){
 
 // Save File As UI
 global_variable Process global_save_file_as_box = (Process){
-  .flags = Process_Flag_AsBox,
+  .flags = (Process_Flag_AsBox|
+            Process_Flag_UiDescendIfActive|
+            Process_Flag_UiShowIfActive),
   .position = (Vector2){100.0f, 100.0f},
   .ui_box = {
     .kind = Ui_Box_Kind_SaveFileAs,
@@ -515,6 +517,68 @@ function Process_Do_Undo *get_process_do_undo_from_process(Context *context, Pro
   return do_undo;
 }
 
+
+
+
+typedef struct Process_Tree_Iterator {
+  B32 stack_pop;
+  U64 arena_pop_pos;
+  Process_Stack *stack;
+} Process_Tree_Iterator;
+
+
+function Process_Tree_Iterator proc_tree_iter_init(Context *context, Process *p) {
+  Process_Tree_Iterator iter = (Process_Tree_Iterator){0};
+
+  iter.arena_pop_pos = arena_current_pos(context->temp_arena);
+  iter.stack = push_struct(context->temp_arena, Process_Stack);
+
+  if (iter.stack) {
+    iter.stack->process = context->views[View_Kind_Ui].root_process;
+  }
+  else {
+    arena_pop_to(context->temp_arena, iter.arena_pop_pos);
+  }
+
+  return iter;
+}
+
+
+function B32 proc_tree_iter_test(Context *context, Process_Tree_Iterator iter) {
+  B32 should_continue = iter.stack && iter.stack->process;
+  return should_continue;
+}
+
+
+function void proc_tree_iter_next(Context *context, Process_Tree_Iterator *iter) {
+  B32 not_visited = iter->stack->visited == 0;
+  B32 is_active = is_active_process(context, iter->stack->process);
+  B32 can_descend = (!Get_Flag(iter->stack->process->flags, Process_Flag_UiDescendIfActive) ||
+                     is_active);
+  iter->stack_pop = 0;
+  iter->stack->visited = 1;
+
+  if (not_visited && can_descend && iter->stack->process->child) {
+    Process_Stack *new_stack = push_struct(context->temp_arena, Process_Stack);
+
+    if (new_stack) {
+      new_stack->process = iter->stack->process->child;
+      SLLStackPush(iter->stack, new_stack);
+    }
+    else {
+      arena_pop_to(context->temp_arena, iter->arena_pop_pos);
+      iter->stack = 0;
+    }
+  }
+  else if (iter->stack->process->sibling) {
+    iter->stack->process = iter->stack->process->sibling;
+    iter->stack->visited = 0;
+  }
+  else {
+    iter->stack_pop = 1;
+    SLLStackPop(iter->stack);
+  }
+}
 
 
 
@@ -1189,6 +1253,22 @@ function void set_open_file_as_active_element(Context *context, Process *_elemen
 
 
 function void set_save_file_as_as_active_element(Context *context, Process *element) {
+  // NOTE: assume that open-file-box is a child of the root ui-element
+  View *ui_view = &context->views[View_Kind_Ui];
+  Process *root_process = ui_view->root_process;
+  Process *open_file_box = 0;
+
+  List_For_N(Process *, r, root_process->child, sibling) {
+    if (r->ui_box.kind == Ui_Box_Kind_SaveFileAs) {
+      open_file_box = r;
+    }
+  }
+
+  if (open_file_box) {
+    clear_active_processes(context);
+    Set_Flag(open_file_box->flags, Process_Flag_RefIsActive);
+    SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, open_file_box, next_active, 0);
+  }
 }
 
 
@@ -1205,6 +1285,7 @@ function void handle_label_editing(Context *context, Process_List ps) {
   while ((key = context->ui_state.key_presses[k++])) {
     for (Process *a = ps.first; a != 0; a = a->next_active) {
       Process_Do_Undo_Kind do_undo_kind = get_process_do_undo_kind(context, a);
+      printf("do_undo_kind %d\n", do_undo_kind);
       do_undo_kind_flags |= Process_Do_Undo_Kind_Flag_From_Kind(do_undo_kind);
       Process_Do_Undo *do_undo = get_process_do_undo_from_kind(context, do_undo_kind);
 
@@ -1520,7 +1601,7 @@ function B32 do_ui_element(Context *context, Process_Stack *stack, Process *elem
           Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
           // set as active
           if (Get_Flag(element->flags, Process_Flag_CanBeActive)) {
-            clear_active_processes(context);
+            /* clear_active_processes(context); */
             Set_Flag(element->flags, Process_Flag_RefIsActive);
             SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, element, next_active, 0);
           }
@@ -1528,6 +1609,16 @@ function B32 do_ui_element(Context *context, Process_Stack *stack, Process *elem
           if (element->func) {
             element->func(context, element);
           }
+        }
+      }
+
+      if (Get_Flag(element->flags, Process_Flag_TextEdit)) {
+        if (element->label == 0) {
+          element->label = push_struct(context->ui_arena, Piece_Table);
+        }
+        if (element->label) {
+          Process_List p_list = (Process_List){element, element};
+          handle_label_editing(context, p_list);
         }
       }
 
@@ -3064,10 +3155,25 @@ function void initialize_ui_elements(Context *context) {
   Initialize_Ui_Process(edit_menu_button, global_ui_procs[Global_Ui_Proc_Id_edit_menu_button]);
   Initialize_Ui_Process(open_file_box, global_open_file_box);
   Initialize_Ui_Process(open_file_label, global_ui_procs[Global_Ui_Proc_Id_open_file_label]);
+  Initialize_Ui_Process(open_file_confirm_box, global_open_file_confirm_box);
+  Initialize_Ui_Process(open_button, global_ui_procs[Global_Ui_Proc_Id_open_button]);
+  Initialize_Ui_Process(cancel_button, global_ui_procs[Global_Ui_Proc_Id_cancel_button]);
+  Initialize_Ui_Process(save_file_as_box, global_save_file_as_box);
+  Initialize_Ui_Process(save_file_as_text_input, global_ui_procs[Global_Ui_Proc_Id_save_file_as_text_input]);
+
+
   top_menu_box->child = file_menu_button;
   file_menu_button->sibling = edit_menu_button;
   edit_menu_button->sibling = open_file_box;
+
   open_file_box->child = open_file_label;
+  open_file_label->sibling = open_file_confirm_box;
+  open_file_confirm_box->child = open_button;
+  open_button->sibling = cancel_button;
+
+  open_file_box->sibling = save_file_as_box;
+  save_file_as_box->child = save_file_as_text_input;
+
 
   // file menu buttons
   {
@@ -3079,6 +3185,9 @@ function void initialize_ui_elements(Context *context) {
     file_menu_button->child = sub_menu_box;
     sub_menu_box->child = open_file_button;
     open_file_button->sibling = save_file_button;
+    open_file_button->func = set_open_file_as_active_element;
+    save_as_file_button->func = set_save_file_as_as_active_element;
+
     save_file_button->sibling = save_as_file_button;
   }
 
@@ -3202,7 +3311,6 @@ int main(void) {
                Process_Flag_UiDescendIfActive|Process_Flag_CanBeActive);
       global_ui_procs[Global_Ui_Proc_Id_open_file_button] =
         create_lit_button(&context, str8_lit("Open..."), 0, 0);
-      global_ui_procs[Global_Ui_Proc_Id_open_file_button].func = set_open_file_as_active_element;
       global_ui_procs[Global_Ui_Proc_Id_save_file_button] =
         create_lit_button(&context, str8_lit("Save"), 0, 0);
       /* save_file_button.func = save_file; */
@@ -3303,55 +3411,29 @@ int main(void) {
 
       // handle ui
       {
-        Arena *temp_arena = context.temp_arena;
-
         // TODO: this whole sizing/not-sizing thing is awkward....
         for (S32 sizing = 1; sizing >= 0; --sizing) {
-          U64 arena_pop_pos = arena_current_pos(context.temp_arena);
+          Process *root_process = context.views[View_Kind_Ui].root_process;
 
-          Process_Stack *stack = push_struct(temp_arena, Process_Stack);
-
-          if (stack == 0) goto ui_crawl_error;
-          stack->process = context.views[View_Kind_Ui].root_process;
-
-          for (; stack && stack->process;) {
-            B32 not_visited = stack->visited == 0;
+          for (Process_Tree_Iterator iter = proc_tree_iter_init(&context, root_process);
+               proc_tree_iter_test(&context, iter);
+               proc_tree_iter_next(&context, &iter)) {
+            B32 not_visited = iter.stack->visited == 0;
 
             if (not_visited) {
-              if (Get_Flag(stack->process->flags, Process_Flag_AsBox)) {
-                ui_box_begin(&context, stack, sizing);
+              if (Get_Flag(iter.stack->process->flags, Process_Flag_AsBox)) {
+                ui_box_begin(&context, iter.stack, sizing);
               }
               else {
-                do_ui_element(&context, stack, stack->process, sizing);
-                /* B32 interacted = do_ui_element(&context, stack, stack->process, 0); */
+                do_ui_element(&context, iter.stack, iter.stack->process, sizing);
               }
-              stack->visited = 1;
             }
 
-            B32 is_active = is_active_process(&context, stack->process);
-            B32 can_descend = (!Get_Flag(stack->process->flags, Process_Flag_UiDescendIfActive) ||
-                               is_active);
-
-            if (not_visited && can_descend && stack->process->child) {
-              Process_Stack *new_stack = push_struct(temp_arena, Process_Stack);
-              if (stack == 0) goto ui_crawl_error;
-              new_stack->process = stack->process->child;
-              SLLStackPush(stack, new_stack);
-            }
-            else if (stack->process->sibling) {
-              stack->process = stack->process->sibling;
-              stack->visited = 0;
-            }
-            else {
-              if (Get_Flag(stack->process->flags, Process_Flag_AsBox)) {
-                ui_box_end(&context, stack, sizing);
-              }
-              SLLStackPop(stack);
+            if (iter.stack_pop &&
+                Get_Flag(iter.stack->process->flags, Process_Flag_AsBox)) {
+              ui_box_end(&context, iter.stack, sizing);
             }
           }
-
-        ui_crawl_error:;
-          arena_pop_to(context.temp_arena, arena_pop_pos);
         }
       }
 
