@@ -520,12 +520,6 @@ function Process_Do_Undo *get_process_do_undo_from_process(Context *context, Pro
 
 
 
-typedef struct Process_Tree_Iterator {
-  B32 stack_pop;
-  U64 arena_pop_pos;
-  Process_Stack *stack;
-} Process_Tree_Iterator;
-
 
 function Process_Tree_Iterator proc_tree_iter_init(Context *context, Process *p) {
   Process_Tree_Iterator iter = (Process_Tree_Iterator){0};
@@ -535,6 +529,7 @@ function Process_Tree_Iterator proc_tree_iter_init(Context *context, Process *p)
 
   if (iter.stack) {
     iter.stack->process = context->views[View_Kind_Ui].root_process;
+    iter.stack_push = 1;
   }
   else {
     arena_pop_to(context->temp_arena, iter.arena_pop_pos);
@@ -551,32 +546,40 @@ function B32 proc_tree_iter_test(Context *context, Process_Tree_Iterator iter) {
 
 
 function void proc_tree_iter_next(Context *context, Process_Tree_Iterator *iter) {
-  B32 not_visited = iter->stack->visited == 0;
-  B32 is_active = is_active_process(context, iter->stack->process);
-  B32 can_descend = (!Get_Flag(iter->stack->process->flags, Process_Flag_UiDescendIfActive) ||
-                     is_active);
+  if (iter->stack_pop) {
+    SLLStackPop(iter->stack);
+  }
   iter->stack_pop = 0;
-  iter->stack->visited = 1;
+  iter->stack_push = 0;
 
-  if (not_visited && can_descend && iter->stack->process->child) {
-    Process_Stack *new_stack = push_struct(context->temp_arena, Process_Stack);
+  if (iter->stack) {
+    B32 not_visited = iter->stack->visited == 0;
+    B32 is_active = is_active_process(context, iter->stack->process);
+    B32 can_descend = (!Get_Flag(iter->stack->process->flags, Process_Flag_UiDescendIfActive) ||
+                       is_active);
 
-    if (new_stack) {
-      new_stack->process = iter->stack->process->child;
-      SLLStackPush(iter->stack, new_stack);
+    iter->stack->visited = 1;
+
+    if (not_visited && can_descend && iter->stack->process->child) {
+      Process_Stack *new_stack = push_struct(context->temp_arena, Process_Stack);
+
+      if (new_stack) {
+        new_stack->process = iter->stack->process->child;
+        iter->stack_push = 1;
+        SLLStackPush(iter->stack, new_stack);
+      }
+      else {
+        arena_pop_to(context->temp_arena, iter->arena_pop_pos);
+        iter->stack = 0;
+      }
+    }
+    else if (iter->stack->process->sibling) {
+      iter->stack->process = iter->stack->process->sibling;
+      iter->stack->visited = 0;
     }
     else {
-      arena_pop_to(context->temp_arena, iter->arena_pop_pos);
-      iter->stack = 0;
+      iter->stack_pop = 1;
     }
-  }
-  else if (iter->stack->process->sibling) {
-    iter->stack->process = iter->stack->process->sibling;
-    iter->stack->visited = 0;
-  }
-  else {
-    iter->stack_pop = 1;
-    SLLStackPop(iter->stack);
   }
 }
 
@@ -3411,6 +3414,8 @@ int main(void) {
 
       // handle ui
       {
+        Render_Context *rc = &context.ui_render_context;
+#if 0
         // TODO: this whole sizing/not-sizing thing is awkward....
         for (S32 sizing = 1; sizing >= 0; --sizing) {
           Process *root_process = context.views[View_Kind_Ui].root_process;
@@ -3418,9 +3423,7 @@ int main(void) {
           for (Process_Tree_Iterator iter = proc_tree_iter_init(&context, root_process);
                proc_tree_iter_test(&context, iter);
                proc_tree_iter_next(&context, &iter)) {
-            B32 not_visited = iter.stack->visited == 0;
-
-            if (not_visited) {
+            if (iter.stack->visited == 0) {
               if (Get_Flag(iter.stack->process->flags, Process_Flag_AsBox)) {
                 ui_box_begin(&context, iter.stack, sizing);
               }
@@ -3435,6 +3438,44 @@ int main(void) {
             }
           }
         }
+#else
+        Process *root_process = context.views[View_Kind_Ui].root_process;
+
+        for (Process_Tree_Iterator iter = proc_tree_iter_init(&context, root_process);
+             proc_tree_iter_test(&context, iter);
+             proc_tree_iter_next(&context, &iter)) {
+          if (iter.stack && iter.stack->process) {
+            if (iter.stack_pop) {
+              // TODO: handle pop
+              // restore the old ui state
+              iter.box.layout = iter.stack->parent_box.layout;
+              iter.box.offset = iter.stack->parent_box.offset;
+            }
+            else if (iter.stack_push) {
+              // store the current ui state
+              iter.stack->parent_box.layout = iter.box.layout;
+              iter.stack->parent_box.offset = iter.box.offset;
+
+              if (Get_Flag(iter.stack->process->flags, Process_Flag_AsBox)) {
+                iter.box.layout = iter.stack->process->ui_box.layout;
+                iter.box.offset = iter.stack->process->ui_box.offset;
+              }
+            }
+
+            // handle node
+            Vector2 p = iter.box.offset;
+            Color color = (Color){255, 0, 255, 100};
+            render_DrawRectangle(rc, p.x, p.y, 18, 18, color);
+
+            if (iter.box.layout == Ui_Layout_Horizontal) {
+              iter.box.offset = Vector2Add(iter.box.offset, (Vector2){20, 0});
+            }
+            else if (iter.box.layout == Ui_Layout_Vertical) {
+              iter.box.offset = Vector2Add(iter.box.offset, (Vector2){0, 20});
+            }
+          }
+        }
+#endif
       }
 
       if (!Get_Flag(context.ui_state.flags, Ui_State_Flag_action_occured)) {

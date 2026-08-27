@@ -229,11 +229,22 @@ struct Process {
   U64 cold_id;
 };
 
+
+// TODO: Merge Process_Stack and Process_Tree_Iterator?
 typedef struct Process_Stack {
+  Ui_Box parent_box;
   B32 visited;
   Process *process;
   struct Process_Stack *next;
 } Process_Stack;
+
+typedef struct Process_Tree_Iterator {
+  Ui_Box box;
+  Process_Stack *stack;
+  B32 stack_pop;
+  B32 stack_push;
+  U64 arena_pop_pos;
+} Process_Tree_Iterator;
 
 
 // Process Trie
