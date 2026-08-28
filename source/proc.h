@@ -60,8 +60,10 @@ typedef enum {
 
 typedef struct Ui_Box {
   Ui_Box_Kind kind;
-  Vector2 offset;
+  B32 debug_delete_me_plz_HighlightBox;
+  Vector2 position;
   Vector2 scroll_offset;
+  Vector2 size;
   Vector2 min_size;
   Vector2 max_size;
   U32 flags;
@@ -211,7 +213,6 @@ struct Process {
 
   void (*func)(Context*, Process*); // TODO: What do we do about this func? It's only used for UI elements, so maybe we should stop using Processes as UI elements and give up on the idea of process-ui?
 
-  Vector2 size;
   Vector2 margin;
   Ui_Box ui_box;
 

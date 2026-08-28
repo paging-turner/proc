@@ -164,6 +164,7 @@ global_variable Process *edit_submenu[] = {
 global_variable Process global_top_menu_box = (Process){
   .flags = Process_Flag_AsBox,
   .ui_box = {
+    .debug_delete_me_plz_HighlightBox = 1,
     .align = Ui_Align_TopLeft,
     .layout = Ui_Layout_Horizontal,
   }
@@ -1354,7 +1355,7 @@ function void handle_label_editing(Context *context, Process_List ps) {
 
 
 function Vector2 get_ui_element_size(Context *context, Process *element, B32 fit_to_text, U8 *label_c_string) {
-  Vector2 size = element->size;
+  Vector2 size = element->ui_box.size;
   String8 label = str8_lit(label_c_string);
   F32 font_size = global_panel_font_size;
   Vector2 padding = global_button_padding;
@@ -1379,7 +1380,7 @@ function Vector2 get_ui_element_size(Context *context, Process *element, B32 fit
 
 
 function Vector2 get_ui_box_inner_position(Context *context, Process *box) {
-  Vector2 position = Vector2Add(Vector2Add(box->position, box->ui_box.offset), box->ui_box.scroll_offset);
+  Vector2 position = Vector2Add(Vector2Add(box->position, box->ui_box.position), box->ui_box.scroll_offset);
   return position;
 }
 
@@ -1387,7 +1388,7 @@ function Vector2 get_ui_box_inner_position(Context *context, Process *box) {
 function Vector2 get_box_size(Process *box) {
   Process *box_parent = box->next;
   B32 stretch = Get_Flag(box->flags, Ui_Box_Flag_Stretch);
-  Vector2 size = box->size;
+  Vector2 size = box->ui_box.size;
 
   if (stretch && box_parent) {
     Vector2 parent_size = get_box_size(box_parent);
@@ -1435,16 +1436,16 @@ function B32 ui_box_should_set_y(Process *box) {
 function void set_ui_box_size(Process *box, Vector2 size, B32 set_box_x, B32 set_box_y) {
   if (set_box_x) {
     if (box->ui_box.layout == Ui_Layout_Horizontal) {
-      box->size.x += size.x;
+      box->ui_box.size.x += size.x;
     } else {
-      box->size.x = Max(box->size.x, size.x);
+      box->ui_box.size.x = Max(box->ui_box.size.x, size.x);
     }
   }
   if (set_box_y) {
     if (box->ui_box.layout == Ui_Layout_Vertical) {
-      box->size.y += size.y;
+      box->ui_box.size.y += size.y;
     } else {
-      box->size.y = Max(box->size.y, size.y);
+      box->ui_box.size.y = Max(box->ui_box.size.y, size.y);
     }
   }
 }
@@ -1498,38 +1499,38 @@ function B32 do_ui_element(Context *context, Process_Stack *stack, Process *elem
     }
 
     B32 fit_to_text = Get_Flag(element->flags, Process_Flag_FitToText);
-    element->size = get_ui_element_size(context, element, fit_to_text, element->label_c_string);
+    element->ui_box.size = get_ui_element_size(context, element, fit_to_text, element->label_c_string);
 
     if (box_parent) {
-      set_ui_box_size(box_parent, element->size, set_box_x, set_box_y);
+      set_ui_box_size(box_parent, element->ui_box.size, set_box_x, set_box_y);
     }
 
     switch (align) {
     case Ui_Align_Top: {
-      box_position.x -= 0.5f * element->size.x;
+      box_position.x -= 0.5f * element->ui_box.size.x;
     } break;
     case Ui_Align_TopLeft: {
     } break;
     case Ui_Align_Left: {
-      box_position.y -= 0.5f * element->size.y;
+      box_position.y -= 0.5f * element->ui_box.size.y;
     } break;
     case Ui_Align_BottomLeft: {
-      box_position.y -= element->size.y;
+      box_position.y -= element->ui_box.size.y;
     } break;
     case Ui_Align_Bottom: {
-      box_position.x -= 0.5f * element->size.x;
-      box_position.y -= element->size.y;
+      box_position.x -= 0.5f * element->ui_box.size.x;
+      box_position.y -= element->ui_box.size.y;
     } break;
     case Ui_Align_BottomRight: {
-      box_position.x -= element->size.x;
-      box_position.y -= element->size.y;
+      box_position.x -= element->ui_box.size.x;
+      box_position.y -= element->ui_box.size.y;
     } break;
     case Ui_Align_Right: {
-      box_position.x -= element->size.x;
-      box_position.y -= 0.5f * element->size.y;
+      box_position.x -= element->ui_box.size.x;
+      box_position.y -= 0.5f * element->ui_box.size.y;
     } break;
     case Ui_Align_TopRight: {
-      box_position.x -= element->size.x;
+      box_position.x -= element->ui_box.size.x;
     } break;
     }
   } else {
@@ -1541,7 +1542,7 @@ function B32 do_ui_element(Context *context, Process_Stack *stack, Process *elem
       next_offset = Zero_Struct(Vector2);
     } break;
     case Ui_Layout_Vertical: {
-      next_offset = (Vector2){0.0f, element->size.y};
+      next_offset = (Vector2){0.0f, element->ui_box.size.y};
       if (box_parent) {
         element->position = get_ui_box_inner_position(context, box_parent);
       }
@@ -1550,28 +1551,28 @@ function B32 do_ui_element(Context *context, Process_Stack *stack, Process *elem
       if (box_parent) {
         element->position = get_ui_box_inner_position(context, box_parent);
       }
-      next_offset = (Vector2){element->size.x, 0.0f};
+      next_offset = (Vector2){element->ui_box.size.x, 0.0f};
     } break;
     }
 
     Vector2 box_size = (Vector2){0};
     if (box_parent) {
-      box_parent->ui_box.offset = Vector2Add(box_parent->ui_box.offset, next_offset);
+      box_parent->ui_box.position = Vector2Add(box_parent->ui_box.position, next_offset);
       box_size = get_box_size(box_parent);
 
       if (set_box_x && layout == Ui_Layout_Vertical) {
-        element->size.x = box_size.x;
+        element->ui_box.size.x = box_size.x;
       }
       if (set_box_y && layout == Ui_Layout_Horizontal) {
-        element->size.y = box_size.y;
+        element->ui_box.size.y = box_size.y;
       }
     }
 
     Rectangle element_rect = (Rectangle){
       element->position.x+element->margin.x,
       element->position.y+element->margin.y,
-      element->size.x-2.0f*element->margin.x,
-      element->size.y-2.0f*element->margin.y,
+      element->ui_box.size.x-2.0f*element->margin.x,
+      element->ui_box.size.y-2.0f*element->margin.y,
     };
     B32 in_bounds = 1;
     B32 hover_box = 1;
@@ -1653,8 +1654,8 @@ function Process *create_button(Arena *arena, Vector2 position, String_Chunk_Lis
   if (button) {
     U8 *label_c_string = c_string_from_string_chunk_list(render_GlobalTempArena, &label);
     S32 text_width = MeasureText((char *)label_c_string, font_size);
-    button->size.x = text_width + 2.0f*padding.x;
-    button->size.y = font_size + 2.0f*padding.y;
+    button->ui_box.size.x = text_width + 2.0f*padding.x;
+    button->ui_box.size.y = font_size + 2.0f*padding.y;
 
     Set_Flag(button->flags, Process_Flag_Clickable|Process_Flag_FitToText);
     button->position = position;
@@ -1681,12 +1682,12 @@ function void ui_box_begin(Context *context, Process_Stack *stack, B32 sizing) {
   Process *parent_box = parent_box_stack ? parent_box_stack->process : 0;
 
   if (sizing) {
-    box->ui_box.offset = (Vector2){0.0f, 0.0f};
+    box->ui_box.position = (Vector2){0.0f, 0.0f};
     if (box->ui_box.sizing == Ui_Sizing_FitContents || box->ui_box.sizing == Ui_Sizing_FitContentsX) {
-      box->size.x = 0;
+      box->ui_box.size.x = 0;
     }
     if (box->ui_box.sizing == Ui_Sizing_FitContents || box->ui_box.sizing == Ui_Sizing_FitContentsY) {
-      box->size.y = 0;
+      box->ui_box.size.y = 0;
     }
   }
 
@@ -1705,7 +1706,7 @@ function void ui_box_begin(Context *context, Process_Stack *stack, B32 sizing) {
       if (Get_Flag(box->flags, Ui_Box_Flag_ScrollY) &&
           ui_state->mouse_wheel_movement.y != 0) {
         Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
-        F32 max_scroll_offset = box->size.y - size.y;
+        F32 max_scroll_offset = box->ui_box.size.y - size.y;
         box->ui_box.scroll_offset.y += ui_state->mouse_wheel_movement.y;
         box->ui_box.scroll_offset.y = Clamp(box->ui_box.scroll_offset.y, -max_scroll_offset, 0.0f);
       }
@@ -1755,8 +1756,8 @@ function void ui_box_end(Context *context, Process_Stack *stack, B32 sizing) {
         next_offset = (Vector2){box_size.x, 0.0f};
       } break;
       }
-      parent_box->ui_box.offset =
-        Vector2Add(parent_box->ui_box.offset, next_offset);
+      parent_box->ui_box.position =
+        Vector2Add(parent_box->ui_box.position, next_offset);
     }
     if (Get_Flag(box->flags, Ui_Box_Flag_Clip)) {
       render_EndScissorMode(rc);
@@ -3415,67 +3416,86 @@ int main(void) {
       // handle ui
       {
         Render_Context *rc = &context.ui_render_context;
-#if 0
-        // TODO: this whole sizing/not-sizing thing is awkward....
-        for (S32 sizing = 1; sizing >= 0; --sizing) {
-          Process *root_process = context.views[View_Kind_Ui].root_process;
-
-          for (Process_Tree_Iterator iter = proc_tree_iter_init(&context, root_process);
-               proc_tree_iter_test(&context, iter);
-               proc_tree_iter_next(&context, &iter)) {
-            if (iter.stack->visited == 0) {
-              if (Get_Flag(iter.stack->process->flags, Process_Flag_AsBox)) {
-                ui_box_begin(&context, iter.stack, sizing);
-              }
-              else {
-                do_ui_element(&context, iter.stack, iter.stack->process, sizing);
-              }
-            }
-
-            if (iter.stack_pop &&
-                Get_Flag(iter.stack->process->flags, Process_Flag_AsBox)) {
-              ui_box_end(&context, iter.stack, sizing);
-            }
-          }
-        }
-#else
         Process *root_process = context.views[View_Kind_Ui].root_process;
+        F32 menu_dimension_size = 20.0f;
+        Vector2 menu_size = (Vector2){menu_dimension_size,menu_dimension_size};
+
+        Color debug_highlight_color = (Color){255, 0, 255, 100};
 
         for (Process_Tree_Iterator iter = proc_tree_iter_init(&context, root_process);
              proc_tree_iter_test(&context, iter);
              proc_tree_iter_next(&context, &iter)) {
+
           if (iter.stack && iter.stack->process) {
-            if (iter.stack_pop) {
+            B32 is_box = Get_Flag(iter.stack->process->flags, Process_Flag_AsBox);
+            B32 stack_popped = iter.stack_pop;
+            B32 stack_pushed = iter.stack_push;
+
+            // initial push/pop handling
+            if (stack_popped) {
               // TODO: handle pop
               // restore the old ui state
               iter.box.layout = iter.stack->parent_box.layout;
-              iter.box.offset = iter.stack->parent_box.offset;
+              iter.box.position = iter.stack->parent_box.position;
+
+              if (iter.stack->process->ui_box.debug_delete_me_plz_HighlightBox) {
+                Rectangle r = (Rectangle) {
+                  iter.box.position.x,
+                  iter.box.position.y,
+                  iter.stack->process->ui_box.size.x,
+                  iter.stack->process->ui_box.size.y
+                };
+                render_DrawRectangle(rc, r.x, r.y, r.x, r.y, debug_highlight_color);
+              }
             }
-            else if (iter.stack_push) {
+            else if (stack_pushed) {
               // store the current ui state
               iter.stack->parent_box.layout = iter.box.layout;
-              iter.stack->parent_box.offset = iter.box.offset;
+              iter.stack->parent_box.position = iter.box.position;
 
-              if (Get_Flag(iter.stack->process->flags, Process_Flag_AsBox)) {
+              if (is_box) {
                 iter.box.layout = iter.stack->process->ui_box.layout;
-                iter.box.offset = iter.stack->process->ui_box.offset;
+                iter.box.position = iter.stack->process->ui_box.position;
               }
             }
 
-            // handle node
-            Vector2 p = iter.box.offset;
-            Color color = (Color){255, 0, 255, 100};
-            render_DrawRectangle(rc, p.x, p.y, 18, 18, color);
+            { // draw label
+              const char *label_c_string = 0;
+              if (iter.stack->process->label_c_string) {
+                label_c_string = (const char *)iter.stack->process->label_c_string;
+              }
+              else if (iter.stack->process->label) {
+                String8 label_string = piece_table_get_string(context.temp_arena, iter.stack->process->label);
+                if (label_string.str && label_string.size) {
+                  label_c_string = (const char *)label_string.str;
+                }
+              }
+              if (label_c_string) {
+                F32 font_size = menu_size.y;
+                F32 new_menu_size_x = MeasureText(label_c_string, font_size);
 
-            if (iter.box.layout == Ui_Layout_Horizontal) {
-              iter.box.offset = Vector2Add(iter.box.offset, (Vector2){20, 0});
+                render_DrawText(rc, label_c_string, iter.box.position.x, iter.box.position.y, font_size, (Color){0, 0, 0, 255}, 1);
+
+                // update size
+                iter.stack->process->ui_box.size.x = new_menu_size_x;
+                menu_size.x                        = new_menu_size_x;
+              }
             }
-            else if (iter.box.layout == Ui_Layout_Vertical) {
-              iter.box.offset = Vector2Add(iter.box.offset, (Vector2){0, 20});
+
+            if (!is_box) {
+              // handle node
+              Vector2 p = iter.box.position;
+              render_DrawRectangle(rc, p.x, p.y, menu_size.x, menu_size.y, debug_highlight_color);
+
+              if (iter.box.layout == Ui_Layout_Horizontal) {
+                iter.box.position = Vector2Add(iter.box.position, (Vector2){menu_size.x, 0});
+              }
+              else if (iter.box.layout == Ui_Layout_Vertical) {
+                iter.box.position = Vector2Add(iter.box.position, (Vector2){0, menu_size.y});
+              }
             }
           }
         }
-#endif
       }
 
       if (!Get_Flag(context.ui_state.flags, Ui_State_Flag_action_occured)) {
