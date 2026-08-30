@@ -191,6 +191,8 @@ struct Process {
     Process *conn[Process_Connection__Count]; // NOTE: also indexed by Process_Branch
   };
 
+  Process *parent;
+
   union {
     struct {
       U32 which_in;
@@ -373,6 +375,11 @@ function              void delete_wire(Context *context, Process *wire, Process_
 function              void add_wire_connection(Context *context, Process *wire, Process *process, Process_Connection conn, U32 which_conn);
 function              void handle_label_editing(Context *context, Process_List ps);
 function          Process *find_process_connection(Context *context, Process *p, Process_Connection conn, U32 which_conn);
+
+function              void set_save_file_as_as_active_element(Context *context, Process *element);
+function              void handle_copy(Context *context, Process *element);
+function              void handle_paste(Context *context, Process *element);
+
 
 
 

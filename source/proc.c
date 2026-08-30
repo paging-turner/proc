@@ -100,32 +100,69 @@ global_variable String_Chunk global_null_string_chunk;
 // UI Globals
 ////////////////////////
 
+#define Global_Ui_Proc_Kind_Xlist(X)\
+  X(file_menu_button)\
+  X(open_file_button)\
+  X(save_file_button)\
+  X(save_as_file_button)\
+  X(edit_menu_button)\
+  X(copy_button)\
+  X(paste_button)\
+  X(open_file_label)\
+  X(open_button)\
+  X(cancel_button)\
+  X(save_button)\
+  X(save_file_as_text_input)
+
+
 // TODO: Once we do the tree version of UI layout, we won't need this enum
 typedef enum Global_Ui_Proc_Id {
-  Global_Ui_Proc_Id_file_menu_button,
-  Global_Ui_Proc_Id_open_file_button,
-  Global_Ui_Proc_Id_save_file_button,
-  Global_Ui_Proc_Id_save_as_file_button,
-  Global_Ui_Proc_Id_edit_menu_button,
-  Global_Ui_Proc_Id_copy_button,
-  Global_Ui_Proc_Id_paste_button,
-  Global_Ui_Proc_Id_open_file_label,
-  Global_Ui_Proc_Id_open_button,
-  Global_Ui_Proc_Id_cancel_button,
-  Global_Ui_Proc_Id_save_button,
-  Global_Ui_Proc_Id_save_file_as_text_input,
+#define X(name, ...)\
+  Global_Ui_Proc_Id_##name,
+  Global_Ui_Proc_Kind_Xlist(X)
+#undef X
 } Global_Ui_Proc_Id;
 
 global_variable Process global_ui_procs[] = {
-  [Global_Ui_Proc_Id_file_menu_button] = (Process){0},
-  [Global_Ui_Proc_Id_open_file_button] = (Process){0},
-  [Global_Ui_Proc_Id_save_file_button] = (Process){0},
-  [Global_Ui_Proc_Id_save_as_file_button] = (Process){0},
-  [Global_Ui_Proc_Id_edit_menu_button] = (Process){0},
-  [Global_Ui_Proc_Id_copy_button] = (Process){0},
-  [Global_Ui_Proc_Id_paste_button] = (Process){0},
+  [Global_Ui_Proc_Id_file_menu_button] = (Process){
+    .flags = (Process_Flag_Clickable |
+              Process_Flag_FitToText |
+              Process_Flag_UiDescendIfActive |
+              Process_Flag_CanBeActive),
+    .label_c_string = (U8 *)"File"
+  },
+  [Global_Ui_Proc_Id_open_file_button] = (Process){
+    .flags = (Process_Flag_Clickable | Process_Flag_FitToText),
+    .label_c_string = (U8 *)"Open..."
+  },
+  [Global_Ui_Proc_Id_save_file_button] = (Process){
+    .flags = (Process_Flag_Clickable | Process_Flag_FitToText),
+    .label_c_string = (U8 *)"Save"
+  },
+  [Global_Ui_Proc_Id_save_as_file_button] = (Process){
+    .flags = (Process_Flag_Clickable | Process_Flag_FitToText),
+    .label_c_string = (U8 *)"Save As...",
+    .func = set_save_file_as_as_active_element
+  },
+  [Global_Ui_Proc_Id_edit_menu_button] = (Process){
+    .flags = (Process_Flag_Clickable | Process_Flag_FitToText),
+    .label_c_string = (U8 *)"Edit",
+  },
+  [Global_Ui_Proc_Id_copy_button] = (Process){
+    .flags = (Process_Flag_Clickable | Process_Flag_FitToText),
+    .label_c_string = (U8 *)"Copy",
+    .func = handle_copy,
+  },
+  [Global_Ui_Proc_Id_paste_button] = (Process){
+    .flags = (Process_Flag_Clickable | Process_Flag_FitToText),
+    .label_c_string = (U8 *)"Paste",
+    .func = handle_paste
+  },
   [Global_Ui_Proc_Id_open_file_label] = (Process){
-    .flags = Process_Flag_FitToText,
+    .flags = (Process_Flag_Clickable |
+              Process_Flag_FitToText |
+              Process_Flag_UiDescendIfActive |
+              Process_Flag_CanBeActive),
     .label_c_string = (U8 *)"Open File...",
     .margin = (Vector2){5.0f, 8.0f},
   },
@@ -149,19 +186,19 @@ global_variable Process global_ui_procs[] = {
   }
 };
 
-
-global_variable Process *file_submenu[] = {
-  &global_ui_procs[Global_Ui_Proc_Id_open_file_button],
-  &global_ui_procs[Global_Ui_Proc_Id_save_file_button],
-  &global_ui_procs[Global_Ui_Proc_Id_save_as_file_button]
-};
-global_variable Process *edit_submenu[] = {
-  &global_ui_procs[Global_Ui_Proc_Id_copy_button],
-  &global_ui_procs[Global_Ui_Proc_Id_paste_button],
-};
+#define X(name, ...)\
+  Process global_ui_##name = (Process){0};
+  Global_Ui_Proc_Kind_Xlist(X)
+#undef X
 
 
-global_variable Process global_top_menu_box = (Process){
+
+
+
+global_variable Process global_ui_root = (Process){};
+
+
+global_variable Process global_ui_top_menu_box = (Process){
   .flags = Process_Flag_AsBox,
   .ui_box = {
     .debug_delete_me_plz_HighlightBox = 1,
@@ -170,7 +207,7 @@ global_variable Process global_top_menu_box = (Process){
   }
 };
 
-global_variable Process global_sub_menu_box = (Process){
+global_variable Process global_ui_sub_menu_box = (Process){
   .flags = Process_Flag_AsBox,
   .ui_box = {
     .align = Ui_Align_TopLeft,
@@ -180,7 +217,7 @@ global_variable Process global_sub_menu_box = (Process){
 };
 
 // Open File UI
-global_variable Process global_open_file_box = (Process){
+global_variable Process global_ui_open_file_box = (Process){
   .flags = (Process_Flag_AsBox|
             Process_Flag_UiDescendIfActive|
             Process_Flag_UiShowIfActive),
@@ -205,7 +242,7 @@ global_variable Process file_list_box = (Process){
     .max_size = (Vector2){0.0f, 100.0f},
   }
 };
-global_variable Process global_open_file_confirm_box = (Process){
+global_variable Process global_ui_open_file_confirm_box = (Process){
   .flags = Process_Flag_AsBox,
   .ui_box = {
     .align = Ui_Align_TopRight, // TODO: The right-alignment is broken... should fix that at some point...
@@ -216,7 +253,7 @@ global_variable Process global_open_file_confirm_box = (Process){
 
 
 // Save File As UI
-global_variable Process global_save_file_as_box = (Process){
+global_variable Process global_ui_save_file_as_box = (Process){
   .flags = (Process_Flag_AsBox|
             Process_Flag_UiDescendIfActive|
             Process_Flag_UiShowIfActive),
@@ -906,7 +943,10 @@ function Process *push_permanent_process(Context *context) {
 }
 
 
-function Process *create_process(Context *context, Process_Do_Undo_Kind do_undo_kind) {
+function Process *create_process(
+  Context *context,
+  Process_Do_Undo_Kind do_undo_kind
+  ) {
   Process *p = push_permanent_process(context);
 
   if (p) {
@@ -916,6 +956,10 @@ function Process *create_process(Context *context, Process_Do_Undo_Kind do_undo_
 
   return p;
 }
+
+
+
+
 
 
 
@@ -1289,7 +1333,6 @@ function void handle_label_editing(Context *context, Process_List ps) {
   while ((key = context->ui_state.key_presses[k++])) {
     for (Process *a = ps.first; a != 0; a = a->next_active) {
       Process_Do_Undo_Kind do_undo_kind = get_process_do_undo_kind(context, a);
-      printf("do_undo_kind %d\n", do_undo_kind);
       do_undo_kind_flags |= Process_Do_Undo_Kind_Flag_From_Kind(do_undo_kind);
       Process_Do_Undo *do_undo = get_process_do_undo_from_kind(context, do_undo_kind);
 
@@ -2920,26 +2963,6 @@ get_process_selection(Context *context, View *view, Process *p) {
 
 
 
-function Process create_lit_button(Context *context, String8 label, F32 x_pos, F32 y_pos) {
-  Process button = Zero_Struct(Process);
-
-  U32 flags = Process_Flag_Clickable | Process_Flag_FitToText;
-  Set_Flag(button.flags, flags);
-
-  button.position.x = x_pos;
-  button.position.y = y_pos;
-
-  /* button.label = string_chunk_list_from_string8(context, label); */
-  button.label_c_string = label.str;
-
-  return button;
-}
-
-
-
-
-
-
 
 
 
@@ -3136,74 +3159,64 @@ function void create_keybind_array(Context *context) {
 
 
 
-#define Initialize_Ui_Process(var_name, copy_proc)\
-  Process *var_name = create_process(context, Process_Do_Undo_Kind_Ui);\
-  {\
-    if (var_name == 0) goto init_ui_elements_error;\
-    U64 var_name##_gen_id = var_name->gen_id;\
-    *var_name = (copy_proc);\
-    var_name->gen_id = var_name##_gen_id;\
+
+
+
+function Process *decl_ui_init(
+  Context *context,
+  Process *parent_process,
+  Process proc_to_copy,
+  Process_Do_Undo_Kind do_undo_kind
+  ) {
+  Process *p = push_permanent_process(context);
+
+  if (p) {
+    Process_Do_Undo *do_undo = get_process_do_undo_from_kind(context, do_undo_kind);
+    U64 gen_id = p->gen_id;
+    *p = proc_to_copy;
+    p->parent = parent_process;
+    p->gen_id = gen_id;
+
+    add_process_to_process_edit_list(context, do_undo, p, Proc_Trie_Edit_Insert, (Process){0});
   }
 
-
-function void initialize_ui_elements(Context *context) {
-  View *ui_view = &context->views[View_Kind_Ui];
-  Process_Do_Undo *ui_do_undo = &context->views[View_Kind_Ui].do_undo;
-
-  // top menu box
-  Initialize_Ui_Process(top_menu_box, global_top_menu_box);
-  ui_view->root_process = top_menu_box;
-
-  // top menu buttons
-  Initialize_Ui_Process(file_menu_button, global_ui_procs[Global_Ui_Proc_Id_file_menu_button]);
-  Initialize_Ui_Process(edit_menu_button, global_ui_procs[Global_Ui_Proc_Id_edit_menu_button]);
-  Initialize_Ui_Process(open_file_box, global_open_file_box);
-  Initialize_Ui_Process(open_file_label, global_ui_procs[Global_Ui_Proc_Id_open_file_label]);
-  Initialize_Ui_Process(open_file_confirm_box, global_open_file_confirm_box);
-  Initialize_Ui_Process(open_button, global_ui_procs[Global_Ui_Proc_Id_open_button]);
-  Initialize_Ui_Process(cancel_button, global_ui_procs[Global_Ui_Proc_Id_cancel_button]);
-  Initialize_Ui_Process(save_file_as_box, global_save_file_as_box);
-  Initialize_Ui_Process(save_file_as_text_input, global_ui_procs[Global_Ui_Proc_Id_save_file_as_text_input]);
-
-
-  top_menu_box->child = file_menu_button;
-  file_menu_button->sibling = edit_menu_button;
-  edit_menu_button->sibling = open_file_box;
-
-  open_file_box->child = open_file_label;
-  open_file_label->sibling = open_file_confirm_box;
-  open_file_confirm_box->child = open_button;
-  open_button->sibling = cancel_button;
-
-  open_file_box->sibling = save_file_as_box;
-  save_file_as_box->child = save_file_as_text_input;
-
-
-  // file menu buttons
-  {
-    Initialize_Ui_Process(sub_menu_box, global_sub_menu_box);
-    Initialize_Ui_Process(open_file_button, global_ui_procs[Global_Ui_Proc_Id_open_file_button]);
-    Initialize_Ui_Process(save_file_button, global_ui_procs[Global_Ui_Proc_Id_save_file_button]);
-    Initialize_Ui_Process(save_as_file_button, global_ui_procs[Global_Ui_Proc_Id_save_as_file_button]);
-
-    file_menu_button->child = sub_menu_box;
-    sub_menu_box->child = open_file_button;
-    open_file_button->sibling = save_file_button;
-    open_file_button->func = set_open_file_as_active_element;
-    save_as_file_button->func = set_save_file_as_as_active_element;
-
-    save_file_button->sibling = save_as_file_button;
-  }
-
-  // open file ui
-  Initialize_Ui_Process(sub_menu_box, global_sub_menu_box);
-
-
-  // edit menu buttons
-
-  gather_processes_from_trie(context, ui_do_undo);
-init_ui_elements_error:;
+  return p;
 }
+
+#define Decl_Ui(c, n)\
+  for (Process *p = decl_ui_init((c), parent_process, global_ui_##n, Process_Do_Undo_Kind_Ui);\
+       p != 0;\
+       (parent_process = p->parent, p = 0))
+
+
+function void initialize_ui_elements(Context *c) {
+  Process *parent_process = 0;
+  /* Process *current_process = 0; */
+  Decl_Ui(c, root) {
+    Decl_Ui(c, top_menu_box) {
+      Decl_Ui(c, file_menu_button) {
+        Decl_Ui(c, sub_menu_box) {
+          Decl_Ui(c, open_file_button);
+          Decl_Ui(c, save_file_button);
+          Decl_Ui(c, save_as_file_button);
+        };
+      };
+      Decl_Ui(c, edit_menu_button);
+      Decl_Ui(c, open_file_box) {
+        Decl_Ui(c, open_file_label);
+        Decl_Ui(c, open_file_confirm_box) {
+          Decl_Ui(c, open_button);
+          Decl_Ui(c, cancel_button);
+        };
+      };
+    };
+    Decl_Ui(c, save_file_as_box) {
+      Decl_Ui(c, save_file_as_text_input);
+    };
+  };
+}
+
+
 
 
 
@@ -3309,29 +3322,8 @@ int main(void) {
 
 
       // init ui elements
-      global_ui_procs[Global_Ui_Proc_Id_file_menu_button] =
-        create_lit_button(&context, str8_lit("File"), 0, 0);
-      Set_Flag(global_ui_procs[Global_Ui_Proc_Id_file_menu_button].flags,
-               Process_Flag_UiDescendIfActive|Process_Flag_CanBeActive);
-      global_ui_procs[Global_Ui_Proc_Id_open_file_button] =
-        create_lit_button(&context, str8_lit("Open..."), 0, 0);
-      global_ui_procs[Global_Ui_Proc_Id_save_file_button] =
-        create_lit_button(&context, str8_lit("Save"), 0, 0);
-      /* save_file_button.func = save_file; */
-      global_ui_procs[Global_Ui_Proc_Id_save_as_file_button] =
-        create_lit_button(&context, str8_lit("Save As..."), 0, 0);
-      global_ui_procs[Global_Ui_Proc_Id_save_as_file_button].func = set_save_file_as_as_active_element;
-      global_ui_procs[Global_Ui_Proc_Id_edit_menu_button] =
-        create_lit_button(&context, str8_lit("Edit"), 0, 0);
-      Set_Flag(global_ui_procs[Global_Ui_Proc_Id_edit_menu_button].flags,
-               Process_Flag_UiDescendIfActive|Process_Flag_CanBeActive);
-      global_ui_procs[Global_Ui_Proc_Id_copy_button] =
-        create_lit_button(&context, str8_lit("Copy"), 0, 0);
-      global_ui_procs[Global_Ui_Proc_Id_copy_button].func = handle_copy;
-      global_ui_procs[Global_Ui_Proc_Id_paste_button] =
-        create_lit_button(&context, str8_lit("Paste"), 0, 0);
-      global_ui_procs[Global_Ui_Proc_Id_paste_button].func = handle_paste;
       initialize_ui_elements(&context);
+
 
       // init common filepaths
 #if OS_WINDOWS
