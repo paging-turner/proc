@@ -101,6 +101,12 @@ global_variable String_Chunk global_null_string_chunk;
 ////////////////////////
 
 #define Global_Ui_Proc_Kind_Xlist(X)\
+  X(root)\
+  X(top_menu_box)\
+  X(sub_menu_box)\
+  X(open_file_box)\
+  X(open_file_confirm_box)\
+  X(save_file_as_box)\
   X(file_menu_button)\
   X(open_file_button)\
   X(save_file_button)\
@@ -183,99 +189,74 @@ global_variable Process global_ui_procs[] = {
   },
   [Global_Ui_Proc_Id_save_file_as_text_input] = (Process){
     .flags = Process_Flag_TextEdit|Process_Flag_FitToText|Process_Flag_Clickable|Process_Flag_CanBeActive,
+  },
+  [Global_Ui_Proc_Id_top_menu_box] = (Process){
+    .flags = Process_Flag_AsBox,
+    .ui_box = {
+      .debug_delete_me_plz_HighlightBox = 1,
+      .align = Ui_Align_TopLeft,
+      .layout = Ui_Layout_Horizontal,
+    }
+  },
+  [Global_Ui_Proc_Id_sub_menu_box] = (Process){
+    .flags = Process_Flag_AsBox,
+    .ui_box = {
+      .align = Ui_Align_TopLeft,
+      .layout = Ui_Layout_Vertical,
+      .sizing = Ui_Sizing_FitContentsX,
+    }
+  },
+  [Global_Ui_Proc_Id_open_file_box] = (Process){
+    .flags = (Process_Flag_AsBox|
+              Process_Flag_UiDescendIfActive|
+              Process_Flag_UiShowIfActive),
+    .position = (Vector2){100.0f, 100.0f},
+    .ui_box = {
+      .kind = Ui_Box_Kind_OpenFile,
+      .min_size = (Vector2){300.0f, 0.0f},
+      .align = Ui_Align_TopLeft,
+      .layout = Ui_Layout_Vertical,
+      .sizing = Ui_Sizing_FitContents,
+      .flags = Ui_Box_Flag_ShouldDraw,
+      .color = (Color){200.0f, 200.0f, 200.0f, 255.0f},
+    }
+  },
+  [Global_Ui_Proc_Id_open_file_confirm_box] = (Process){
+    .flags = Process_Flag_AsBox,
+    .ui_box = {
+      .align = Ui_Align_TopRight, // TODO: The right-alignment is broken... should fix that at some point...
+      .layout = Ui_Layout_Horizontal,
+      .sizing = Ui_Sizing_FitContents,
+    }
+  },
+  [Global_Ui_Proc_Id_save_file_as_box] = (Process){
+    .flags = (Process_Flag_AsBox|
+              Process_Flag_UiDescendIfActive|
+              Process_Flag_UiShowIfActive),
+    .position = (Vector2){100.0f, 100.0f},
+    .ui_box = {
+      .kind = Ui_Box_Kind_SaveFileAs,
+      .min_size = (Vector2){300.0f, 0.0f},
+      .align = Ui_Align_TopLeft,
+      .layout = Ui_Layout_Vertical,
+      .sizing = Ui_Sizing_FitContents,
+      .flags = Ui_Box_Flag_ShouldDraw,
+      .color = (Color){200.0f, 200.0f, 200.0f, 255.0f},
+    }
   }
 };
 
-#define X(name, ...)\
-  Process global_ui_##name = (Process){0};
-  Global_Ui_Proc_Kind_Xlist(X)
-#undef X
+/* #define X(name, ...)\ */
+/*   Process global_ui_##name = (Process){0}; */
+/*   Global_Ui_Proc_Kind_Xlist(X) */
+/* #undef X */
 
 
 
 
 
-global_variable Process global_ui_root = (Process){};
 
 
-global_variable Process global_ui_top_menu_box = (Process){
-  .flags = Process_Flag_AsBox,
-  .ui_box = {
-    .debug_delete_me_plz_HighlightBox = 1,
-    .align = Ui_Align_TopLeft,
-    .layout = Ui_Layout_Horizontal,
-  }
-};
-
-global_variable Process global_ui_sub_menu_box = (Process){
-  .flags = Process_Flag_AsBox,
-  .ui_box = {
-    .align = Ui_Align_TopLeft,
-    .layout = Ui_Layout_Vertical,
-    .sizing = Ui_Sizing_FitContentsX,
-  }
-};
-
-// Open File UI
-global_variable Process global_ui_open_file_box = (Process){
-  .flags = (Process_Flag_AsBox|
-            Process_Flag_UiDescendIfActive|
-            Process_Flag_UiShowIfActive),
-  .position = (Vector2){100.0f, 100.0f},
-  .ui_box = {
-    .kind = Ui_Box_Kind_OpenFile,
-    .min_size = (Vector2){300.0f, 0.0f},
-    .align = Ui_Align_TopLeft,
-    .layout = Ui_Layout_Vertical,
-    .sizing = Ui_Sizing_FitContents,
-    .flags = Ui_Box_Flag_ShouldDraw,
-    .color = (Color){200.0f, 200.0f, 200.0f, 255.0f},
-  }
-};
-global_variable Process file_list_box = (Process){
-  .flags = Process_Flag_AsBox,
-  .ui_box = {
-    .align = Ui_Align_TopLeft,
-    .layout = Ui_Layout_Vertical,
-    .sizing = Ui_Sizing_FitContents,
-    .flags = Ui_Box_Flag_Clip|Ui_Box_Flag_ScrollY|Ui_Box_Flag_Stretch,
-    .max_size = (Vector2){0.0f, 100.0f},
-  }
-};
-global_variable Process global_ui_open_file_confirm_box = (Process){
-  .flags = Process_Flag_AsBox,
-  .ui_box = {
-    .align = Ui_Align_TopRight, // TODO: The right-alignment is broken... should fix that at some point...
-    .layout = Ui_Layout_Horizontal,
-    .sizing = Ui_Sizing_FitContents,
-  }
-};
-
-
-// Save File As UI
-global_variable Process global_ui_save_file_as_box = (Process){
-  .flags = (Process_Flag_AsBox|
-            Process_Flag_UiDescendIfActive|
-            Process_Flag_UiShowIfActive),
-  .position = (Vector2){100.0f, 100.0f},
-  .ui_box = {
-    .kind = Ui_Box_Kind_SaveFileAs,
-    .min_size = (Vector2){300.0f, 0.0f},
-    .align = Ui_Align_TopLeft,
-    .layout = Ui_Layout_Vertical,
-    .sizing = Ui_Sizing_FitContents,
-    .flags = Ui_Box_Flag_ShouldDraw,
-    .color = (Color){200.0f, 200.0f, 200.0f, 255.0f},
-  }
-};
-global_variable Process save_file_as_confirm_box = (Process){
-  .flags = Process_Flag_AsBox,
-  .ui_box = {
-    .align = Ui_Align_TopRight, // TODO: The right-alignment is broken... should fix that at some point...
-    .layout = Ui_Layout_Horizontal,
-    .sizing = Ui_Sizing_FitContents,
-  }
-};
 
 
 
@@ -1509,6 +1490,153 @@ function Process_Stack *get_parent_box_stack(Context *context, Process_Stack *st
 
   return parent_box_stack;
 }
+
+
+
+
+
+
+
+function B32 NEW_do_ui_element(Context *context, Process *element, Process *parent_element, Vector2 *offset) {
+  B32 interacted = 0;
+  B32 is_hot = 0;
+
+  Render_Context *rc = &context->ui_render_context;
+  Ui_State *ui_state = &context->ui_state;
+
+  /* Process_Stack *parent_box_stack = get_parent_box_stack(context, stack); */
+  /* Process *parent_element = parent_box_stack->process; */
+
+  F32 font_size = global_panel_font_size;
+  Vector2 padding = global_button_padding;
+  Color dormant_bg_color = global_button_dormant_bg_color;
+  Color hot_bg_color = global_button_hot_bg_color;
+  Color font_color = global_button_font_color;
+
+  Ui_Align align = (parent_element == 0) ? Ui_Default_Align : parent_element->ui_box.align;
+  Ui_Layout layout = (parent_element == 0) ? Ui_Default_Layout : parent_element->ui_box.layout;
+  Vector2 box_position = (parent_element == 0) ? Ui_Default_Position : parent_element->position;
+
+  B32 set_box_x = parent_element ? ui_box_should_set_x(parent_element) : 0;
+  B32 set_box_y = parent_element ? ui_box_should_set_y(parent_element) : 0;
+
+  // @Copypasta ui_box_end
+  Vector2 next_offset;
+  switch (layout) {
+  default:
+  case Ui_Layout_None: {
+    next_offset = Zero_Struct(Vector2);
+  } break;
+  case Ui_Layout_Vertical: {
+    next_offset = (Vector2){0.0f, element->ui_box.size.y};
+    if (parent_element) {
+      element->position = get_ui_box_inner_position(context, parent_element);
+    }
+  } break;
+  case Ui_Layout_Horizontal: {
+    if (parent_element) {
+      element->position = get_ui_box_inner_position(context, parent_element);
+    }
+    next_offset = (Vector2){element->ui_box.size.x, 0.0f};
+  } break;
+  }
+
+  Vector2 box_size = (Vector2){0};
+  if (parent_element) {
+    parent_element->ui_box.position = Vector2Add(parent_element->ui_box.position, next_offset);
+    box_size = get_box_size(parent_element);
+
+    if (set_box_x && layout == Ui_Layout_Vertical) {
+      element->ui_box.size.x = box_size.x;
+    }
+    if (set_box_y && layout == Ui_Layout_Horizontal) {
+      element->ui_box.size.y = box_size.y;
+    }
+  }
+
+  Rectangle element_rect = (Rectangle){
+    element->position.x+element->margin.x,
+    element->position.y+element->margin.y,
+    element->ui_box.size.x-2.0f*element->margin.x,
+    element->ui_box.size.y-2.0f*element->margin.y,
+  };
+  B32 in_bounds = 1;
+  B32 hover_box = 1;
+  Rectangle box_rect;
+  if (parent_element) {
+    box_rect = (Rectangle){parent_element->position.x, parent_element->position.y, box_size.x, box_size.y};
+  }
+  else {
+    box_rect = (Rectangle){0};
+  }
+
+  if (parent_element && Get_Flag(parent_element->flags, Ui_Box_Flag_Clip)) {
+    in_bounds = CheckCollisionRecs(element_rect, box_rect);
+  }
+
+  if (in_bounds) {
+    /* printf("in bounds %p\n", element); */
+    B32 hover_element = rectangle_contains_point(element_rect, context->ui_state.mouse_position);
+    if (parent_element) {
+      hover_box = (!Get_Flag(element->flags, Ui_Box_Flag_Clip) ||
+                   rectangle_contains_point(box_rect, context->ui_state.mouse_position));
+    }
+    if (Get_Flag(element->flags, Process_Flag_Clickable) &&
+        !Get_Flag(ui_state->flags, Ui_State_Flag_action_occured) &&
+        hover_element && hover_box) {
+      context->hot_process = (Process_Loc){0};
+      is_hot = 1;
+
+      if (IsMouseButtonPressed(0)) {
+        interacted = 1;
+        Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
+        // set as active
+        if (Get_Flag(element->flags, Process_Flag_CanBeActive)) {
+          /* clear_active_processes(context); */
+          Set_Flag(element->flags, Process_Flag_RefIsActive);
+          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, element, next_active, 0);
+        }
+        // call func
+        if (element->func) {
+          element->func(context, element);
+        }
+      }
+    }
+
+    // TODO: Allow label-editing during UI
+#if 0
+    if (Get_Flag(element->flags, Process_Flag_TextEdit)) {
+      if (element->label == 0) {
+        element->label = push_struct(context->ui_arena, Piece_Table);
+      }
+      if (element->label) {
+        Process_List p_list = (Process_List){element, element};
+        handle_label_editing(context, p_list);
+      }
+    }
+#endif
+
+    B32 is_hot_bg_color = is_hot || element == context->selected_element;
+    Color bg_color = is_hot_bg_color ? hot_bg_color : dormant_bg_color;
+    if (is_hot) {
+      context->hot_process.process = element;
+    }
+
+    render_DrawRectangle(rc, element_rect.x, element_rect.y, element_rect.width, element_rect.height, bg_color);
+
+    if (element->label_c_string) {
+      render_DrawText(rc, (char *)element->label_c_string, element_rect.x+padding.x+1.0f, element_rect.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
+      render_DrawText(rc, (char *)element->label_c_string, element_rect.x+padding.x, element_rect.y+padding.y, font_size, font_color, 0);
+    }
+  }
+
+  return interacted;
+}
+
+
+
+
+
 
 
 function B32 do_ui_element(Context *context, Process_Stack *stack, Process *element, B32 sizing) {
@@ -3165,10 +3293,11 @@ function void create_keybind_array(Context *context) {
 function Process *decl_ui_init(
   Context *context,
   Process *parent_process,
+  Vector2 *offset,
   Process proc_to_copy,
   Process_Do_Undo_Kind do_undo_kind
   ) {
-  Process *p = push_permanent_process(context);
+  Process *p = push_struct(context->per_frame_arena, Process);
 
   if (p) {
     Process_Do_Undo *do_undo = get_process_do_undo_from_kind(context, do_undo_kind);
@@ -3177,21 +3306,46 @@ function Process *decl_ui_init(
     p->parent = parent_process;
     p->gen_id = gen_id;
 
-    add_process_to_process_edit_list(context, do_undo, p, Proc_Trie_Edit_Insert, (Process){0});
+    /* add_process_to_process_edit_list(context, do_undo, p, Proc_Trie_Edit_Insert, (Process){0}); */
+
+    NEW_do_ui_element(context, p, parent_process, offset);
   }
 
   return p;
 }
 
+function void decl_ui_next(
+  Context *context,
+  Process **p,
+  Process **parent_process,
+  Vector2 *offset
+  ) {
+  if (p && *p && parent_process && *parent_process) {
+    Vector2 size = get_ui_element_size(context, *p, 1, 0);
+
+    if ((*parent_process)->ui_box.layout == Ui_Layout_Horizontal) {
+      offset->x += size.x;
+    }
+    else if ((*parent_process)->ui_box.layout == Ui_Layout_Vertical) {
+      offset->y += size.y;
+    }
+  }
+
+  // restore the old parent-process
+  *parent_process = (*p)->parent;
+  *p = 0;
+}
+
 #define Decl_Ui(c, n)\
-  for (Process *p = decl_ui_init((c), parent_process, global_ui_##n, Process_Do_Undo_Kind_Ui);\
+  for (Process *p = decl_ui_init((c), parent_process, &offset, global_ui_procs[Global_Ui_Proc_Id_##n], Process_Do_Undo_Kind_Ui);\
        p != 0;\
-       (parent_process = p->parent, p = 0))
+       decl_ui_next((c), &p, &parent_process, &offset))
 
 
-function void initialize_ui_elements(Context *c) {
+function void do_ui_elements(Context *c) {
   Process *parent_process = 0;
-  /* Process *current_process = 0; */
+  Vector2 offset = (Vector2){0};
+
   Decl_Ui(c, root) {
     Decl_Ui(c, top_menu_box) {
       Decl_Ui(c, file_menu_button) {
@@ -3321,8 +3475,6 @@ int main(void) {
       global_process_bg_color = (Color){190, 190, 199, 255};
 
 
-      // init ui elements
-      initialize_ui_elements(&context);
 
 
       // init common filepaths
@@ -3408,6 +3560,10 @@ int main(void) {
       // handle ui
       {
         Render_Context *rc = &context.ui_render_context;
+#if 1
+        /* // init ui elements */
+        do_ui_elements(&context);
+#else
         Process *root_process = context.views[View_Kind_Ui].root_process;
         F32 menu_dimension_size = 20.0f;
         Vector2 menu_size = (Vector2){menu_dimension_size,menu_dimension_size};
@@ -3488,6 +3644,7 @@ int main(void) {
             }
           }
         }
+#endif
       }
 
       if (!Get_Flag(context.ui_state.flags, Ui_State_Flag_action_occured)) {
