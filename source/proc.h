@@ -63,6 +63,7 @@ typedef struct Ui_Box {
   B32 debug_delete_me_plz_HighlightBox;
   Vector2 position;
   Vector2 scroll_offset;
+  Vector2 layout_offset;
   Vector2 size;
   Vector2 min_size;
   Vector2 max_size;
@@ -191,8 +192,6 @@ struct Process {
     Process *conn[Process_Connection__Count]; // NOTE: also indexed by Process_Branch
   };
 
-  Process *parent;
-
   union {
     struct {
       U32 which_in;
@@ -222,6 +221,7 @@ struct Process {
 
   Process *next;
   Process *next_active;
+  Process *parent;
 
   U8 *label_c_string;
   U32 label_cursor;

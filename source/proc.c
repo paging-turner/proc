@@ -100,6 +100,7 @@ global_variable String_Chunk global_null_string_chunk;
 // UI Globals
 ////////////////////////
 
+// TODO: Symbol-sets?
 #define Global_Ui_Proc_Kind_Xlist(X)\
   X(root)\
   X(top_menu_box)\
@@ -120,8 +121,6 @@ global_variable String_Chunk global_null_string_chunk;
   X(save_button)\
   X(save_file_as_text_input)
 
-
-// TODO: Once we do the tree version of UI layout, we won't need this enum
 typedef enum Global_Ui_Proc_Id {
 #define X(name, ...)\
   Global_Ui_Proc_Id_##name,
@@ -246,10 +245,6 @@ global_variable Process global_ui_procs[] = {
   }
 };
 
-/* #define X(name, ...)\ */
-/*   Process global_ui_##name = (Process){0}; */
-/*   Global_Ui_Proc_Kind_Xlist(X) */
-/* #undef X */
 
 
 
@@ -1378,19 +1373,25 @@ function void handle_label_editing(Context *context, Process_List ps) {
 }
 
 
-function Vector2 get_ui_element_size(Context *context, Process *element, B32 fit_to_text, U8 *label_c_string) {
+function Vector2 get_ui_element_size(Context *context, Process *element, B32 fit_to_text) {
   Vector2 size = element->ui_box.size;
-  String8 label = str8_lit(label_c_string);
   F32 font_size = global_panel_font_size;
   Vector2 padding = global_button_padding;
 
-  if (label_c_string == 0 && element->label) {
-    label = piece_table_get_string(render_GlobalTempArena, element->label);
-  }
-
   if (fit_to_text) {
-    size.x = (F32)MeasureText((char *)label.str, font_size) + 2.0f*padding.x;
-    size.y = font_size + 2.0f*padding.y;
+    String8 text = (String8){0};
+
+    if (element->label_c_string) {
+      text = str8_lit(element->label_c_string);
+    }
+    else if (element->label) {
+      text = piece_table_get_string(render_GlobalTempArena, element->label);
+    }
+
+    if (text.str) {
+      size.x = (F32)MeasureText((char *)text.str, font_size) + 2.0f*padding.x;
+      size.y = font_size + 2.0f*padding.y;
+    }
   }
 
   size = Vector2Add(size, Vector2Scale(element->margin, 2.0f));
@@ -1497,66 +1498,28 @@ function Process_Stack *get_parent_box_stack(Context *context, Process_Stack *st
 
 
 
-function B32 NEW_do_ui_element(Context *context, Process *element, Process *parent_element, Vector2 *offset) {
+function B32 NEW_do_ui_element(
+  Context *context,
+  Process *element,
+  Process *parent_element,
+  Vector2 padding
+  ) {
   B32 interacted = 0;
   B32 is_hot = 0;
 
   Render_Context *rc = &context->ui_render_context;
   Ui_State *ui_state = &context->ui_state;
 
-  /* Process_Stack *parent_box_stack = get_parent_box_stack(context, stack); */
-  /* Process *parent_element = parent_box_stack->process; */
-
   F32 font_size = global_panel_font_size;
-  Vector2 padding = global_button_padding;
   Color dormant_bg_color = global_button_dormant_bg_color;
   Color hot_bg_color = global_button_hot_bg_color;
   Color font_color = global_button_font_color;
 
-  Ui_Align align = (parent_element == 0) ? Ui_Default_Align : parent_element->ui_box.align;
-  Ui_Layout layout = (parent_element == 0) ? Ui_Default_Layout : parent_element->ui_box.layout;
-  Vector2 box_position = (parent_element == 0) ? Ui_Default_Position : parent_element->position;
-
-  B32 set_box_x = parent_element ? ui_box_should_set_x(parent_element) : 0;
-  B32 set_box_y = parent_element ? ui_box_should_set_y(parent_element) : 0;
-
-  // @Copypasta ui_box_end
-  Vector2 next_offset;
-  switch (layout) {
-  default:
-  case Ui_Layout_None: {
-    next_offset = Zero_Struct(Vector2);
-  } break;
-  case Ui_Layout_Vertical: {
-    next_offset = (Vector2){0.0f, element->ui_box.size.y};
-    if (parent_element) {
-      element->position = get_ui_box_inner_position(context, parent_element);
-    }
-  } break;
-  case Ui_Layout_Horizontal: {
-    if (parent_element) {
-      element->position = get_ui_box_inner_position(context, parent_element);
-    }
-    next_offset = (Vector2){element->ui_box.size.x, 0.0f};
-  } break;
-  }
-
-  Vector2 box_size = (Vector2){0};
-  if (parent_element) {
-    parent_element->ui_box.position = Vector2Add(parent_element->ui_box.position, next_offset);
-    box_size = get_box_size(parent_element);
-
-    if (set_box_x && layout == Ui_Layout_Vertical) {
-      element->ui_box.size.x = box_size.x;
-    }
-    if (set_box_y && layout == Ui_Layout_Horizontal) {
-      element->ui_box.size.y = box_size.y;
-    }
-  }
+  element->ui_box.size = get_ui_element_size(context, element, 1);
 
   Rectangle element_rect = (Rectangle){
-    element->position.x+element->margin.x,
-    element->position.y+element->margin.y,
+    element->position.x + element->ui_box.layout_offset.x + element->margin.x,
+    element->position.y + element->ui_box.layout_offset.y + element->margin.y,
     element->ui_box.size.x-2.0f*element->margin.x,
     element->ui_box.size.y-2.0f*element->margin.y,
   };
@@ -1564,7 +1527,8 @@ function B32 NEW_do_ui_element(Context *context, Process *element, Process *pare
   B32 hover_box = 1;
   Rectangle box_rect;
   if (parent_element) {
-    box_rect = (Rectangle){parent_element->position.x, parent_element->position.y, box_size.x, box_size.y};
+    Vector2 size = get_ui_element_size(context, element, 1);
+    box_rect = (Rectangle){parent_element->position.x, parent_element->position.y, size.x, size.y};
   }
   else {
     box_rect = (Rectangle){0};
@@ -1575,7 +1539,6 @@ function B32 NEW_do_ui_element(Context *context, Process *element, Process *pare
   }
 
   if (in_bounds) {
-    /* printf("in bounds %p\n", element); */
     B32 hover_element = rectangle_contains_point(element_rect, context->ui_state.mouse_position);
     if (parent_element) {
       hover_box = (!Get_Flag(element->flags, Ui_Box_Flag_Clip) ||
@@ -1592,9 +1555,7 @@ function B32 NEW_do_ui_element(Context *context, Process *element, Process *pare
         Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
         // set as active
         if (Get_Flag(element->flags, Process_Flag_CanBeActive)) {
-          /* clear_active_processes(context); */
           Set_Flag(element->flags, Process_Flag_RefIsActive);
-          SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, element, next_active, 0);
         }
         // call func
         if (element->func) {
@@ -1670,7 +1631,7 @@ function B32 do_ui_element(Context *context, Process_Stack *stack, Process *elem
     }
 
     B32 fit_to_text = Get_Flag(element->flags, Process_Flag_FitToText);
-    element->ui_box.size = get_ui_element_size(context, element, fit_to_text, element->label_c_string);
+    element->ui_box.size = get_ui_element_size(context, element, fit_to_text);
 
     if (box_parent) {
       set_ui_box_size(box_parent, element->ui_box.size, set_box_x, set_box_y);
@@ -3292,23 +3253,23 @@ function void create_keybind_array(Context *context) {
 
 function Process *decl_ui_init(
   Context *context,
-  Process *parent_process,
-  Vector2 *offset,
-  Process proc_to_copy,
+  Process **parent_process,
+  Vector2 padding,
+  Process *proc_to_copy,
   Process_Do_Undo_Kind do_undo_kind
   ) {
-  Process *p = push_struct(context->per_frame_arena, Process);
+  Process *p = proc_to_copy;
 
   if (p) {
     Process_Do_Undo *do_undo = get_process_do_undo_from_kind(context, do_undo_kind);
     U64 gen_id = p->gen_id;
-    *p = proc_to_copy;
-    p->parent = parent_process;
+    p->parent = *parent_process; // NOTE: store old parent
     p->gen_id = gen_id;
+    p->ui_box.layout_offset = p->parent ? p->parent->ui_box.layout_offset : (Vector2){0};
 
-    /* add_process_to_process_edit_list(context, do_undo, p, Proc_Trie_Edit_Insert, (Process){0}); */
+    NEW_do_ui_element(context, p, *parent_process, padding);
 
-    NEW_do_ui_element(context, p, parent_process, offset);
+    *parent_process = p;
   }
 
   return p;
@@ -3317,56 +3278,100 @@ function Process *decl_ui_init(
 function void decl_ui_next(
   Context *context,
   Process **p,
-  Process **parent_process,
-  Vector2 *offset
+  Process **parent_process
   ) {
-  if (p && *p && parent_process && *parent_process) {
-    Vector2 size = get_ui_element_size(context, *p, 1, 0);
-
-    if ((*parent_process)->ui_box.layout == Ui_Layout_Horizontal) {
-      offset->x += size.x;
-    }
-    else if ((*parent_process)->ui_box.layout == Ui_Layout_Vertical) {
-      offset->y += size.y;
-    }
-  }
-
   // restore the old parent-process
   *parent_process = (*p)->parent;
   *p = 0;
 }
 
+
+
+
+#define Ui_Push_Offset_X(n, o)\
+  F32 old_offset_x__##n = (o).x
+
+#define Ui_Push_Offset_Y(n, o)\
+  F32 old_offset_y__##n = global_ui_procs[Global_Ui_Proc_Id_##n].ui_box.layout_offset.y;\
+  global_ui_procs[Global_Ui_Proc_Id_##n].ui_box.layout_offset.y = (o)
+
+#define Ui_Pop_Offset_X(n, o)\
+  (o).x = old_offset_x__##n
+
+#define Ui_Pop_Offset_Y(n)\
+  global_ui_procs[Global_Ui_Proc_Id_##n].ui_box.layout_offset.y = old_offset_y__##n
+
+#define Ui_Push_Offset(n, o)\
+  Vector2 old_offset__##n = global_ui_procs[Global_Ui_Proc_Id_##n].ui_box.layout_offset;\
+  global_ui_procs[Global_Ui_Proc_Id_##n].ui_box.layout_offset = (o)
+
+#define Ui_Pop_Offset(n)\
+  global_ui_procs[Global_Ui_Proc_Id_##n].ui_box.layout_offset = old_offset__##n
+
+// TODO: rename Decl_Ui to X and undef at the end of using it in do_ui_elements?
 #define Decl_Ui(c, n)\
-  for (Process *p = decl_ui_init((c), parent_process, &offset, global_ui_procs[Global_Ui_Proc_Id_##n], Process_Do_Undo_Kind_Ui);\
-       p != 0;\
-       decl_ui_next((c), &p, &parent_process, &offset))
+  for (Process *n = decl_ui_init((c), &parent_process, padding, &global_ui_procs[Global_Ui_Proc_Id_##n], Process_Do_Undo_Kind_Ui);\
+       n != 0;\
+       decl_ui_next((c), &n, &parent_process))
 
 
 function void do_ui_elements(Context *c) {
   Process *parent_process = 0;
-  Vector2 offset = (Vector2){0};
+
+  Vector2 padding = global_button_padding;
+  F32 menu_button_y_offset = global_panel_font_size + 2.0f*padding.y;
 
   Decl_Ui(c, root) {
     Decl_Ui(c, top_menu_box) {
+      global_ui_procs[Global_Ui_Proc_Id_top_menu_box].ui_box.layout_offset = (Vector2){0};
       Decl_Ui(c, file_menu_button) {
-        Decl_Ui(c, sub_menu_box) {
-          Decl_Ui(c, open_file_button);
-          Decl_Ui(c, save_file_button);
-          Decl_Ui(c, save_as_file_button);
-        };
+        F32 new_y_offset = global_ui_procs[Global_Ui_Proc_Id_file_menu_button].ui_box.layout_offset.y + menu_button_y_offset;
+        file_menu_button->parent->ui_box.layout_offset.x +=
+          (file_menu_button->ui_box.size.x > 0.0f) ? file_menu_button->ui_box.size.x : 250.0f;
+        Ui_Push_Offset_Y(file_menu_button, new_y_offset);
+        {
+          Decl_Ui(c, sub_menu_box) {
+            Decl_Ui(c, open_file_button);
+            global_ui_procs[Global_Ui_Proc_Id_sub_menu_box].ui_box.layout_offset.y += menu_button_y_offset;
+            Decl_Ui(c, save_file_button);
+            global_ui_procs[Global_Ui_Proc_Id_sub_menu_box].ui_box.layout_offset.y += menu_button_y_offset;
+            Decl_Ui(c, save_as_file_button);
+            global_ui_procs[Global_Ui_Proc_Id_sub_menu_box].ui_box.layout_offset.y += menu_button_y_offset;
+          };
+        }
+
+        Ui_Pop_Offset_Y(file_menu_button);
       };
-      Decl_Ui(c, edit_menu_button);
+      Decl_Ui(c, edit_menu_button) {
+        Ui_Push_Offset_Y(edit_menu_button, global_ui_procs[Global_Ui_Proc_Id_edit_menu_button].ui_box.layout_offset.y + menu_button_y_offset);
+        {
+          Decl_Ui(c, copy_button);
+          global_ui_procs[Global_Ui_Proc_Id_edit_menu_button].ui_box.layout_offset.y += menu_button_y_offset;
+          Decl_Ui(c, paste_button);
+          global_ui_procs[Global_Ui_Proc_Id_edit_menu_button].ui_box.layout_offset.y += menu_button_y_offset;
+        }
+
+        global_ui_procs[Global_Ui_Proc_Id_top_menu_box].ui_box.layout_offset.x +=
+          edit_menu_button->ui_box.size.x > 0.0f ? edit_menu_button->ui_box.size.x : 50.0f;
+        Ui_Pop_Offset_Y(edit_menu_button);
+      }
       Decl_Ui(c, open_file_box) {
-        Decl_Ui(c, open_file_label);
-        Decl_Ui(c, open_file_confirm_box) {
-          Decl_Ui(c, open_button);
-          Decl_Ui(c, cancel_button);
-        };
+        Ui_Push_Offset(open_file_box, Vector2Scale(global_window_size, 0.5f));
+        {
+          Decl_Ui(c, open_file_label);
+          Decl_Ui(c, open_file_confirm_box) {
+            global_ui_procs[Global_Ui_Proc_Id_top_menu_box].ui_box.layout_offset =
+              global_ui_procs[Global_Ui_Proc_Id_open_file_box].ui_box.layout_offset;
+            Decl_Ui(c, open_button);
+            Decl_Ui(c, cancel_button);
+          };
+        }
+        Ui_Pop_Offset(open_file_box);
       };
     };
-    Decl_Ui(c, save_file_as_box) {
-      Decl_Ui(c, save_file_as_text_input);
-    };
+    /* Decl_Ui(c, save_file_as_box) { */
+    /*   Decl_Ui(c, save_file_as_text_input); */
+    /* }; */
   };
 }
 
