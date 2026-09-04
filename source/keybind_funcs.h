@@ -41,7 +41,7 @@ function void clear_active_process_list(Process_List *list) {
     for (Process *p = list->first; p != 0;) {
       Process *next = p->next_active;
       p->next_active = 0;
-      Unset_Flag(p->flags, Process_Flag_RefIsActive);
+      Unset_Flag(p->flags, Process_Flag_IsActive);
       p = next;
     }
 

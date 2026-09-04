@@ -150,7 +150,10 @@ global_variable Process global_ui_procs[] = {
     .func = set_save_file_as_as_active_element
   },
   [Global_Ui_Proc_Id_edit_menu_button] = (Process){
-    .flags = (Process_Flag_Clickable | Process_Flag_FitToText),
+    .flags = (Process_Flag_Clickable |
+              Process_Flag_FitToText |
+              Process_Flag_UiDescendIfActive |
+              Process_Flag_CanBeActive),
     .label_c_string = (U8 *)"Edit",
   },
   [Global_Ui_Proc_Id_copy_button] = (Process){
@@ -192,6 +195,7 @@ global_variable Process global_ui_procs[] = {
   [Global_Ui_Proc_Id_top_menu_box] = (Process){
     .flags = Process_Flag_AsBox,
     .ui_box = {
+      .flags = Ui_Box_Flag_OnlyOneActive,
       .debug_delete_me_plz_HighlightBox = 1,
       .align = Ui_Align_TopLeft,
       .layout = Ui_Layout_Horizontal,
@@ -200,6 +204,7 @@ global_variable Process global_ui_procs[] = {
   [Global_Ui_Proc_Id_sub_menu_box] = (Process){
     .flags = Process_Flag_AsBox,
     .ui_box = {
+      .flags = Ui_Box_Flag_OnlyOneActive,
       .align = Ui_Align_TopLeft,
       .layout = Ui_Layout_Vertical,
       .sizing = Ui_Sizing_FitContentsX,
@@ -535,67 +540,10 @@ function Process_Do_Undo *get_process_do_undo_from_process(Context *context, Pro
 
 
 
-function Process_Tree_Iterator proc_tree_iter_init(Context *context, Process *p) {
-  Process_Tree_Iterator iter = (Process_Tree_Iterator){0};
-
-  iter.arena_pop_pos = arena_current_pos(context->temp_arena);
-  iter.stack = push_struct(context->temp_arena, Process_Stack);
-
-  if (iter.stack) {
-    iter.stack->process = context->views[View_Kind_Ui].root_process;
-    iter.stack_push = 1;
-  }
-  else {
-    arena_pop_to(context->temp_arena, iter.arena_pop_pos);
-  }
-
-  return iter;
-}
 
 
-function B32 proc_tree_iter_test(Context *context, Process_Tree_Iterator iter) {
-  B32 should_continue = iter.stack && iter.stack->process;
-  return should_continue;
-}
 
 
-function void proc_tree_iter_next(Context *context, Process_Tree_Iterator *iter) {
-  if (iter->stack_pop) {
-    SLLStackPop(iter->stack);
-  }
-  iter->stack_pop = 0;
-  iter->stack_push = 0;
-
-  if (iter->stack) {
-    B32 not_visited = iter->stack->visited == 0;
-    B32 is_active = is_active_process(context, iter->stack->process);
-    B32 can_descend = (!Get_Flag(iter->stack->process->flags, Process_Flag_UiDescendIfActive) ||
-                       is_active);
-
-    iter->stack->visited = 1;
-
-    if (not_visited && can_descend && iter->stack->process->child) {
-      Process_Stack *new_stack = push_struct(context->temp_arena, Process_Stack);
-
-      if (new_stack) {
-        new_stack->process = iter->stack->process->child;
-        iter->stack_push = 1;
-        SLLStackPush(iter->stack, new_stack);
-      }
-      else {
-        arena_pop_to(context->temp_arena, iter->arena_pop_pos);
-        iter->stack = 0;
-      }
-    }
-    else if (iter->stack->process->sibling) {
-      iter->stack->process = iter->stack->process->sibling;
-      iter->stack->visited = 0;
-    }
-    else {
-      iter->stack_pop = 1;
-    }
-  }
-}
 
 
 
@@ -860,7 +808,7 @@ function void gather_processes_from_trie(Context *context, Process_Do_Undo *do_u
       p->position.x = (F32)iter->stack->indent * 60.0f;
       p->position.y = (F32)iter->stack->depth * 60.0f;
       if (iter->stack->root == do_undo->trie->current_root) {
-        Set_Flag(p->flags, Process_Flag_RefIsActive);
+        Set_Flag(p->flags, Process_Flag_IsActive);
       }
       p->ref = iter->stack->root;
       iter->stack->root->ref = p;
@@ -1201,7 +1149,7 @@ function void paste_processes(Context *context) {
 function B32 is_active_process(Context *context, Process *p) {
   B32 is_active = 0;
 
-  if (Get_Flag(p->flags, Process_Flag_RefIsActive)) {
+  if (Get_Flag(p->flags, Process_Flag_IsActive)) {
     is_active = 1;
   }
   else {
@@ -1257,42 +1205,10 @@ function void clear_ui_state(Context *context) {
 
 
 function void set_open_file_as_active_element(Context *context, Process *_element) {
-  // NOTE: assume that open-file-box is a child of the root ui-element
-  View *ui_view = &context->views[View_Kind_Ui];
-  Process *root_process = ui_view->root_process;
-  Process *open_file_box = 0;
-
-  List_For_N(Process *, r, root_process->child, sibling) {
-    if (r->ui_box.kind == Ui_Box_Kind_OpenFile) {
-      open_file_box = r;
-    }
-  }
-
-  if (open_file_box) {
-    clear_active_processes(context);
-    Set_Flag(open_file_box->flags, Process_Flag_RefIsActive);
-    SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, open_file_box, next_active, 0);
-  }
 }
 
 
 function void set_save_file_as_as_active_element(Context *context, Process *element) {
-  // NOTE: assume that open-file-box is a child of the root ui-element
-  View *ui_view = &context->views[View_Kind_Ui];
-  Process *root_process = ui_view->root_process;
-  Process *open_file_box = 0;
-
-  List_For_N(Process *, r, root_process->child, sibling) {
-    if (r->ui_box.kind == Ui_Box_Kind_SaveFileAs) {
-      open_file_box = r;
-    }
-  }
-
-  if (open_file_box) {
-    clear_active_processes(context);
-    Set_Flag(open_file_box->flags, Process_Flag_RefIsActive);
-    SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, open_file_box, next_active, 0);
-  }
 }
 
 
@@ -1476,21 +1392,6 @@ function void set_ui_box_size(Process *box, Vector2 size, B32 set_box_x, B32 set
 }
 
 
-function Process_Stack *get_parent_box_stack(Context *context, Process_Stack *stack) {
-  Process_Stack *parent_box_stack = 0;
-
-  if (stack) {
-    // NOTE: this skips over the current stack-node
-    List_For(Process_Stack *, s, stack->next) {
-      if (s->process && Get_Flag(s->process->flags, Process_Flag_AsBox)) {
-        parent_box_stack = s;
-        break;
-      }
-    }
-  }
-
-  return parent_box_stack;
-}
 
 
 
@@ -1527,8 +1428,10 @@ function B32 NEW_do_ui_element(
   B32 hover_box = 1;
   Rectangle box_rect;
   if (parent_element) {
-    Vector2 size = get_ui_element_size(context, element, 1);
-    box_rect = (Rectangle){parent_element->position.x, parent_element->position.y, size.x, size.y};
+    box_rect = (Rectangle){parent_element->position.x,
+                           parent_element->position.y,
+                           element->ui_box.size.x,
+                           element->ui_box.size.y};
   }
   else {
     box_rect = (Rectangle){0};
@@ -1555,7 +1458,7 @@ function B32 NEW_do_ui_element(
         Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
         // set as active
         if (Get_Flag(element->flags, Process_Flag_CanBeActive)) {
-          Set_Flag(element->flags, Process_Flag_RefIsActive);
+          Toggle_Flag(element->flags, Process_Flag_IsActive);
         }
         // call func
         if (element->func) {
@@ -1600,182 +1503,6 @@ function B32 NEW_do_ui_element(
 
 
 
-function B32 do_ui_element(Context *context, Process_Stack *stack, Process *element, B32 sizing) {
-  B32 interacted = 0;
-  if (stack == 0) goto error;
-  B32 is_hot = 0;
-
-  Render_Context *rc = &context->ui_render_context;
-  Ui_State *ui_state = &context->ui_state;
-
-  Process_Stack *parent_box_stack = get_parent_box_stack(context, stack);
-  Process *box_parent = parent_box_stack->process;
-
-  F32 font_size = global_panel_font_size;
-  Vector2 padding = global_button_padding;
-  Color dormant_bg_color = global_button_dormant_bg_color;
-  Color hot_bg_color = global_button_hot_bg_color;
-  Color font_color = global_button_font_color;
-
-  Ui_Align align = (box_parent == 0) ? Ui_Default_Align : box_parent->ui_box.align;
-  Ui_Layout layout = (box_parent == 0) ? Ui_Default_Layout : box_parent->ui_box.layout;
-  Vector2 box_position = (box_parent == 0) ? Ui_Default_Position : box_parent->position;
-
-  B32 set_box_x = box_parent ? ui_box_should_set_x(box_parent) : 0;
-  B32 set_box_y = box_parent ? ui_box_should_set_y(box_parent) : 0;
-
-  if (sizing) {
-    if (element->label_c_string == 0 && element->label) {
-      String8 string = piece_table_get_string(render_GlobalTempArena, element->label);
-      element->label_c_string = string.str;
-    }
-
-    B32 fit_to_text = Get_Flag(element->flags, Process_Flag_FitToText);
-    element->ui_box.size = get_ui_element_size(context, element, fit_to_text);
-
-    if (box_parent) {
-      set_ui_box_size(box_parent, element->ui_box.size, set_box_x, set_box_y);
-    }
-
-    switch (align) {
-    case Ui_Align_Top: {
-      box_position.x -= 0.5f * element->ui_box.size.x;
-    } break;
-    case Ui_Align_TopLeft: {
-    } break;
-    case Ui_Align_Left: {
-      box_position.y -= 0.5f * element->ui_box.size.y;
-    } break;
-    case Ui_Align_BottomLeft: {
-      box_position.y -= element->ui_box.size.y;
-    } break;
-    case Ui_Align_Bottom: {
-      box_position.x -= 0.5f * element->ui_box.size.x;
-      box_position.y -= element->ui_box.size.y;
-    } break;
-    case Ui_Align_BottomRight: {
-      box_position.x -= element->ui_box.size.x;
-      box_position.y -= element->ui_box.size.y;
-    } break;
-    case Ui_Align_Right: {
-      box_position.x -= element->ui_box.size.x;
-      box_position.y -= 0.5f * element->ui_box.size.y;
-    } break;
-    case Ui_Align_TopRight: {
-      box_position.x -= element->ui_box.size.x;
-    } break;
-    }
-  } else {
-    // @Copypasta ui_box_end
-    Vector2 next_offset;
-    switch (layout) {
-    default:
-    case Ui_Layout_None: {
-      next_offset = Zero_Struct(Vector2);
-    } break;
-    case Ui_Layout_Vertical: {
-      next_offset = (Vector2){0.0f, element->ui_box.size.y};
-      if (box_parent) {
-        element->position = get_ui_box_inner_position(context, box_parent);
-      }
-    } break;
-    case Ui_Layout_Horizontal: {
-      if (box_parent) {
-        element->position = get_ui_box_inner_position(context, box_parent);
-      }
-      next_offset = (Vector2){element->ui_box.size.x, 0.0f};
-    } break;
-    }
-
-    Vector2 box_size = (Vector2){0};
-    if (box_parent) {
-      box_parent->ui_box.position = Vector2Add(box_parent->ui_box.position, next_offset);
-      box_size = get_box_size(box_parent);
-
-      if (set_box_x && layout == Ui_Layout_Vertical) {
-        element->ui_box.size.x = box_size.x;
-      }
-      if (set_box_y && layout == Ui_Layout_Horizontal) {
-        element->ui_box.size.y = box_size.y;
-      }
-    }
-
-    Rectangle element_rect = (Rectangle){
-      element->position.x+element->margin.x,
-      element->position.y+element->margin.y,
-      element->ui_box.size.x-2.0f*element->margin.x,
-      element->ui_box.size.y-2.0f*element->margin.y,
-    };
-    B32 in_bounds = 1;
-    B32 hover_box = 1;
-    Rectangle box_rect;
-    if (box_parent) {
-      box_rect = (Rectangle){box_parent->position.x, box_parent->position.y, box_size.x, box_size.y};
-    }
-    else {
-      box_rect = (Rectangle){0};
-    }
-
-    if (box_parent && Get_Flag(box_parent->flags, Ui_Box_Flag_Clip)) {
-      in_bounds = CheckCollisionRecs(element_rect, box_rect);
-    }
-
-    if (in_bounds) {
-      B32 hover_element = rectangle_contains_point(element_rect, context->ui_state.mouse_position);
-      if (box_parent) {
-        hover_box = (!Get_Flag(stack->process->flags, Ui_Box_Flag_Clip) ||
-                     rectangle_contains_point(box_rect, context->ui_state.mouse_position));
-      }
-      if (Get_Flag(element->flags, Process_Flag_Clickable) &&
-          !Get_Flag(ui_state->flags, Ui_State_Flag_action_occured) &&
-          hover_element && hover_box) {
-        context->hot_process = (Process_Loc){0};
-        is_hot = 1;
-
-        if (IsMouseButtonPressed(0)) {
-          interacted = 1;
-          Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
-          // set as active
-          if (Get_Flag(element->flags, Process_Flag_CanBeActive)) {
-            /* clear_active_processes(context); */
-            Set_Flag(element->flags, Process_Flag_RefIsActive);
-            SLLQueuePush_NZ(context->active_processes.first, context->active_processes.last, element, next_active, 0);
-          }
-          // call func
-          if (element->func) {
-            element->func(context, element);
-          }
-        }
-      }
-
-      if (Get_Flag(element->flags, Process_Flag_TextEdit)) {
-        if (element->label == 0) {
-          element->label = push_struct(context->ui_arena, Piece_Table);
-        }
-        if (element->label) {
-          Process_List p_list = (Process_List){element, element};
-          handle_label_editing(context, p_list);
-        }
-      }
-
-      B32 is_hot_bg_color = is_hot || element == context->selected_element;
-      Color bg_color = is_hot_bg_color ? hot_bg_color : dormant_bg_color;
-      if (is_hot) {
-        context->hot_process.process = element;
-      }
-
-      render_DrawRectangle(rc, element_rect.x, element_rect.y, element_rect.width, element_rect.height, bg_color);
-
-      if (element->label_c_string) {
-        render_DrawText(rc, (char *)element->label_c_string, element_rect.x+padding.x+1.0f, element_rect.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
-        render_DrawText(rc, (char *)element->label_c_string, element_rect.x+padding.x, element_rect.y+padding.y, font_size, font_color, 0);
-      }
-    }
-  }
-
-error:;
-  return interacted;
-}
 
 
 function Process *create_button(Arena *arena, Vector2 position, String_Chunk_List label) {
@@ -1799,103 +1526,8 @@ function Process *create_button(Arena *arena, Vector2 position, String_Chunk_Lis
 }
 
 
-function void ui_box_begin(Context *context, Process_Stack *stack, B32 sizing) {
-  Render_Context *rc = &context->ui_render_context;
-  Ui_State *ui_state = &context->ui_state;
-
-  if (stack == 0 || stack->process == 0) return;
-
-  Assert_If(Get_Flag(stack->process->flags, Process_Flag_AsBox)) {
-    return;
-  }
-
-  Process *box = stack->process;
-  Process_Stack *parent_box_stack = get_parent_box_stack(context, stack);
-  Process *parent_box = parent_box_stack ? parent_box_stack->process : 0;
-
-  if (sizing) {
-    box->ui_box.position = (Vector2){0.0f, 0.0f};
-    if (box->ui_box.sizing == Ui_Sizing_FitContents || box->ui_box.sizing == Ui_Sizing_FitContentsX) {
-      box->ui_box.size.x = 0;
-    }
-    if (box->ui_box.sizing == Ui_Sizing_FitContents || box->ui_box.sizing == Ui_Sizing_FitContentsY) {
-      box->ui_box.size.y = 0;
-    }
-  }
-
-  if (!sizing) {
-    Vector2 size = get_box_size(box);
-    Rectangle box_rect = (Rectangle){box->position.x, box->position.y, size.x, size.y};
-    // positioning
-    if (parent_box) {
-      box->position = get_ui_box_inner_position(context, parent_box);
-    }
-    if (Get_Flag(box->flags, Ui_Box_Flag_ShouldDraw)) {
-      render_DrawRectangle(rc, box_rect.x, box_rect.y, box_rect.width, box_rect.height, box->ui_box.color);
-    }
-    if (rectangle_contains_point(box_rect, ui_state->mouse_position)) {
-      // handle scrolling
-      if (Get_Flag(box->flags, Ui_Box_Flag_ScrollY) &&
-          ui_state->mouse_wheel_movement.y != 0) {
-        Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
-        F32 max_scroll_offset = box->ui_box.size.y - size.y;
-        box->ui_box.scroll_offset.y += ui_state->mouse_wheel_movement.y;
-        box->ui_box.scroll_offset.y = Clamp(box->ui_box.scroll_offset.y, -max_scroll_offset, 0.0f);
-      }
-    }
-    if (Get_Flag(box->flags, Ui_Box_Flag_Clip)) {
-      render_BeginScissorMode(rc, box->position, size);
-    }
-  }
-}
 
 
-function void ui_box_end(Context *context, Process_Stack *stack, B32 sizing) {
-  Render_Context *rc = &context->ui_render_context;
-
-  if (stack == 0 || stack->process == 0) return;
-
-  Assert_If(Get_Flag(stack->process->flags, Process_Flag_AsBox)) {
-    return;
-  }
-
-  Process *box = stack->process;
-  Process_Stack *parent_box_stack = get_parent_box_stack(context, stack);
-  Process *parent_box = parent_box_stack ? parent_box_stack->process : 0;
-
-  if (sizing && parent_box) {
-    B32 set_box_x = ui_box_should_set_x(parent_box);
-    B32 set_box_y = ui_box_should_set_y(parent_box);
-    Vector2 box_size = get_box_size(box);
-
-    set_ui_box_size(parent_box, box_size, set_box_x, set_box_y);
-  }
-
-  if (!sizing) {
-    if (parent_box) {
-      // @Copypasta do_ui_element
-      Vector2 box_size = get_box_size(box);
-      Vector2 next_offset;
-      switch (parent_box->ui_box.layout) {
-      default:
-      case Ui_Layout_None: {
-        next_offset = Zero_Struct(Vector2);
-      } break;
-      case Ui_Layout_Vertical: {
-        next_offset = (Vector2){0.0f, box_size.y};
-      } break;
-      case Ui_Layout_Horizontal: {
-        next_offset = (Vector2){box_size.x, 0.0f};
-      } break;
-      }
-      parent_box->ui_box.position =
-        Vector2Add(parent_box->ui_box.position, next_offset);
-    }
-    if (Get_Flag(box->flags, Ui_Box_Flag_Clip)) {
-      render_EndScissorMode(rc);
-    }
-  }
-}
 
 
 
@@ -3260,30 +2892,80 @@ function Process *decl_ui_init(
   ) {
   Process *p = proc_to_copy;
 
-  if (p) {
+  if (p && parent_process) {
     Process_Do_Undo *do_undo = get_process_do_undo_from_kind(context, do_undo_kind);
     U64 gen_id = p->gen_id;
     p->parent = *parent_process; // NOTE: store old parent
     p->gen_id = gen_id;
     p->ui_box.layout_offset = p->parent ? p->parent->ui_box.layout_offset : (Vector2){0};
 
-    NEW_do_ui_element(context, p, *parent_process, padding);
+    if (p == (global_ui_procs + Global_Ui_Proc_Id_sub_menu_box)) {
+      printf("Sub Menu Box %p\n", p);
+      printf("  Parent %p\n", parent_process ? (*parent_process) : 0);
+    }
+    B32 was_active = Get_Flag(p->flags, Process_Flag_IsActive);
+    B32 should_do_ui_element = 1;
+    if ((*parent_process) &&
+        (Get_Flag((*parent_process)->ui_box.flags, Ui_Box_Flag_OnlyOneActive)) &&
+        ((*parent_process)->ref) &&
+        ((*parent_process)->ref != p)) {
+      should_do_ui_element = 0;
+    }
 
-    *parent_process = p;
+    if (should_do_ui_element) {
+      NEW_do_ui_element(context, p, *parent_process, padding);
+    }
+
+    if (p->parent && (p->parent->ui_box.layout == Ui_Layout_Horizontal)) {
+      F32 x = p->ui_box.size.x;
+      p->parent->ui_box.layout_offset.x += (x > 0.0f) ? x : 850.0f;
+    }
+
+    if (*parent_process &&
+        Get_Flag((*parent_process)->ui_box.flags, Ui_Box_Flag_OnlyOneActive)) {
+      B32 is_active = Get_Flag(p->flags, Process_Flag_IsActive);
+      if (!was_active && is_active) {
+        if ((*parent_process)->ref) {
+          Unset_Flag(((Process *)((*parent_process)->ref))->flags, Process_Flag_IsActive);
+        }
+        (*parent_process)->ref = p;
+      }
+      else if ((*parent_process)->ref && (*parent_process)->ref != p) {
+        Unset_Flag(p->flags, Process_Flag_IsActive);
+      }
+    }
+
+    if (Get_Flag(p->flags, Process_Flag_UiDescendIfActive) &&
+        ((*parent_process)->ref && (*parent_process)->ref != p)) {
+      // TODO: move this logic above to avoid calling do_ui_element ???
+      p = 0;
+    }
+    else {
+      *parent_process = p;
+    }
   }
 
   return p;
 }
 
+
 function void decl_ui_next(
   Context *context,
-  Process **p,
+  Process **p_ptr,
   Process **parent_process
   ) {
-  // restore the old parent-process
-  *parent_process = (*p)->parent;
-  *p = 0;
+  if (p_ptr && *p_ptr && parent_process) {
+    Process *p = *p_ptr;
+    if (Get_Flag(p->ui_box.flags, Ui_Box_Flag_OnlyOneActive)) {
+      p->ref = 0;
+    }
+
+    // restore the old parent-process
+    *parent_process = (*p_ptr)->parent;
+    *p_ptr = 0;
+  }
 }
+
 
 
 
@@ -3325,10 +3007,7 @@ function void do_ui_elements(Context *c) {
     Decl_Ui(c, top_menu_box) {
       global_ui_procs[Global_Ui_Proc_Id_top_menu_box].ui_box.layout_offset = (Vector2){0};
       Decl_Ui(c, file_menu_button) {
-        F32 new_y_offset = global_ui_procs[Global_Ui_Proc_Id_file_menu_button].ui_box.layout_offset.y + menu_button_y_offset;
-        file_menu_button->parent->ui_box.layout_offset.x +=
-          (file_menu_button->ui_box.size.x > 0.0f) ? file_menu_button->ui_box.size.x : 250.0f;
-        Ui_Push_Offset_Y(file_menu_button, new_y_offset);
+        Ui_Push_Offset_Y(file_menu_button, global_ui_procs[Global_Ui_Proc_Id_file_menu_button].ui_box.layout_offset.y + menu_button_y_offset);
         {
           Decl_Ui(c, sub_menu_box) {
             Decl_Ui(c, open_file_button);
@@ -3339,7 +3018,6 @@ function void do_ui_elements(Context *c) {
             global_ui_procs[Global_Ui_Proc_Id_sub_menu_box].ui_box.layout_offset.y += menu_button_y_offset;
           };
         }
-
         Ui_Pop_Offset_Y(file_menu_button);
       };
       Decl_Ui(c, edit_menu_button) {
@@ -3350,9 +3028,6 @@ function void do_ui_elements(Context *c) {
           Decl_Ui(c, paste_button);
           global_ui_procs[Global_Ui_Proc_Id_edit_menu_button].ui_box.layout_offset.y += menu_button_y_offset;
         }
-
-        global_ui_procs[Global_Ui_Proc_Id_top_menu_box].ui_box.layout_offset.x +=
-          edit_menu_button->ui_box.size.x > 0.0f ? edit_menu_button->ui_box.size.x : 50.0f;
         Ui_Pop_Offset_Y(edit_menu_button);
       }
       Decl_Ui(c, open_file_box) {
@@ -3564,92 +3239,7 @@ int main(void) {
 
       // handle ui
       {
-        Render_Context *rc = &context.ui_render_context;
-#if 1
-        /* // init ui elements */
         do_ui_elements(&context);
-#else
-        Process *root_process = context.views[View_Kind_Ui].root_process;
-        F32 menu_dimension_size = 20.0f;
-        Vector2 menu_size = (Vector2){menu_dimension_size,menu_dimension_size};
-
-        Color debug_highlight_color = (Color){255, 0, 255, 100};
-
-        for (Process_Tree_Iterator iter = proc_tree_iter_init(&context, root_process);
-             proc_tree_iter_test(&context, iter);
-             proc_tree_iter_next(&context, &iter)) {
-
-          if (iter.stack && iter.stack->process) {
-            B32 is_box = Get_Flag(iter.stack->process->flags, Process_Flag_AsBox);
-            B32 stack_popped = iter.stack_pop;
-            B32 stack_pushed = iter.stack_push;
-
-            // initial push/pop handling
-            if (stack_popped) {
-              // TODO: handle pop
-              // restore the old ui state
-              iter.box.layout = iter.stack->parent_box.layout;
-              iter.box.position = iter.stack->parent_box.position;
-
-              if (iter.stack->process->ui_box.debug_delete_me_plz_HighlightBox) {
-                Rectangle r = (Rectangle) {
-                  iter.box.position.x,
-                  iter.box.position.y,
-                  iter.stack->process->ui_box.size.x,
-                  iter.stack->process->ui_box.size.y
-                };
-                render_DrawRectangle(rc, r.x, r.y, r.x, r.y, debug_highlight_color);
-              }
-            }
-            else if (stack_pushed) {
-              // store the current ui state
-              iter.stack->parent_box.layout = iter.box.layout;
-              iter.stack->parent_box.position = iter.box.position;
-
-              if (is_box) {
-                iter.box.layout = iter.stack->process->ui_box.layout;
-                iter.box.position = iter.stack->process->ui_box.position;
-              }
-            }
-
-            { // draw label
-              const char *label_c_string = 0;
-              if (iter.stack->process->label_c_string) {
-                label_c_string = (const char *)iter.stack->process->label_c_string;
-              }
-              else if (iter.stack->process->label) {
-                String8 label_string = piece_table_get_string(context.temp_arena, iter.stack->process->label);
-                if (label_string.str && label_string.size) {
-                  label_c_string = (const char *)label_string.str;
-                }
-              }
-              if (label_c_string) {
-                F32 font_size = menu_size.y;
-                F32 new_menu_size_x = MeasureText(label_c_string, font_size);
-
-                render_DrawText(rc, label_c_string, iter.box.position.x, iter.box.position.y, font_size, (Color){0, 0, 0, 255}, 1);
-
-                // update size
-                iter.stack->process->ui_box.size.x = new_menu_size_x;
-                menu_size.x                        = new_menu_size_x;
-              }
-            }
-
-            if (!is_box) {
-              // handle node
-              Vector2 p = iter.box.position;
-              render_DrawRectangle(rc, p.x, p.y, menu_size.x, menu_size.y, debug_highlight_color);
-
-              if (iter.box.layout == Ui_Layout_Horizontal) {
-                iter.box.position = Vector2Add(iter.box.position, (Vector2){menu_size.x, 0});
-              }
-              else if (iter.box.layout == Ui_Layout_Vertical) {
-                iter.box.position = Vector2Add(iter.box.position, (Vector2){0, menu_size.y});
-              }
-            }
-          }
-        }
-#endif
       }
 
       if (!Get_Flag(context.ui_state.flags, Ui_State_Flag_action_occured)) {

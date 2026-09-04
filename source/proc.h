@@ -52,10 +52,11 @@ typedef enum Ui_Box_Kind {
 } Ui_Box_Kind;
 
 typedef enum {
-  Ui_Box_Flag_ShouldDraw = (1 << 0),
-  Ui_Box_Flag_Clip       = (1 << 1),
-  Ui_Box_Flag_ScrollY    = (1 << 2),
-  Ui_Box_Flag_Stretch    = (1 << 3),
+  Ui_Box_Flag_ShouldDraw     = (1 << 0),
+  Ui_Box_Flag_Clip           = (1 << 1),
+  Ui_Box_Flag_ScrollY        = (1 << 2),
+  Ui_Box_Flag_Stretch        = (1 << 3),
+  Ui_Box_Flag_OnlyOneActive  = (1 << 4),
 } Ui_Box_Flag;
 
 typedef struct Ui_Box {
@@ -143,7 +144,7 @@ typedef enum Ref_Kind {
   X( Drag_Out          )\
   X( Invisible         )\
   X( AsBox             )\
-  X( RefIsActive       )\
+  X( IsActive          )\
   X( TextEdit          )\
   X( CanBeActive       )\
   X( Clickable         )\
@@ -184,10 +185,6 @@ struct Process {
     struct {
       Process *in;
       Process *out;
-    };
-    struct {
-      Process *child;
-      Process *sibling;
     };
     Process *conn[Process_Connection__Count]; // NOTE: also indexed by Process_Branch
   };
@@ -233,21 +230,7 @@ struct Process {
 };
 
 
-// TODO: Merge Process_Stack and Process_Tree_Iterator?
-typedef struct Process_Stack {
-  Ui_Box parent_box;
-  B32 visited;
-  Process *process;
-  struct Process_Stack *next;
-} Process_Stack;
 
-typedef struct Process_Tree_Iterator {
-  Ui_Box box;
-  Process_Stack *stack;
-  B32 stack_pop;
-  B32 stack_push;
-  U64 arena_pop_pos;
-} Process_Tree_Iterator;
 
 
 // Process Trie
