@@ -134,6 +134,9 @@ global_variable Process global_ui_procs[] = {
               Process_Flag_FitToText |
               Process_Flag_UiDescendIfActive |
               Process_Flag_CanBeActive),
+    .ui_box = {
+      .layout = Ui_Layout_Vertical,
+    },
     .label_c_string = (U8 *)"File"
   },
   [Global_Ui_Proc_Id_open_file_button] = (Process){
@@ -154,6 +157,9 @@ global_variable Process global_ui_procs[] = {
               Process_Flag_FitToText |
               Process_Flag_UiDescendIfActive |
               Process_Flag_CanBeActive),
+    .ui_box = {
+      .layout = Ui_Layout_Vertical,
+    },
     .label_c_string = (U8 *)"Edit",
   },
   [Global_Ui_Proc_Id_copy_button] = (Process){
@@ -1399,103 +1405,6 @@ function void set_ui_box_size(Process *box, Vector2 size, B32 set_box_x, B32 set
 
 
 
-function B32 NEW_do_ui_element(
-  Context *context,
-  Process *element,
-  Process *parent_element,
-  Vector2 padding
-  ) {
-  B32 interacted = 0;
-  B32 is_hot = 0;
-
-  Render_Context *rc = &context->ui_render_context;
-  Ui_State *ui_state = &context->ui_state;
-
-  F32 font_size = global_panel_font_size;
-  Color dormant_bg_color = global_button_dormant_bg_color;
-  Color hot_bg_color = global_button_hot_bg_color;
-  Color font_color = global_button_font_color;
-
-  element->ui_box.size = get_ui_element_size(context, element, 1);
-
-  Rectangle element_rect = (Rectangle){
-    element->position.x + element->ui_box.layout_offset.x + element->margin.x,
-    element->position.y + element->ui_box.layout_offset.y + element->margin.y,
-    element->ui_box.size.x-2.0f*element->margin.x,
-    element->ui_box.size.y-2.0f*element->margin.y,
-  };
-  B32 in_bounds = 1;
-  B32 hover_box = 1;
-  Rectangle box_rect;
-  if (parent_element) {
-    box_rect = (Rectangle){parent_element->position.x,
-                           parent_element->position.y,
-                           element->ui_box.size.x,
-                           element->ui_box.size.y};
-  }
-  else {
-    box_rect = (Rectangle){0};
-  }
-
-  if (parent_element && Get_Flag(parent_element->flags, Ui_Box_Flag_Clip)) {
-    in_bounds = CheckCollisionRecs(element_rect, box_rect);
-  }
-
-  if (in_bounds) {
-    B32 hover_element = rectangle_contains_point(element_rect, context->ui_state.mouse_position);
-    if (parent_element) {
-      hover_box = (!Get_Flag(element->flags, Ui_Box_Flag_Clip) ||
-                   rectangle_contains_point(box_rect, context->ui_state.mouse_position));
-    }
-    if (Get_Flag(element->flags, Process_Flag_Clickable) &&
-        !Get_Flag(ui_state->flags, Ui_State_Flag_action_occured) &&
-        hover_element && hover_box) {
-      context->hot_process = (Process_Loc){0};
-      is_hot = 1;
-
-      if (IsMouseButtonPressed(0)) {
-        interacted = 1;
-        Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
-        // set as active
-        if (Get_Flag(element->flags, Process_Flag_CanBeActive)) {
-          Toggle_Flag(element->flags, Process_Flag_IsActive);
-        }
-        // call func
-        if (element->func) {
-          element->func(context, element);
-        }
-      }
-    }
-
-    // TODO: Allow label-editing during UI
-#if 0
-    if (Get_Flag(element->flags, Process_Flag_TextEdit)) {
-      if (element->label == 0) {
-        element->label = push_struct(context->ui_arena, Piece_Table);
-      }
-      if (element->label) {
-        Process_List p_list = (Process_List){element, element};
-        handle_label_editing(context, p_list);
-      }
-    }
-#endif
-
-    B32 is_hot_bg_color = is_hot || element == context->selected_element;
-    Color bg_color = is_hot_bg_color ? hot_bg_color : dormant_bg_color;
-    if (is_hot) {
-      context->hot_process.process = element;
-    }
-
-    render_DrawRectangle(rc, element_rect.x, element_rect.y, element_rect.width, element_rect.height, bg_color);
-
-    if (element->label_c_string) {
-      render_DrawText(rc, (char *)element->label_c_string, element_rect.x+padding.x+1.0f, element_rect.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
-      render_DrawText(rc, (char *)element->label_c_string, element_rect.x+padding.x, element_rect.y+padding.y, font_size, font_color, 0);
-    }
-  }
-
-  return interacted;
-}
 
 
 
@@ -2887,6 +2796,7 @@ function Process *decl_ui_init(
   Context *context,
   Process **parent_process,
   Vector2 padding,
+  F32 menu_button_y_offset,
   Process *proc_to_copy,
   Process_Do_Undo_Kind do_undo_kind
   ) {
@@ -2898,46 +2808,126 @@ function Process *decl_ui_init(
     p->parent = *parent_process; // NOTE: store old parent
     p->gen_id = gen_id;
     p->ui_box.layout_offset = p->parent ? p->parent->ui_box.layout_offset : (Vector2){0};
-
-    if (p == (global_ui_procs + Global_Ui_Proc_Id_sub_menu_box)) {
-      printf("Sub Menu Box %p\n", p);
-      printf("  Parent %p\n", parent_process ? (*parent_process) : 0);
-    }
     B32 was_active = Get_Flag(p->flags, Process_Flag_IsActive);
-    B32 should_do_ui_element = 1;
-    if ((*parent_process) &&
-        (Get_Flag((*parent_process)->ui_box.flags, Ui_Box_Flag_OnlyOneActive)) &&
-        ((*parent_process)->ref) &&
-        ((*parent_process)->ref != p)) {
-      should_do_ui_element = 0;
-    }
 
-    if (should_do_ui_element) {
-      NEW_do_ui_element(context, p, *parent_process, padding);
+    {
+      Render_Context *rc = &context->ui_render_context;
+      Ui_State *ui_state = &context->ui_state;
+
+      B32 is_hot = 0;
+      B32 in_bounds = 1;
+      B32 hover_box = 1;
+
+      F32 font_size = global_panel_font_size;
+      Color dormant_bg_color = global_button_dormant_bg_color;
+      Color hot_bg_color = global_button_hot_bg_color;
+      Color font_color = global_button_font_color;
+
+      p->ui_box.size = get_ui_element_size(context, p, 1);
+
+      Rectangle element_rect = (Rectangle){
+        p->position.x + p->ui_box.layout_offset.x + p->margin.x,
+        p->position.y + p->ui_box.layout_offset.y + p->margin.y,
+        p->ui_box.size.x-2.0f*p->margin.x,
+        p->ui_box.size.y-2.0f*p->margin.y,
+      };
+      Rectangle box_rect;
+      if ((*parent_process)) {
+        box_rect = (Rectangle){(*parent_process)->position.x,
+                               (*parent_process)->position.y,
+                               p->ui_box.size.x,
+                               p->ui_box.size.y};
+      }
+      else {
+        box_rect = (Rectangle){0};
+      }
+
+      if ((*parent_process) && Get_Flag((*parent_process)->flags, Ui_Box_Flag_Clip)) {
+        in_bounds = CheckCollisionRecs(element_rect, box_rect);
+      }
+
+      if (in_bounds) {
+        B32 hover_element = rectangle_contains_point(element_rect, context->ui_state.mouse_position);
+        if ((*parent_process)) {
+          hover_box = (!Get_Flag(p->flags, Ui_Box_Flag_Clip) ||
+                       rectangle_contains_point(box_rect, context->ui_state.mouse_position));
+        }
+        if (Get_Flag(p->flags, Process_Flag_Clickable) &&
+            !Get_Flag(ui_state->flags, Ui_State_Flag_action_occured) &&
+            hover_element && hover_box) {
+          context->hot_process = (Process_Loc){0};
+          is_hot = 1;
+
+          if (IsMouseButtonPressed(0)) {
+            Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
+            // set as active
+            if (Get_Flag(p->flags, Process_Flag_CanBeActive)) {
+              Toggle_Flag(p->flags, Process_Flag_IsActive);
+            }
+            // call func
+            if (p->func) {
+              p->func(context, p);
+            }
+          }
+        }
+
+        // TODO: Allow label-editing during UI
+#if 0
+        if (Get_Flag(p->flags, Process_Flag_TextEdit)) {
+          if (p->label == 0) {
+            p->label = push_struct(context->ui_arena, Piece_Table);
+          }
+          if (p->label) {
+            Process_List p_list = (Process_List){p, p};
+            handle_label_editing(context, p_list);
+          }
+        }
+#endif
+
+        B32 is_hot_bg_color = is_hot || p == context->selected_element;
+        Color bg_color = is_hot_bg_color ? hot_bg_color : dormant_bg_color;
+        if (is_hot) {
+          context->hot_process.process = p;
+        }
+
+        render_DrawRectangle(rc, element_rect.x, element_rect.y, element_rect.width, element_rect.height, bg_color);
+
+        if (p->label_c_string) {
+          render_DrawText(rc, (char *)p->label_c_string, element_rect.x+padding.x+1.0f, element_rect.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
+          render_DrawText(rc, (char *)p->label_c_string, element_rect.x+padding.x, element_rect.y+padding.y, font_size, font_color, 0);
+        }
+      }
     }
 
     if (p->parent && (p->parent->ui_box.layout == Ui_Layout_Horizontal)) {
       F32 x = p->ui_box.size.x;
       p->parent->ui_box.layout_offset.x += (x > 0.0f) ? x : 850.0f;
     }
+    if (p->parent && (p->parent->ui_box.layout == Ui_Layout_Vertical)) {
+      p->parent->ui_box.layout_offset.y += menu_button_y_offset;
+    }
 
     if (*parent_process &&
         Get_Flag((*parent_process)->ui_box.flags, Ui_Box_Flag_OnlyOneActive)) {
       B32 is_active = Get_Flag(p->flags, Process_Flag_IsActive);
-      if (!was_active && is_active) {
-        if ((*parent_process)->ref) {
-          Unset_Flag(((Process *)((*parent_process)->ref))->flags, Process_Flag_IsActive);
+      if (Get_Flag(context->ui_state.flags, Ui_State_Flag_action_occured)) {
+        if (!was_active && is_active) {
+          // set as active
+          (*parent_process)->ref = p;
         }
-        (*parent_process)->ref = p;
+        else if (was_active && !is_active) {
+          // set as inactive
+          (*parent_process)->ref = 0;
+        }
       }
-      else if ((*parent_process)->ref && (*parent_process)->ref != p) {
+
+      if ((*parent_process)->ref && (*parent_process)->ref != p) {
         Unset_Flag(p->flags, Process_Flag_IsActive);
       }
     }
 
     if (Get_Flag(p->flags, Process_Flag_UiDescendIfActive) &&
-        ((*parent_process)->ref && (*parent_process)->ref != p)) {
-      // TODO: move this logic above to avoid calling do_ui_element ???
+        (((*parent_process)->ref == 0) || ((*parent_process)->ref != p))) {
       p = 0;
     }
     else {
@@ -2955,11 +2945,6 @@ function void decl_ui_next(
   Process **parent_process
   ) {
   if (p_ptr && *p_ptr && parent_process) {
-    Process *p = *p_ptr;
-    if (Get_Flag(p->ui_box.flags, Ui_Box_Flag_OnlyOneActive)) {
-      p->ref = 0;
-    }
-
     // restore the old parent-process
     *parent_process = (*p_ptr)->parent;
     *p_ptr = 0;
@@ -2992,13 +2977,14 @@ function void decl_ui_next(
 
 // TODO: rename Decl_Ui to X and undef at the end of using it in do_ui_elements?
 #define Decl_Ui(c, n)\
-  for (Process *n = decl_ui_init((c), &parent_process, padding, &global_ui_procs[Global_Ui_Proc_Id_##n], Process_Do_Undo_Kind_Ui);\
+  for (Process *n = decl_ui_init((c), &parent_process, padding, menu_button_y_offset, &global_ui_procs[Global_Ui_Proc_Id_##n], Process_Do_Undo_Kind_Ui);\
        n != 0;\
        decl_ui_next((c), &n, &parent_process))
 
 
 function void do_ui_elements(Context *c) {
   Process *parent_process = 0;
+  B32 mouse_button_0_pressed = Get_Flag(c->ui_state.flags, Ui_State_Flag_mouse0_pressed);
 
   Vector2 padding = global_button_padding;
   F32 menu_button_y_offset = global_panel_font_size + 2.0f*padding.y;
@@ -3009,14 +2995,9 @@ function void do_ui_elements(Context *c) {
       Decl_Ui(c, file_menu_button) {
         Ui_Push_Offset_Y(file_menu_button, global_ui_procs[Global_Ui_Proc_Id_file_menu_button].ui_box.layout_offset.y + menu_button_y_offset);
         {
-          Decl_Ui(c, sub_menu_box) {
-            Decl_Ui(c, open_file_button);
-            global_ui_procs[Global_Ui_Proc_Id_sub_menu_box].ui_box.layout_offset.y += menu_button_y_offset;
-            Decl_Ui(c, save_file_button);
-            global_ui_procs[Global_Ui_Proc_Id_sub_menu_box].ui_box.layout_offset.y += menu_button_y_offset;
-            Decl_Ui(c, save_as_file_button);
-            global_ui_procs[Global_Ui_Proc_Id_sub_menu_box].ui_box.layout_offset.y += menu_button_y_offset;
-          };
+          Decl_Ui(c, open_file_button);
+          Decl_Ui(c, save_file_button);
+          Decl_Ui(c, save_as_file_button);
         }
         Ui_Pop_Offset_Y(file_menu_button);
       };
@@ -3024,9 +3005,7 @@ function void do_ui_elements(Context *c) {
         Ui_Push_Offset_Y(edit_menu_button, global_ui_procs[Global_Ui_Proc_Id_edit_menu_button].ui_box.layout_offset.y + menu_button_y_offset);
         {
           Decl_Ui(c, copy_button);
-          global_ui_procs[Global_Ui_Proc_Id_edit_menu_button].ui_box.layout_offset.y += menu_button_y_offset;
           Decl_Ui(c, paste_button);
-          global_ui_procs[Global_Ui_Proc_Id_edit_menu_button].ui_box.layout_offset.y += menu_button_y_offset;
         }
         Ui_Pop_Offset_Y(edit_menu_button);
       }
@@ -3048,6 +3027,12 @@ function void do_ui_elements(Context *c) {
     /*   Decl_Ui(c, save_file_as_text_input); */
     /* }; */
   };
+
+  // clear out active refs if the user clicks "away" from UI
+  if (mouse_button_0_pressed &&
+      !Get_Flag(c->ui_state.flags, Ui_State_Flag_action_occured)) {
+    global_ui_procs[Global_Ui_Proc_Id_top_menu_box].ref = 0;
+  }
 }
 
 
@@ -3206,7 +3191,7 @@ int main(void) {
         ui_state->last_frame_time = frame_time;
         context.edit_timeout -= ui_state->frame_delta;
 
-        ui_state->mouse_position = GetMousePosition(); // TODO: mouse_position should go in ui_state
+        ui_state->mouse_position = GetMousePosition();
         F32 mouse_move_threshold = 0.1f;
         ui_state->mouse_moved =
           ((fabs(ui_state->active_position.x - ui_state->mouse_position.x) > mouse_move_threshold) ||
