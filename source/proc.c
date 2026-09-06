@@ -196,7 +196,13 @@ global_variable Process global_ui_procs[] = {
     .margin = (Vector2){5.0f, 8.0f},
   },
   [Global_Ui_Proc_Id_save_file_as_text_input] = (Process){
-    .flags = Process_Flag_TextEdit|Process_Flag_FitToText|Process_Flag_Clickable|Process_Flag_CanBeActive,
+    .flags = (Process_Flag_TextEdit|
+              Process_Flag_FitToText|
+              Process_Flag_Clickable|
+              Process_Flag_CanBeActive),
+    .ui_box = {
+      .min_size = (Vector2){200.0f, 40.0f}
+    }
   },
   [Global_Ui_Proc_Id_top_menu_box] = (Process){
     .flags = Process_Flag_AsBox,
@@ -243,7 +249,7 @@ global_variable Process global_ui_procs[] = {
     .flags = (Process_Flag_AsBox|
               Process_Flag_UiDescendIfActive|
               Process_Flag_UiShowIfActive),
-    .position = (Vector2){100.0f, 100.0f},
+    .position = (Vector2){0.0f, 0.0f},
     .ui_box = {
       .kind = Ui_Box_Kind_SaveFileAs,
       .min_size = (Vector2){300.0f, 0.0f},
@@ -1215,6 +1221,9 @@ function void set_open_file_as_active_element(Context *context, Process *_elemen
 
 
 function void set_save_file_as_as_active_element(Context *context, Process *element) {
+  global_ui_procs[Global_Ui_Proc_Id_top_menu_box].ref =
+    &global_ui_procs[Global_Ui_Proc_Id_save_file_as_box];
+  Set_Flag(global_ui_procs[Global_Ui_Proc_Id_save_file_as_box].flags, Process_Flag_IsActive);
 }
 
 
@@ -3022,10 +3031,15 @@ function void do_ui_elements(Context *c) {
         }
         Ui_Pop_Offset(open_file_box);
       };
+      Decl_Ui(c, save_file_as_box) {
+        Ui_Push_Offset(save_file_as_box, Vector2Scale(global_window_size, 0.5f));
+        {
+          Decl_Ui(c, save_file_as_text_input);
+          Decl_Ui(c, save_button);
+        }
+        Ui_Pop_Offset(save_file_as_box);
+      };
     };
-    /* Decl_Ui(c, save_file_as_box) { */
-    /*   Decl_Ui(c, save_file_as_text_input); */
-    /* }; */
   };
 
   // clear out active refs if the user clicks "away" from UI
