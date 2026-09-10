@@ -28,6 +28,7 @@ enum Ui_Align {
   Ui_Align_BottomRight = (U8)5,
   Ui_Align_Right       = (U8)6,
   Ui_Align_TopRight    = (U8)7,
+  Ui_Align_Center      = (U8)8,
 };
 
 typedef U8 Ui_Layout;
@@ -52,11 +53,10 @@ typedef enum Ui_Box_Kind {
 } Ui_Box_Kind;
 
 typedef enum {
-  Ui_Box_Flag_ShouldDraw     = (1 << 0),
-  Ui_Box_Flag_Clip           = (1 << 1),
-  Ui_Box_Flag_ScrollY        = (1 << 2),
-  Ui_Box_Flag_Stretch        = (1 << 3),
-  Ui_Box_Flag_OnlyOneActive  = (1 << 4),
+  Ui_Box_Flag_Clip           = (1 << 0),
+  Ui_Box_Flag_ScrollY        = (1 << 1),
+  Ui_Box_Flag_Stretch        = (1 << 2),
+  Ui_Box_Flag_OnlyOneActive  = (1 << 3),
 } Ui_Box_Flag;
 
 typedef struct Ui_Box {

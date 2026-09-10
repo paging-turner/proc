@@ -232,8 +232,6 @@ global_variable Process global_ui_procs[] = {
       .align = Ui_Align_TopLeft,
       .layout = Ui_Layout_Vertical,
       .sizing = Ui_Sizing_FitContents,
-      .flags = Ui_Box_Flag_ShouldDraw,
-      .color = (Color){200.0f, 200.0f, 200.0f, 255.0f},
     }
   },
   [Global_Ui_Proc_Id_open_file_confirm_box] = (Process){
@@ -250,12 +248,10 @@ global_variable Process global_ui_procs[] = {
               Process_Flag_UiShowIfActive),
     .position = (Vector2){0.0f, 0.0f},
     .ui_box = {
-      .flags = Ui_Box_Flag_ShouldDraw,
       .kind = Ui_Box_Kind_SaveFileAs,
       .align = Ui_Align_TopLeft,
       .layout = Ui_Layout_Vertical,
       .sizing = Ui_Sizing_FitContents,
-      .color = (Color){20.0f, 20.0f, 20.0f, 100.0f},
     }
   }
 };
@@ -2897,9 +2893,11 @@ function Process *decl_ui_init(
 
   if (process && parent_process) {
     Process_Do_Undo *do_undo = get_process_do_undo_from_kind(context, do_undo_kind);
-    U64 gen_id = process->gen_id;
-    process->parent = *parent_process; // NOTE: store old parent
-    process->gen_id = gen_id;
+    { // store old parent
+      U64 gen_id = process->gen_id;
+      process->parent = *parent_process;
+      process->gen_id = gen_id;
+    }
     process->ui_box.layout_offset = process->parent ? process->parent->ui_box.layout_offset : (Vector2){0};
     B32 was_active = Get_Flag(process->flags, Process_Flag_IsActive);
 
@@ -2931,12 +2929,10 @@ function Process *decl_ui_init(
         if (should_fit_x) {
           /* (*parent_process)->ui_box.size.x = (*parent_process)->ui_box.min_size.x; */
           if (horizontal_layout) {
-            printf("x %.2f += %.2f\n", (*parent_process)->ui_box.size.x, process->ui_box.size.x);
             (*parent_process)->ui_box.size.x += process->ui_box.size.x;
           }
           else if (vertical_layout) {
             if ((*parent_process)->ui_box.size.x < process->ui_box.size.x) {
-              printf("x %.2f = %.2f\n", (*parent_process)->ui_box.size.x, process->ui_box.size.x);
               (*parent_process)->ui_box.size.x = process->ui_box.size.x;
             }
           }
@@ -2945,13 +2941,11 @@ function Process *decl_ui_init(
           (*parent_process)->ui_box.size.y = (*parent_process)->ui_box.min_size.y;
           if (horizontal_layout) {
             if ((*parent_process)->ui_box.size.y < process->ui_box.size.y) {
-              printf("y %.2f = %.2f\n", (*parent_process)->ui_box.size.y, process->ui_box.size.y);
               (*parent_process)->ui_box.size.y = process->ui_box.size.y;
             }
 
           }
           else if (vertical_layout) {
-            printf("y %.2f += %.2f\n", (*parent_process)->ui_box.size.y, process->ui_box.size.y);
             (*parent_process)->ui_box.size.y += process->ui_box.size.y;
           }
         }
@@ -2984,22 +2978,36 @@ function Process *decl_ui_init(
       if ((*parent_process)) {
         hover_box = (!Get_Flag(process->flags, Ui_Box_Flag_Clip) ||
                      rectangle_contains_point(box_rect, context->ui_state.mouse_position));
+        is_hot = hover_element && hover_box;
       }
-      if (Get_Flag(process->flags, Process_Flag_Clickable) &&
-          !Get_Flag(ui_state->flags, Ui_State_Flag_action_occured) &&
-          hover_element && hover_box) {
-        context->hot_process = (Process_Loc){0};
-        is_hot = 1;
 
-        if (IsMouseButtonPressed(0)) {
-          Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
-          // set as active
-          if (Get_Flag(process->flags, Process_Flag_CanBeActive)) {
-            Toggle_Flag(process->flags, Process_Flag_IsActive);
+      if (Get_Flag(process->flags, Process_Flag_Clickable)) {
+        { // draw clickable background
+          B32 is_hot_bg_color = is_hot || process == context->selected_element;
+          Color bg_color = is_hot_bg_color ? hot_bg_color : dormant_bg_color;
+          if (is_hot) {
+            context->hot_process.process = process;
           }
-          // call func
-          if (process->func) {
-            process->func(context, process);
+
+          if (element_rect.width > 0.0f && element_rect.height > 0.0f && bg_color.a > 0) {
+            render_DrawRectangle(rc, element_rect.x, element_rect.y, element_rect.width, element_rect.height, bg_color);
+          }
+        }
+
+        // handle click
+        if (!Get_Flag(ui_state->flags, Ui_State_Flag_action_occured) && is_hot) {
+          context->hot_process = (Process_Loc){0};
+
+          if (IsMouseButtonPressed(0)) {
+            Set_Flag(ui_state->flags, Ui_State_Flag_action_occured);
+            // set as active
+            if (Get_Flag(process->flags, Process_Flag_CanBeActive)) {
+              Toggle_Flag(process->flags, Process_Flag_IsActive);
+            }
+            // call func
+            if (process->func) {
+              process->func(context, process);
+            }
           }
         }
       }
@@ -3016,14 +3024,6 @@ function Process *decl_ui_init(
         }
       }
 #endif
-
-      B32 is_hot_bg_color = is_hot || process == context->selected_element;
-      Color bg_color = is_hot_bg_color ? hot_bg_color : dormant_bg_color;
-      if (is_hot) {
-        context->hot_process.process = process;
-      }
-
-      render_DrawRectangle(rc, element_rect.x, element_rect.y, element_rect.width, element_rect.height, bg_color);
 
       if (process->label_c_string) {
         render_DrawText(rc, (char *)process->label_c_string, element_rect.x+padding.x+1.0f, element_rect.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
@@ -3082,8 +3082,7 @@ function void decl_ui_next(
   ) {
   if (process_ptr && (*process_ptr)) {
     // draw box
-    if (Get_Flag((*process_ptr)->flags, Process_Flag_IsBox) &&
-        Get_Flag((*process_ptr)->ui_box.flags, Ui_Box_Flag_ShouldDraw)) {
+    if (Get_Flag((*process_ptr)->flags, Process_Flag_IsBox)) {
       Render_Context *rc = &context->process_render_context;
       Vector2 pos = (*process_ptr)->position;
       Vector2 size = (*process_ptr)->ui_box.size;
@@ -3123,12 +3122,11 @@ function void decl_ui_next(
 #define Ui_Pop_Offset(n)\
   global_ui_procs[Global_Ui_Proc_Id_##n].ui_box.layout_offset = old_offset__##n
 
-// TODO: rename Decl_Ui to X and undef at the end of using it in do_ui_elements?
-#define Decl_Ui(c, n)\
+
+#define D(c, n)\
   for (Process *n = decl_ui_init((c), &parent_process, padding, menu_button_y_offset, &global_ui_procs[Global_Ui_Proc_Id_##n], Process_Do_Undo_Kind_Ui);\
        n != 0;\
        decl_ui_next((c), &n, &parent_process))
-
 
 function void do_ui_elements(Context *c) {
   Process *parent_process = 0;
@@ -3137,62 +3135,63 @@ function void do_ui_elements(Context *c) {
   Vector2 padding = global_button_padding;
   F32 menu_button_y_offset = global_panel_font_size + 2.0f*padding.y;
 
-  Decl_Ui(c, root) {
-    Decl_Ui(c, top_menu_box) {
+  D(c, root) {
+    D(c, top_menu_box) {
       global_ui_procs[Global_Ui_Proc_Id_top_menu_box].ui_box.layout_offset = (Vector2){0};
-      Decl_Ui(c, file_menu_button) {
+      D(c, file_menu_button) {
         Ui_Push_Offset_Y(file_menu_button, global_ui_procs[Global_Ui_Proc_Id_file_menu_button].ui_box.layout_offset.y + menu_button_y_offset);
         {
-          Decl_Ui(c, open_file_button);
-          Decl_Ui(c, save_file_button);
-          Decl_Ui(c, save_as_file_button);
+          D(c, open_file_button);
+          D(c, save_file_button);
+          D(c, save_as_file_button);
         }
         Ui_Pop_Offset_Y(file_menu_button);
-      };
-      Decl_Ui(c, edit_menu_button) {
+      }
+      D(c, edit_menu_button) {
         Ui_Push_Offset_Y(edit_menu_button, global_ui_procs[Global_Ui_Proc_Id_edit_menu_button].ui_box.layout_offset.y + menu_button_y_offset);
         {
-          Decl_Ui(c, copy_button);
-          Decl_Ui(c, paste_button);
+          D(c, copy_button);
+          D(c, paste_button);
         }
         Ui_Pop_Offset_Y(edit_menu_button);
       }
       #if 0
-      Decl_Ui(c, open_file_box) {
+      D(c, open_file_box) {
         Ui_Push_Offset(open_file_box, Vector2Scale(global_window_size, 0.5f));
         {
-          Decl_Ui(c, open_file_label);
-          Decl_Ui(c, open_file_confirm_box) {
+          D(c, open_file_label);
+          D(c, open_file_confirm_box) {
             global_ui_procs[Global_Ui_Proc_Id_top_menu_box].ui_box.layout_offset =
               global_ui_procs[Global_Ui_Proc_Id_open_file_box].ui_box.layout_offset;
-            Decl_Ui(c, open_button);
-            Decl_Ui(c, cancel_button);
-          };
+            D(c, open_button);
+            D(c, cancel_button);
+          }
         }
         Ui_Pop_Offset(open_file_box);
-      };
+      }
       #endif
       {
-        Decl_Ui(c, save_file_as_box) {
+        D(c, save_file_as_box) {
           Ui_Push_Offset(save_file_as_box, Vector2Scale(global_window_size, 0.5f));
           if (save_file_as_box) {
             save_file_as_box->position = global_ui_procs[Global_Ui_Proc_Id_save_file_as_box].ui_box.layout_offset;
           }
           {
-            /* Decl_Ui(c, save_file_as_text_input); */
-            Decl_Ui(c, save_button);
+            /* D(c, save_file_as_text_input); */
+            D(c, save_button);
           }
           Ui_Pop_Offset(save_file_as_box);
-        };
+        }
       }
-    };
-  };
+    }
+  }
 
   // clear out active refs if the user clicks "away" from UI
   if (mouse_button_0_pressed &&
       !Get_Flag(c->ui_state.flags, Ui_State_Flag_action_occured)) {
     global_ui_procs[Global_Ui_Proc_Id_top_menu_box].ref = 0;
   }
+#undef D
 }
 
 
