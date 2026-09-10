@@ -1,14 +1,12 @@
 #define Save_File_Magic_Number AsciiID4('p', 'r', 'o', 'c')
-#define Save_File_Version 0
+#define Save_File_Version 1
 
 typedef struct {
   U32 magic_number;
   U32 version;
   U32 process_count;
-  union {
-    U32 string_count; // TODO: Once we phase out string_count, we can remove this member, and hopefully before we have enough v1 files to care.
-    U32 string_size;
-  };
+  U8 *start_of_string_data;
+  U32 string_data_size;
 } Save_File_Header;
 
 typedef U64 Cold_Process_Id;
@@ -97,7 +95,7 @@ function void write_save_file_v1(Context *context, Arena *arena, U8 *file_name) 
   header->magic_number = Save_File_Magic_Number;
   header->version = 1;
   header->process_count = process_count;
-  header->string_size = string_cold_size;
+  header->string_data_size = string_cold_size;
 
   Cold_Process *first_cold_process = Save_File_Start_Of_Processes_V1(save_file_data.str);
   U8 *start_of_cold_string = Save_File_Start_Of_Strings_V1(save_file_data.str, process_count);

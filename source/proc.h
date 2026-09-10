@@ -61,7 +61,6 @@ typedef enum {
 
 typedef struct Ui_Box {
   Ui_Box_Kind kind;
-  B32 debug_delete_me_plz_HighlightBox;
   Vector2 position;
   Vector2 scroll_offset;
   Vector2 layout_offset;
@@ -143,7 +142,7 @@ typedef enum Ref_Kind {
   X( Drag_In           )\
   X( Drag_Out          )\
   X( Invisible         )\
-  X( AsBox             )\
+  X( IsBox             )\
   X( IsActive          )\
   X( TextEdit          )\
   X( CanBeActive       )\
