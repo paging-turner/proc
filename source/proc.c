@@ -3012,8 +3012,9 @@ function Process *decl_ui_init(
         }
       }
 
-#if 0
+#if 1
       // TODO: Allow label-editing during UI
+      // @Copypasta Undo keybind handler
       if (Get_Flag(process->flags, Process_Flag_TextEdit)) {
         if (process->label == 0) {
           process->label = push_struct(context->ui_arena, Piece_Table);
@@ -3025,9 +3026,20 @@ function Process *decl_ui_init(
       }
 #endif
 
-      if (process->label_c_string) {
-        render_DrawText(rc, (char *)process->label_c_string, element_rect.x+padding.x+1.0f, element_rect.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
-        render_DrawText(rc, (char *)process->label_c_string, element_rect.x+padding.x, element_rect.y+padding.y, font_size, font_color, 0);
+      { // draw label
+        // @Copypasta "draw processes"
+        String8 label_string = piece_table_get_string(context->temp_arena, process->label);
+
+        if (label_string.str == 0 || label_string.size == 0) {
+          if (process->label_c_string) {
+            label_string = str8_lit(process->label_c_string);
+          }
+        }
+
+        if (label_string.str && label_string.size) {
+          render_DrawText(rc, (char *)label_string.str, element_rect.x+padding.x+1.0f, element_rect.y+padding.y+1.0f, font_size, (Color){0, 0, 0, 255}, 0);
+          render_DrawText(rc, (char *)label_string.str, element_rect.x+padding.x, element_rect.y+padding.y, font_size, font_color, 0);
+        }
       }
 
       { // handle box layout
@@ -3155,7 +3167,7 @@ function void do_ui_elements(Context *c) {
         }
         Ui_Pop_Offset_Y(edit_menu_button);
       }
-      #if 0
+      #if 1
       D(c, open_file_box) {
         Ui_Push_Offset(open_file_box, Vector2Scale(global_window_size, 0.5f));
         {
@@ -3177,7 +3189,7 @@ function void do_ui_elements(Context *c) {
             save_file_as_box->position = global_ui_procs[Global_Ui_Proc_Id_save_file_as_box].ui_box.layout_offset;
           }
           {
-            /* D(c, save_file_as_text_input); */
+            D(c, save_file_as_text_input);
             D(c, save_button);
           }
           Ui_Pop_Offset(save_file_as_box);
@@ -3382,10 +3394,11 @@ int main(void) {
         }
       }
 
-      // handle ui
-      {
-        do_ui_elements(&context);
-      }
+      /* // handle ui */
+      /* { */
+      /*   // TODO: handle ui elements  */
+      /*   do_ui_elements(&context); */
+      /* } */
 
       if (!Get_Flag(context.ui_state.flags, Ui_State_Flag_action_occured)) {
         // environment
@@ -3459,6 +3472,7 @@ int main(void) {
           for (Process *p = processes_to_draw; p != 0; p = p->next) {
             B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
 
+            // @Copypasta decl_ui_init
             String8 label_string = piece_table_get_string(context.temp_arena, p->label);
             if (label_string.str == 0 || label_string.size == 0) {
               if (p->label_c_string) {
