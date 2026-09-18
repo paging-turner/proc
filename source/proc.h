@@ -124,6 +124,7 @@ StaticAssert((U32)Process_Connection__Count == (U32)Process_Branch__Count,
 
 typedef struct Process Process;
 typedef struct Context Context;
+typedef struct View View;
 
 typedef enum Ref_Kind {
   Ref_Kind__Null,
@@ -208,7 +209,7 @@ struct Process {
     S32 conn_count[Process_Connection__Count];
   };
 
-  void (*func)(Context*, Process*); // TODO: What do we do about this func? It's only used for UI elements, so maybe we should stop using Processes as UI elements and give up on the idea of process-ui?
+  void (*func)(Context*, View*, Process*); // TODO: What do we do about this func? It's only used for UI elements, so maybe we should stop using Processes as UI elements and give up on the idea of process-ui?
 
   Vector2 margin;
   Ui_Box ui_box;
@@ -255,7 +256,6 @@ Process global_default_steady_trie_process;
        proc_trie_iter_test(iter_name);\
        proc_trie_iter_next(iter_name))
 
-typedef struct View View;
 
 typedef enum {
   Process_Selection__Null,
@@ -272,6 +272,22 @@ struct Process_Selection {
   B32 hot_id_assigned;
   View *view;
 };
+
+function View *view_iter_next(View *view) {
+  View *next_view = 0;
+
+  if (view) {
+  }
+
+  return next_view;
+}
+
+
+#define View_Iterate(view_name, ctx)\
+  for (View *view_name = (ctx)->root_view;\
+       view_name != 0;\
+       view_name = view_iter_next(view_name))
+
 
 typedef struct Process_Shape Process_Shape;
 typedef struct Process_Selection Process_Selection;
@@ -313,11 +329,13 @@ typedef enum Process_Do_Undo_Kind Process_Do_Undo_Kind;
 typedef enum Process_Do_Undo_Kind_Flag Process_Do_Undo_Kind_Flag;
 typedef struct Keybind Keybind;
 function              void clear_process_list(Context *context, Process_List *list);
-function              void clear_active_processes(Context *context);
+function              void clear_active_process_list(Process_List *list);
+function              void clear_active_processes(Context *context, View *view);
+
 function              void clear_ds_view_process_list(Context *context);
 function          Process *push_permanent_process(Context *context);
 function          Process *create_detached_process(Context *context);
-function          Process *create_process(Context *context, Process_Do_Undo_Kind do_undo_kind);
+function          Process *create_process(Context *context, View *view);
 function     String_Chunk *create_string_chunk(Context *context);
 function String_Chunk_List string_chunk_list_from_string8(Context *context, String8 string8);
 function         V2_Chunk *create_v2_chunk(Context *context);
@@ -326,41 +344,41 @@ function          Vector2 *get_fresh_v2_from_v2_chunk(Context *context, V2_Chunk
 function               S32 collect_save_files(Context *context);
 function               B32 rectangle_contains_point(Rectangle r, Vector2 p);
 function           Vector2 get_wire_position_from_wire(Context *context, View *view, Process *wire, Process_Shape shape, Process_Connection conn);
-function          Process *get_wire_from_selection(Context *context, Process_Selection selection);
+function          Process *get_wire_from_selection(Context *context, View *view, Process_Selection selection);
 function     Process_Shape get_process_shape(Context *context, View *view, Process *p);
 function           Vector2 get_process_size(Context *context, Process *p, Process_Shape shape);
 function         Rectangle get_selection_rectangle(Context *context);
 function           Vector2 get_process_position(Context *context, View *view, Process *process);
 function Process_Selection get_process_selection(Context *context, View *view, Process *p);
-function               B32 is_active_process(Context *context, Process *p);
-function              void remove_process_from_active_processes(Context *context, Process *p);
+function               B32 is_active_process(Context *context, View *view, Process *p);
+function              void remove_process_from_active_processes(Context *context, View *view, Process *p);
 function    Keybind_Result check_keybind(Keybind_Environment *keybind_env);
-function              void exit_add_wire_mode(Context *context);
-function  Editable_Process get_editable_process(Process_Edit_List edit_list, Process *p);
-function  Process_Do_Undo *get_process_do_undo_from_process(Context *context, Process *p);
-function  Process_Do_Undo *get_process_do_undo_from_kind(Context *context, Process_Do_Undo_Kind kind);
-function       Process_Do_Undo_Kind get_process_do_undo_kind(Context *context, Process *p);
-function  Process_Do_Undo_Kind_Flag get_process_do_undo_kind_flag(Context *context, Process *p);
-function void              gather_processes_from_trie_from_do_undo_flags(Context *context, Process_Do_Undo_Kind_Flag kind_flags);
+function              void exit_add_wire_mode(Context *context, View *view);
 
-function               B32 add_process_to_process_edit_list(Context *context, Process_Do_Undo *do_undo, Process *p, Proc_Trie_Edit_Kind edit_kind, Process new_process);
-function              void delete_process(Context *context, Process *p, Process_Connection_Flag which_conn_flags);
-function              void copy_active_processes(Context *context);
-function              void paste_processes(Context *context);
-function              void gather_processes_from_trie(Context *context, Process_Do_Undo *do_undo);
+function  Editable_Process get_editable_process(Process_Edit_List edit_list, Process *p);
+
+function               B32 add_process_to_process_edit_list(Context *context, View *view, Process *p, Proc_Trie_Edit_Kind edit_kind, Process new_process);
+function              void delete_process(Context *context, View *view, Process *p, U32 which_conn_flags);
+
+function              void copy_active_processes(Context *context, View *view);
+
+function              void paste_processes(Context *context, View *view);
+
+function              void gather_processes_from_trie(Context *context, View *view);
 
 function              void remove_process_from_process_list(Context *context, Process_List *list, Process *p);
 function          Process *connect_detached_processes(Context *context, Process *out, Process *in);
-function Connection_Result connect_processes_no_gather(Context *context, Process *out, Process *in);
-function Connection_Result connect_processes(Context *context, Process *out, Process *in);
+function Connection_Result connect_processes_no_gather(Context *context, View *view, Process *out, Process *in);
+function Connection_Result connect_processes(Context *context, View *view, Process *out, Process *in);
 function              void delete_wire(Context *context, Process *wire, Process_Connection_Flag conn_flags);
-function              void add_wire_connection(Context *context, Process *wire, Process *process, Process_Connection conn, U32 which_conn);
-function              void handle_label_editing(Context *context, Process_List ps);
-function          Process *find_process_connection(Context *context, Process *p, Process_Connection conn, U32 which_conn);
+function              void add_wire_connection(Context *context, View *view, Process *wire, Process *process, Process_Connection conn, U32 which_conn);
+function              void handle_label_editing(Context *context, View *view, Process_List ps);
+function          Process *find_process_connection(Context *context, View *view, Process *p, Process_Connection conn, U32 which_conn);
 
-function              void set_save_file_as_as_active_element(Context *context, Process *element);
-function              void handle_copy(Context *context, Process *element);
-function              void handle_paste(Context *context, Process *element);
+function              void set_save_file_as_as_active_element(Context *context, View *view, Process *element);
+function              void handle_copy(Context *context, View *view, Process *element);
+
+function              void handle_paste(Context *context, View *view, Process *element);
 
 
 
@@ -509,12 +527,12 @@ enum Process_Do_Undo_Kind_Flag {
 struct Process_Do_Undo {
   Proc_Trie_Trie *trie;
   Process_Edit_List edit_list;
+  Arena *arena;
 };
 
 
 
 
-#define View_Count  5
 
 typedef enum View_Kind {
   View_Kind_Procs,
@@ -522,7 +540,12 @@ typedef enum View_Kind {
   View_Kind_Trie,
   View_Kind__Count,
 } View_Kind;
-StaticAssert((View_Kind__Count <= View_Count), Max_View_Count);
+
+typedef enum View_Layout {
+  View_Layout__Null,
+  View_Layout_Horizontal,
+  View_Layout_Vertical
+} View_Layout;
 
 typedef enum View_Flag {
   View_Flag_Active   = 1 << 0,
@@ -539,7 +562,14 @@ struct View {
   Process_List active_processes;
   Process *root_process;
   Process_Do_Undo do_undo;
+
+  View_Layout layout;
+  View *first;
+  View *last;
 };
+
+
+
 
 typedef struct Process_Loc {
   View *view;
@@ -564,13 +594,11 @@ struct Context {
   V2_Chunk *free_v2_chunks;
 
   Process_Loc hot_process;
-  // TODO: do active/copy_processes need to be per-view? What about hot_process?
-  Process_List active_processes;
+  // TODO: does copy_processes need to be per-view? What about hot_process?
   Process_List copy_processes;
 
   Process_List save_file_list;
   Process *selected_element; // Use this for things like picking (button click) a file to open.
-  /* Process_List ui_box_stack; */
 
   Render_Context ui_render_context;
   Render_Context process_render_context;
@@ -580,7 +608,7 @@ struct Context {
 
   U8 *save_file_name;
 
-  View views[View_Count];
+  View *root_view;
 
   Piece_Table_Memory piece_table_memory;
 

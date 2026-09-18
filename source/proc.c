@@ -277,25 +277,7 @@ function void check_process_list(Process_List list) {
 }
 
 
-function void check_context(Context *context) {
-  check_process_list(context->free_processes);
-  check_process_list(context->active_processes);
-  check_process_list(context->copy_processes);
-}
 
-
-function void debug_check_active_proc_in_current_procs(Context *context) {
-  List_For(Process *, a, context->active_processes.first) {
-    B32 is_in_processes = 0;
-    List_For(Process *, p, context->views[View_Kind_Procs].processes.first) {
-      if (a == p) {
-        is_in_processes = 1;
-        break;
-      }
-    }
-    Assert(is_in_processes);
-  }
-}
 
 
 
@@ -445,18 +427,17 @@ function Process_Edit *process_edit_list_contains_process(
 
 function B32 add_process_to_process_edit_list(
   Context *context,
-  Process_Do_Undo *do_undo,
+  View *view,
   Process *p,
   Proc_Trie_Edit_Kind edit_kind,
   Process new_process
   ) {
   B32 overwritten = 0;
   Process_Edit *found_proc_edit = 0;
-  Process_Do_Undo *test_do_undo = get_process_do_undo_from_process(context, p);
 
   // ensure that do-undo matches the do-undo of the passed-in process
-  if (test_do_undo == 0 || test_do_undo == do_undo) {
-    for (Process_Edit *proc_edit = do_undo->edit_list.first;
+  if (view) {
+    for (Process_Edit *proc_edit = view->do_undo.edit_list.first;
          proc_edit != 0;
          proc_edit = proc_edit->next) {
       if (proc_edit->process == p) {
@@ -467,7 +448,7 @@ function B32 add_process_to_process_edit_list(
 
     if (found_proc_edit == 0) {
       found_proc_edit = arena_push(context->temp_arena, sizeof(Process_Edit));
-      SLLQueuePush(do_undo->edit_list.first, do_undo->edit_list.last, found_proc_edit);
+      SLLQueuePush(view->do_undo.edit_list.first, view->do_undo.edit_list.last, found_proc_edit);
     }
 
     // TODO: Overwrite if we are deleting, if we are updating again... then we need to consider that an error or figure out a better way to merge updates.
@@ -487,75 +468,24 @@ function B32 add_process_to_process_edit_list(
 
 
 
-function Process_Do_Undo_Kind get_process_do_undo_kind(Context *context, Process *p) {
-  // @Speed
-  Process_Do_Undo_Kind kind = 0;
-
-  // check ui procs
-  for (U32 i = 0; i < ArrayCount(global_ui_procs); ++i) {
-    Process *ui_proc = global_ui_procs + i;
-    if (ui_proc == p) {
-      kind = Process_Do_Undo_Kind_Ui;
-      goto done;
-    }
-  }
-
-  // check main procs
-  List_For(Process *, main_proc, context->views[View_Kind_Procs].processes.first) {
-    if (main_proc == p) {
-      kind = Process_Do_Undo_Kind_Proc;
-      break;
-    }
-  }
-
-done:;
-  return kind;
-}
 
 
-function Process_Do_Undo_Kind_Flag get_process_do_undo_kind_flag(Context *context, Process *p) {
-  Process_Do_Undo_Kind kind = get_process_do_undo_kind(context, p);
-  Process_Do_Undo_Kind_Flag flag = Process_Do_Undo_Kind_Flag_From_Kind(kind);
-  return flag;
-}
 
 
-function Process_Do_Undo *get_process_do_undo_from_kind(
+
+
+
+
+
+
+function void update_edited_wire_pointers(
   Context *context,
-  Process_Do_Undo_Kind kind
+  Process_Do_Undo *do_undo,
+  Process_Edit *proc_edit,
+  B32 inserting
   ) {
-  Process_Do_Undo *do_undo = 0;
-
-  switch(kind) {
-  case Process_Do_Undo_Kind_Proc: { do_undo = &context->views[View_Kind_Procs].do_undo; } break;
-  case Process_Do_Undo_Kind_Ui: { do_undo = &context->views[View_Kind_Ui].do_undo; } break;
-  }
-
-  return do_undo;
-}
-
-
-
-function Process_Do_Undo *get_process_do_undo_from_process(Context *context, Process *p) {
-  Process_Do_Undo_Kind kind = get_process_do_undo_kind(context, p);
-  Process_Do_Undo *do_undo = get_process_do_undo_from_kind(context, kind);
-  return do_undo;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-function void update_edited_wire_pointers(Context *context, Process_Edit *proc_edit, B32 inserting) {
   // update the pointers of the wire if the connected processes have been updated
-  for (Process_Edit *test_edit = context->views[View_Kind_Procs].do_undo.edit_list.first;
+  for (Process_Edit *test_edit = do_undo->edit_list.first;
        test_edit != 0;
        test_edit = test_edit->next) {
     if (!Get_Flag(test_edit->process->flags, Process_Flag_Wire)) {
@@ -587,28 +517,20 @@ function void update_edited_wire_pointers(Context *context, Process_Edit *proc_e
 
 function void apply_process_edits_by_kind(
   Context *context,
-  Process_Do_Undo *do_undo,
+  View *view,
   B32 handle_wires
   ) {
   Assert(handle_wires == 0 || handle_wires == 1);
-  B32 is_proc_do_undo = do_undo == &context->views[View_Kind_Procs].do_undo;
-  B32 is_ui_do_undo = do_undo == &context->views[View_Kind_Ui].do_undo;
-  Arena *arena;
-  if (is_proc_do_undo) {
-    arena = context->permanent_arena;
-  }
-  else if (is_ui_do_undo) {
-    arena = context->ui_arena;
-  }
-  else {
-    goto error;
-  }
+  if (context == 0) goto error;
+  Process_Do_Undo *do_undo = &view->do_undo;
+  if (do_undo == 0) goto error;
+  Arena *arena = do_undo->arena;
+  if (arena == 0) goto error;
 
   // TODO: @Speed
   for (Process_Edit *proc_edit = do_undo->edit_list.first;
        proc_edit != 0;
        proc_edit = proc_edit->next) {
-    /* Assert(!"TODO: If this is a ui-do-undo proc, we need to point to the ref or something like that..."); */
     B32 is_wire = Get_Flag(proc_edit->process->flags, Process_Flag_Wire) ? 1 : 0;
     B32 should_edit = !(handle_wires ^ is_wire);
 
@@ -618,7 +540,7 @@ function void apply_process_edits_by_kind(
         Assert(proc_edit->process);
 
         if (is_wire) {
-          update_edited_wire_pointers(context, proc_edit, 1);
+          update_edited_wire_pointers(context, do_undo, proc_edit, 1);
         }
 
 #if Use_Gen_Id_For_Trie_Key
@@ -648,18 +570,17 @@ function void apply_process_edits_by_kind(
           proc_edit->new_process_ptr = new_p;
 
           if (is_wire) {
-            update_edited_wire_pointers(context, proc_edit, 0);
+            update_edited_wire_pointers(context, do_undo, proc_edit, 0);
           }
           else {
             // update any non-edited wires connected to proc being updated
-            for (Process *w = context->views[View_Kind_Procs].processes.first; w != 0; w = w->next) {
+            for (Process *w = view->processes.first; w != 0; w = w->next) {
               if (Get_Flag(w->flags, Process_Flag_Wire)) {
-                Process_Do_Undo *do_undo = get_process_do_undo_from_process(context, w);
                 B32 wire_in_edit_list = 0;
                 // TODO: We should be able to call the new `get_editable_process` here, right?
                 Process new_wire_lit = *w;
                 // find current new-wire lit if it exists, and overwrite `new_wire_lit`
-                for (Process_Edit *proc_edit = do_undo->edit_list.first;
+                for (Process_Edit *proc_edit = view->do_undo.edit_list.first;
                      proc_edit != 0;
                      proc_edit = proc_edit->next) {
                   if (proc_edit->process == w) {
@@ -681,7 +602,7 @@ function void apply_process_edits_by_kind(
 
                 if (!wire_in_edit_list && (in_match || out_match)) {
                   // TODO: Use `get_editable_process` for new_wire_lit
-                  add_process_to_process_edit_list(context, do_undo, w, Proc_Trie_Edit_Update, new_wire_lit);
+                  add_process_to_process_edit_list(context, view, w, Proc_Trie_Edit_Update, new_wire_lit);
                 }
               }
             }
@@ -752,15 +673,16 @@ error:;
 
 
 
-function void gather_processes_from_trie(Context *context, Process_Do_Undo *do_undo) {
+function void gather_processes_from_trie(Context *context, View *view) {
+  if (view == 0) goto error;
+  Process_Do_Undo *do_undo = &view->do_undo;
+  if (do_undo == 0) goto error;
   Proc_Trie_Trie *trie = do_undo->trie;
-
-  B32 is_proc_do_undo = do_undo == &context->views[View_Kind_Procs].do_undo;
-  B32 is_ui_do_undo = do_undo == &context->views[View_Kind_Ui].do_undo;
+  if (trie == 0) goto error;
 
   { // apply process edits
-    apply_process_edits_by_kind(context, do_undo, 0);
-    apply_process_edits_by_kind(context, do_undo, 1);
+    apply_process_edits_by_kind(context, view, 0);
+    apply_process_edits_by_kind(context, view, 1);
   }
 
   // transfer active, edited procs
@@ -768,21 +690,20 @@ function void gather_processes_from_trie(Context *context, Process_Do_Undo *do_u
   for (Process_Edit *proc_edit = do_undo->edit_list.first;
        proc_edit != 0;
        proc_edit = proc_edit->next) {
-    for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
+    for (Process *a = view->active_processes.first; a != 0; a = a->next_active) {
       if (proc_edit->process == a && proc_edit->new_process_ptr) {
         SLLQueuePush_NZ(new_active_procs.first, new_active_procs.last, proc_edit->new_process_ptr, next_active, 0);
       }
     }
   }
-  context->active_processes = new_active_procs;
+  view->active_processes = new_active_procs;
 
   do_undo->edit_list = (Process_Edit_List){0};
   proc_trie_commit(trie);
 
-  if (is_proc_do_undo) {
-    View *view = context->views + View_Kind_Procs;
+  { // what is this block?
     Arena *arena = context->per_frame_arena;
-    clear_process_list(context, &context->views[View_Kind_Procs].processes);
+    clear_process_list(context, &view->processes);
 
     view->process_count = 0;
     for (Proc_Trie_Iterator *iter = proc_trie_iter_init(arena, trie->current_root->node);
@@ -798,74 +719,61 @@ function void gather_processes_from_trie(Context *context, Process_Do_Undo *do_u
         view->process_count += 1;
       }
     }
-  }
-  else if (is_ui_do_undo) {
-  }
 
-  // Update data-structure view processes
-  if (is_proc_do_undo) {
-    Process_List *ds_proc_list = &context->views[View_Kind_Trie].processes;
-    clear_process_list(context, ds_proc_list);
+#if 0 // TODO: Find a way to switch between kinds of views and draw the data-structure view
+    { // Update data-structure view processes
+      Process_List *ds_proc_list = &view->processes;
+      clear_process_list(context, ds_proc_list);
 
-    for (Proc_Trie_Iterator *iter = proc_trie_iter_root_init(context->per_frame_arena, do_undo->trie);
-         proc_trie_iter_root_test(iter);
-         proc_trie_iter_root_next(iter)) {
-      Process *p = create_detached_process(context);
-      p->position.x = (F32)iter->stack->indent * 60.0f;
-      p->position.y = (F32)iter->stack->depth * 60.0f;
-      if (iter->stack->root == do_undo->trie->current_root) {
-        Set_Flag(p->flags, Process_Flag_IsActive);
-      }
-      p->ref = iter->stack->root;
-      { // set the label_c_string
-        String8 gen_id_string = str8_lit(TextFormat("%llu", p->gen_id));
-        if (gen_id_string.str && gen_id_string.size) {
-          U8 *label_c_string = arena_push(context->per_frame_arena, gen_id_string.size);
-          if (label_c_string) {
-            MemoryCopy(label_c_string, gen_id_string.str, gen_id_string.size);
-            p->label_c_string = label_c_string;
+      for (Proc_Trie_Iterator *iter = proc_trie_iter_root_init(context->per_frame_arena, do_undo->trie);
+           proc_trie_iter_root_test(iter);
+           proc_trie_iter_root_next(iter)) {
+        Process *p = create_detached_process(context);
+        p->position.x = (F32)iter->stack->indent * 60.0f;
+        p->position.y = (F32)iter->stack->depth * 60.0f;
+        if (iter->stack->root == do_undo->trie->current_root) {
+          Set_Flag(p->flags, Process_Flag_IsActive);
+        }
+        p->ref = iter->stack->root;
+        { // set the label_c_string
+          String8 gen_id_string = str8_lit(TextFormat("%llu", p->gen_id));
+          if (gen_id_string.str && gen_id_string.size) {
+            U8 *label_c_string = arena_push(context->per_frame_arena, gen_id_string.size);
+            if (label_c_string) {
+              MemoryCopy(label_c_string, gen_id_string.str, gen_id_string.size);
+              p->label_c_string = label_c_string;
+            }
           }
         }
-      }
-      iter->stack->root->ref = p;
-      SLLQueuePush(ds_proc_list->first, ds_proc_list->last, p);
+        iter->stack->root->ref = p;
+        SLLQueuePush(ds_proc_list->first, ds_proc_list->last, p);
 
-      // add line to prev_edit
-      if (iter->stack->root->prev_edit) {
-        Process *l = create_detached_process(context);
-        Set_Flag(l->flags, Process_Flag_Line);
-        l->in = iter->stack->root->prev_edit->ref;
-        l->out = iter->stack->root->ref;
-        SLLQueuePush(ds_proc_list->first, ds_proc_list->last, l);
-      }
+        // add line to prev_edit
+        if (iter->stack->root->prev_edit) {
+          Process *l = create_detached_process(context);
+          Set_Flag(l->flags, Process_Flag_Line);
+          l->in = iter->stack->root->prev_edit->ref;
+          l->out = iter->stack->root->ref;
+          SLLQueuePush(ds_proc_list->first, ds_proc_list->last, l);
+        }
 
-      // add line to prev_branch
-      if (iter->stack->root->prev_branch) {
-        Process *l = create_detached_process(context);
-        Set_Flag(l->flags, Process_Flag_Line);
-        l->in = iter->stack->root->prev_branch->ref;
-        l->out = iter->stack->root->ref;
-        SLLQueuePush(ds_proc_list->first, ds_proc_list->last, l);
-      }
+        // add line to prev_branch
+        if (iter->stack->root->prev_branch) {
+          Process *l = create_detached_process(context);
+          Set_Flag(l->flags, Process_Flag_Line);
+          l->in = iter->stack->root->prev_branch->ref;
+          l->out = iter->stack->root->ref;
+          SLLQueuePush(ds_proc_list->first, ds_proc_list->last, l);
+        }
 
+      }
     }
+#endif
   }
+error:;
 }
 
 
-function void gather_processes_from_trie_from_do_undo_flags(
-  Context *context,
-  Process_Do_Undo_Kind_Flag kind_flags
-  ) {
-  if (Get_Flag(kind_flags, Process_Do_Undo_Kind_Flag_Proc)) {
-    Process_Do_Undo *proc_do_undo = &context->views[View_Kind_Procs].do_undo;
-    gather_processes_from_trie(context, proc_do_undo);
-  }
-  if (Get_Flag(kind_flags, Process_Do_Undo_Kind_Flag_Ui)) {
-    Process_Do_Undo *ui_do_undo = &context->views[View_Kind_Ui].do_undo;
-    gather_processes_from_trie(context, ui_do_undo);
-  }
-}
 
 
 
@@ -885,13 +793,12 @@ function Process *push_permanent_process(Context *context) {
 
 function Process *create_process(
   Context *context,
-  Process_Do_Undo_Kind do_undo_kind
+  View *view
   ) {
   Process *p = push_permanent_process(context);
 
   if (p) {
-    Process_Do_Undo *do_undo = get_process_do_undo_from_kind(context, do_undo_kind);
-    add_process_to_process_edit_list(context, do_undo, p, Proc_Trie_Edit_Insert, (Process){0});
+    add_process_to_process_edit_list(context, view, p, Proc_Trie_Edit_Insert, (Process){0});
   }
 
   return p;
@@ -950,8 +857,8 @@ function void clear_active_process_list(Process_List *list) {
 
 
 
-function void clear_active_processes(Context *context) {
-  clear_active_process_list(&context->active_processes);
+function void clear_active_processes(Context *context, View *view) {
+  clear_active_process_list(&view->active_processes);
 }
 
 
@@ -982,21 +889,20 @@ function Process *create_detached_process(Context *context) {
 
 function Process *create_processes(
   Context *context,
-  U32 process_count,
-  Process_Do_Undo_Kind do_undo_kind
+  View *view,
+  U32 process_count
   ) {
   Process *ps = push_array(context->permanent_arena, Process, process_count);
-  Process_Do_Undo *do_undo = get_process_do_undo_from_kind(context, do_undo_kind);
 
   if (ps) {
     for (U32 i = 0; i < process_count; ++i) {
       Process *p = ps + i;
       p->gen_id = context->proc_gen_id++;
-      add_process_to_process_edit_list(context, do_undo, p, Proc_Trie_Edit_Insert, (Process){0});
+      add_process_to_process_edit_list(context, view, p, Proc_Trie_Edit_Insert, (Process){0});
     }
 
     // TODO: if we end up allowing dynamic creation of procs for ui, we need to switch with kind of do-undo to pass to the gather func........
-    gather_processes_from_trie(context, do_undo);
+    gather_processes_from_trie(context, view);
   }
 
   return ps;
@@ -1079,7 +985,7 @@ function Process *add_process_to_copy_list(
 }
 
 
-function void copy_active_processes(Context *context) {
+function void copy_active_processes(Context *context, View *view) {
   B32 error = 0;
   Vector2 copy_center = (Vector2){0};
   F32 copy_count = 0.0f;
@@ -1088,13 +994,13 @@ function void copy_active_processes(Context *context) {
   remove_copy_process_list(context, &context->copy_processes);
 
   // copy processes from active-list to copy-list
-  for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
+  for (Process *a = view->active_processes.first; a != 0; a = a->next_active) {
     if (Get_Flag(a->flags, Process_Flag_Wire)) {
       // add connected processes if they have not been added yet
       for (S32 conn = 0; conn < Process_Connection__Count; ++conn) {
         if (a->conn[conn] && a->conn[conn]->to_copied == 0) {
           B32 found_conn = 0;
-          for (Process *test_p = context->active_processes.first; test_p != 0; test_p = test_p->next_active) {
+          for (Process *test_p = view->active_processes.first; test_p != 0; test_p = test_p->next_active) {
             if (test_p == a->conn[conn]) {
               found_conn = 1;
               // add connected process to copied list
@@ -1126,7 +1032,7 @@ function void copy_active_processes(Context *context) {
   }
 
   // remove all to_copied fields
-  for (Process *p = context->views[View_Kind_Procs].processes.first; p != 0; p = p->next) {
+  for (Process *p = view->processes.first; p != 0; p = p->next) {
     p->to_copied = 0;
   }
 
@@ -1202,33 +1108,30 @@ function void copy_active_processes(Context *context) {
 }
 
 
-function void paste_processes(Context *context) {
-  for (S32 v = 0; v < View_Count; ++v) {
-    View *view = context->views + v;
-    // TODO: bounds check the view
-    if (Get_Flag(view->flags, View_Flag_Active) &&
-        Get_Flag(view->flags, View_Flag_Editable)) {
-      Vector2 mouse_world_pos = GetScreenToWorld2D(context->ui_state.mouse_position, view->camera);
-      Vector2 center_delta = Vector2Subtract(mouse_world_pos, context->copy_center);
+function void paste_processes(Context *context, View *view) {
+  // TODO: bounds check the view
+  if (Get_Flag(view->flags, View_Flag_Active) &&
+      Get_Flag(view->flags, View_Flag_Editable)) {
+    Vector2 mouse_world_pos = GetScreenToWorld2D(context->ui_state.mouse_position, view->camera);
+    Vector2 center_delta = Vector2Subtract(mouse_world_pos, context->copy_center);
 
-      U32 process_count = 0;
+    U32 process_count = 0;
+    for (Process *p = context->copy_processes.first; p != 0; p = p->next) {
+      process_count += 1;
+    }
+
+    if (process_count) {
+      Process *ps = create_processes(context, view, process_count);
+      U32 i = 0;
+
       for (Process *p = context->copy_processes.first; p != 0; p = p->next) {
-        process_count += 1;
-      }
-
-      if (process_count) {
-        Process *ps = create_processes(context, process_count, Process_Do_Undo_Kind_Proc);
-        U32 i = 0;
-
-        for (Process *p = context->copy_processes.first; p != 0; p = p->next) {
-          if (i >= process_count) {
-            break;
-          }
-          Process *new_p = ps + i;
-          i += 1;
-          *new_p = *p;
-          new_p->position = Vector2Add(p->position, center_delta);
+        if (i >= process_count) {
+          break;
         }
+        Process *new_p = ps + i;
+        i += 1;
+        *new_p = *p;
+        new_p->position = Vector2Add(p->position, center_delta);
       }
     }
   }
@@ -1239,14 +1142,14 @@ function void paste_processes(Context *context) {
 
 
 
-function B32 is_active_process(Context *context, Process *p) {
+function B32 is_active_process(Context *context, View *view, Process *p) {
   B32 is_active = 0;
 
   if (Get_Flag(p->flags, Process_Flag_IsActive)) {
     is_active = 1;
   }
   else {
-    for (Process *test_p = context->active_processes.first; test_p != 0; test_p = test_p->next_active) {
+    for (Process *test_p = view->active_processes.first; test_p != 0; test_p = test_p->next_active) {
       if (test_p == p) {
         is_active = 1;
         break;
@@ -1260,13 +1163,14 @@ function B32 is_active_process(Context *context, Process *p) {
 
 function Process *find_process_connection(
   Context *context,
+  View *view,
   Process *p,
   Process_Connection conn,
   U32 which_conn
   ) {
   Process *target_wire = 0;
 
-  for (Process *w = context->views[View_Kind_Procs].processes.first; w != 0; w = w->next) {
+  for (Process *w = view->processes.first; w != 0; w = w->next) {
     if (Get_Flag(w->flags, Process_Flag_Wire)) {
       if ((p == w->conn[conn]) && (w->which_conn[conn] == which_conn)) {
         target_wire = w;
@@ -1281,19 +1185,21 @@ function Process *find_process_connection(
 
 
 
+
+
+
 ////////////////////////////////////////
 // UI Functions
 ////////////////////////////////////////
 
-function void clear_ui_state(Context *context) {
+function void clear_ui_state(Context *context, View *view) {
   context->save_file_list.first = 0;
   context->save_file_list.last = 0;
 
   arena_pop_to(context->ui_arena, 0);
-  context->views[View_Kind_Ui].do_undo.trie = proc_trie_create_trie(context->ui_arena);
-  gather_processes_from_trie(context, &context->views[View_Kind_Ui].do_undo);
+  view->do_undo.trie = proc_trie_create_trie(context->ui_arena);
+  gather_processes_from_trie(context, view);
 }
-
 
 
 
@@ -1301,14 +1207,14 @@ function void set_open_file_as_active_element(Context *context, Process *_elemen
 }
 
 
-function void set_save_file_as_as_active_element(Context *context, Process *element) {
+function void set_save_file_as_as_active_element(Context *context, View *view, Process *element) {
   global_ui_procs[Global_Ui_Proc_Id_top_menu_box].ref =
     &global_ui_procs[Global_Ui_Proc_Id_save_file_as_box];
   Set_Flag(global_ui_procs[Global_Ui_Proc_Id_save_file_as_box].flags, Process_Flag_IsActive);
 }
 
 
-function void handle_label_editing(Context *context, Process_List ps) {
+function void handle_label_editing(Context *context, View *view, Process_List ps) {
   // TODO: we need more than ascii text editing at some point.....
   U32 key = 0;
   U32 k = 0;
@@ -1316,20 +1222,15 @@ function void handle_label_editing(Context *context, Process_List ps) {
   B32 should_update_process = context->edit_timeout <= 0.0f;
   Process_List new_active_list = (Process_List){0};
   B32 editing_occured = 0;
-  U32 do_undo_kind_flags = 0;
 
   while ((key = context->ui_state.key_presses[k++])) {
     for (Process *a = ps.first; a != 0; a = a->next_active) {
-      Process_Do_Undo_Kind do_undo_kind = get_process_do_undo_kind(context, a);
-      do_undo_kind_flags |= Process_Do_Undo_Kind_Flag_From_Kind(do_undo_kind);
-      Process_Do_Undo *do_undo = get_process_do_undo_from_kind(context, do_undo_kind);
-
-      if (do_undo && Get_Flag(a->flags, Process_Flag_TextEdit)) {
+      if (view && Get_Flag(a->flags, Process_Flag_TextEdit)) {
         Process edit_a;
 
         if (should_update_process) {
           context->edit_timeout = context->time_to_wait_for_label_edit;
-          Editable_Process editable_a = get_editable_process(do_undo->edit_list, a);
+          Editable_Process editable_a = get_editable_process(view->do_undo.edit_list, a);
           edit_a = editable_a.process;
         }
         else {
@@ -1370,7 +1271,7 @@ function void handle_label_editing(Context *context, Process_List ps) {
 
         // update active proc
         if (should_update_process && editing_occured) {
-          add_process_to_process_edit_list(context, do_undo, a, Proc_Trie_Edit_Update, edit_a);
+          add_process_to_process_edit_list(context, view, a, Proc_Trie_Edit_Update, edit_a);
         }
         else {
           *a = edit_a;
@@ -1380,7 +1281,7 @@ function void handle_label_editing(Context *context, Process_List ps) {
   }
 
   if (should_update_process && editing_occured) {
-    gather_processes_from_trie_from_do_undo_flags(context, do_undo_kind_flags);
+    gather_processes_from_trie(context, view);
   }
 }
 
@@ -1488,21 +1389,6 @@ function void set_ui_box_size(Process *box, Vector2 size, B32 set_box_x, B32 set
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 function Process *create_button(Arena *arena, Vector2 position, String_Chunk_List label) {
   Process *button = push_struct(arena, Process);
   Vector2 padding = global_button_padding;
@@ -1524,6 +1410,44 @@ function Process *create_button(Arena *arena, Vector2 position, String_Chunk_Lis
 }
 
 
+
+
+
+
+
+////////////////
+// View BEGIN //
+////////////////
+
+function View *view_create(View_Kind kind) {
+  View *result = 0;
+
+  return result;
+}
+
+function View *view_stack_push(View *view, View *view_to_push) {
+  return view;
+}
+
+function View *view_queue_push(View *view, View *view_to_push) {
+  return view;
+}
+
+function View *view_get_child(View *view, U32 index) {
+  View *result = 0;
+
+  return result;
+}
+
+function View_Kind view_get_kind(View *view) {
+  View_Kind kind = 0;
+
+  return kind;
+}
+
+//////////////
+// View END //
+//////////////
 
 
 
@@ -1563,22 +1487,22 @@ function S32 collect_save_files(Context *context) {
 }
 
 
-function void save_file(Context *context, Process *element) {
+function void save_file(Context *context, View *view, Process *element) {
   if (context->save_file_name) {
-    write_save_file(context, context->temp_arena, context->save_file_name);
+    write_save_file(context, view, context->temp_arena, context->save_file_name);
   }
 }
 
 
 
 
-function void handle_copy(Context *context, Process *element) {
-  copy_active_processes(context);
+function void handle_copy(Context *context, View *view, Process *element) {
+  copy_active_processes(context, view);
 }
 
 
-function void handle_paste(Context *context, Process *element) {
-  paste_processes(context);
+function void handle_paste(Context *context, View *view, Process *element) {
+  paste_processes(context, view);
 }
 
 
@@ -1599,9 +1523,8 @@ function Vector2 get_percentage_between_points(Vector2 p0, Vector2 p1, F32 perce
 function Vector2 get_process_position(Context *context, View *view, Process *process) {
   // TODO: we probably want to just call world-to-screen inside here...
   Vector2 position = process->position;
-  B32 is_active = is_active_process(context, process);
-  B32 is_proc_view = view == context->views + View_Kind_Procs;
-  B32 is_dragging = is_proc_view && Get_Flag(context->flags, Context_Flag_Dragging);
+  B32 is_active = is_active_process(context, view, process);
+  B32 is_dragging = Get_Flag(context->flags, Context_Flag_Dragging);
 
   if (is_active && is_dragging) {
     Vector2 delta = Vector2Subtract(context->ui_state.mouse_position, context->ui_state.active_position);
@@ -1734,10 +1657,10 @@ function Rectangle get_selection_rectangle(Context *context) {
 }
 
 
-function Process *get_wire_from_selection(Context *context, Process_Selection selection) {
+function Process *get_wire_from_selection(Context *context, View *view, Process_Selection selection) {
   Process *wire = 0;
 
-  for (Process *p = context->views[View_Kind_Procs].processes.first; p != 0; p = p->next) {
+  for (Process *p = view->processes.first; p != 0; p = p->next) {
     if (Get_Flag(p->flags, Process_Flag_Wire)) {
       if (selection.type == Process_Selection_In &&
           p->in == selection.process &&
@@ -1793,15 +1716,15 @@ function Editable_Process get_editable_process(
 
 
 
-function void remove_process_from_active_processes(Context *context, Process *p) {
-  if (context->active_processes.first == p) {
-    SLLQueuePop_NZ(context->active_processes.first, context->active_processes.last, next_active, 0);
+function void remove_process_from_active_processes(Context *context, View *view, Process *p) {
+  if (view->active_processes.first == p) {
+    SLLQueuePop_NZ(view->active_processes.first, view->active_processes.last, next_active, 0);
   } else {
-    for (Process *test_p = context->active_processes.first; test_p != 0; test_p = test_p->next_active) {
+    for (Process *test_p = view->active_processes.first; test_p != 0; test_p = test_p->next_active) {
       if (test_p->next_active == p) {
         test_p->next_active = p->next_active;
-        if (p == context->active_processes.last) {
-          context->active_processes.last = test_p;
+        if (p == view->active_processes.last) {
+          view->active_processes.last = test_p;
         }
         break;
       }
@@ -1811,8 +1734,8 @@ function void remove_process_from_active_processes(Context *context, Process *p)
 
 
 
-function void exit_add_wire_mode(Context *context) {
-  clear_active_processes(context);
+function void exit_add_wire_mode(Context *context, View *view) {
+  clear_active_processes(context, view);
   Unset_Flag(context->flags, Context_Flag_NewWire);
 }
 
@@ -1820,22 +1743,19 @@ function void exit_add_wire_mode(Context *context) {
 
 function void add_wire_connection(
   Context *context,
+  View *view,
   Process *wire,
   Process *process,
   Process_Connection conn,
   U32 which_conn
   ) {
   if (context && wire && process) {
-    Process_Do_Undo *do_undo = get_process_do_undo_from_process(context, wire);
-    Process_Do_Undo *test_do_undo = get_process_do_undo_from_process(context, wire);
-    B32 is_same_do_undo = do_undo == test_do_undo;
-
-    if (is_same_do_undo) {
+    { // what is this block?
       {
         B32 wire_moved_to_same_process = wire->conn[conn] == process;
         B32 wire_is_to_the_left_of_itself = which_conn > wire->which_conn[conn];
 
-        Editable_Process new_wire = get_editable_process(context->views[View_Kind_Procs].do_undo.edit_list, wire);
+        Editable_Process new_wire = get_editable_process(view->do_undo.edit_list, wire);
         new_wire.process.conn[conn] = process;
         if (wire_moved_to_same_process && wire_is_to_the_left_of_itself) {
           new_wire.process.which_conn[conn] = which_conn - 1;
@@ -1843,24 +1763,24 @@ function void add_wire_connection(
         else {
           new_wire.process.which_conn[conn] = which_conn;
         }
-        add_process_to_process_edit_list(context, do_undo, wire, Proc_Trie_Edit_Update, new_wire.process);
+        add_process_to_process_edit_list(context, view, wire, Proc_Trie_Edit_Update, new_wire.process);
       }
 
       // decrement currently connected process' conn-count
       {
-        Editable_Process new_process = get_editable_process(context->views[View_Kind_Procs].do_undo.edit_list, wire->conn[conn]);
+        Editable_Process new_process = get_editable_process(view->do_undo.edit_list, wire->conn[conn]);
         new_process.process.conn_count[conn] -= 1;
-        add_process_to_process_edit_list(context, do_undo, wire->conn[conn], Proc_Trie_Edit_Update, new_process.process);
+        add_process_to_process_edit_list(context, view, wire->conn[conn], Proc_Trie_Edit_Update, new_process.process);
       }
 
       // increment newly connected process' conn-count
       {
-        Editable_Process new_process = get_editable_process(context->views[View_Kind_Procs].do_undo.edit_list, process);
+        Editable_Process new_process = get_editable_process(view->do_undo.edit_list, process);
         new_process.process.conn_count[conn] += 1;
-        add_process_to_process_edit_list(context, do_undo, process, Proc_Trie_Edit_Update, new_process.process);
+        add_process_to_process_edit_list(context, view, process, Proc_Trie_Edit_Update, new_process.process);
       }
 
-      for (Process *test_wire = context->views[View_Kind_Procs].processes.first;
+      for (Process *test_wire = view->processes.first;
            test_wire != 0;
            test_wire = test_wire->next) {
         if (Get_Flag(test_wire->flags, Process_Flag_Wire)) {
@@ -1874,17 +1794,17 @@ function void add_wire_connection(
             // decrement which_conn
             if (test_wire_connected_to_old_process &&
                 test_wire_to_the_right_of_old_process) {
-              Editable_Process new_test_wire = get_editable_process(context->views[View_Kind_Procs].do_undo.edit_list, test_wire);
+              Editable_Process new_test_wire = get_editable_process(view->do_undo.edit_list, test_wire);
               new_test_wire.process.which_conn[conn] -= 1;
-              add_process_to_process_edit_list(context, do_undo, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
+              add_process_to_process_edit_list(context, view, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
             }
 
             // increment which_conn
             if (test_wire_connected_to_new_process &&
                 test_wire_to_the_right_of_new_process) {
-              Editable_Process new_test_wire = get_editable_process(context->views[View_Kind_Procs].do_undo.edit_list, test_wire);
+              Editable_Process new_test_wire = get_editable_process(view->do_undo.edit_list, test_wire);
               new_test_wire.process.which_conn[conn] += 1;
-              add_process_to_process_edit_list(context, do_undo, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
+              add_process_to_process_edit_list(context, view, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
             }
           }
         }
@@ -1892,19 +1812,18 @@ function void add_wire_connection(
     }
   }
 
-  exit_add_wire_mode(context);
+  exit_add_wire_mode(context, view);
 }
 
 
 
 function void handle_deleted_wire(
   Context *context,
+  View *view,
   Process *wire,
   Process_Connection_Flag conn_flags
   ) {
   if (wire) {
-    Process_Do_Undo *do_undo = get_process_do_undo_from_process(context, wire);
-
     // Remove a wire and move wires to the right of the moved wire to the left.
     B32 in_matched = 0;
     B32 out_matched = 0;
@@ -1913,14 +1832,14 @@ function void handle_deleted_wire(
     B32 remove_in = Get_Flag(conn_flags, Process_Connection_Flag_In);
     B32 remove_out = Get_Flag(conn_flags, Process_Connection_Flag_Out);
 
-    for (Process *test_wire = context->views[View_Kind_Procs].processes.first;
+    for (Process *test_wire = view->processes.first;
          test_wire != 0;
          test_wire = test_wire->next) {
       B32 should_replace = 0;
       B32 is_wire = Get_Flag(test_wire->flags, Process_Flag_Wire);
 
       if (is_wire && test_wire != wire) {
-        Editable_Process new_test_wire = get_editable_process(context->views[View_Kind_Procs].do_undo.edit_list, test_wire);
+        Editable_Process new_test_wire = get_editable_process(view->do_undo.edit_list, test_wire);
 
         // adjust in-connections that come after deleted wire
         if (remove_in && test_wire->in == wire->in) {
@@ -1941,7 +1860,7 @@ function void handle_deleted_wire(
         }
 
         if (should_replace) {
-          add_process_to_process_edit_list(context, do_undo, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
+          add_process_to_process_edit_list(context, view, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
         }
       }
     }
@@ -1952,18 +1871,18 @@ function void handle_deleted_wire(
     // decrement process' in-count
     if (remove_in && (in_matched || only_in_conn)) {
       if (wire->in) {
-        Editable_Process new_in = get_editable_process(context->views[View_Kind_Procs].do_undo.edit_list, wire->in);
+        Editable_Process new_in = get_editable_process(view->do_undo.edit_list, wire->in);
         new_in.process.in_count -= 1;
-        add_process_to_process_edit_list(context, do_undo, wire->in, Proc_Trie_Edit_Update, new_in.process);
+        add_process_to_process_edit_list(context, view, wire->in, Proc_Trie_Edit_Update, new_in.process);
       }
     }
 
     // decrement process' out-count
     if (remove_out && (out_matched || only_out_conn)) {
       if (wire->out) {
-        Editable_Process new_out = get_editable_process(context->views[View_Kind_Procs].do_undo.edit_list, wire->out);
+        Editable_Process new_out = get_editable_process(view->do_undo.edit_list, wire->out);
         new_out.process.out_count -= 1;
-        add_process_to_process_edit_list(context, do_undo, wire->out, Proc_Trie_Edit_Update, new_out.process);
+        add_process_to_process_edit_list(context, view, wire->out, Proc_Trie_Edit_Update, new_out.process);
       }
     }
   }
@@ -1975,10 +1894,8 @@ function void handle_deleted_wire(
 
 
 
-function void delete_process(Context *context, Process *p, U32 which_conn_flags) {
-  Process_Do_Undo *do_undo = get_process_do_undo_from_process(context, p);
-
-  B32 p_overwritten = add_process_to_process_edit_list(context, do_undo, p, Proc_Trie_Edit_Delete, (Process){0});
+function void delete_process(Context *context, View *view, Process *p, U32 which_conn_flags) {
+  B32 p_overwritten = add_process_to_process_edit_list(context, view, p, Proc_Trie_Edit_Delete, (Process){0});
 
   // if deleting a wire, adjust connected processes
   if (Get_Flag(p->flags, Process_Flag_Wire)) {
@@ -1986,21 +1903,20 @@ function void delete_process(Context *context, Process *p, U32 which_conn_flags)
       ? which_conn_flags
       : (Process_Connection_Flag_In | Process_Connection_Flag_Out);
     if (p_overwritten) {
-      handle_deleted_wire(context, p, which_conn_flags_resolved); // TODO: inline this function since it's only used in `delete_process`
+      handle_deleted_wire(context, view, p, which_conn_flags_resolved); // TODO: inline this function since it's only used in `delete_process`
     }
   }
   else {
     // check for wires connected to the deleted process, and delete those also
-    for (Process *wire = context->views[View_Kind_Procs].processes.first; wire != 0;) {
-      Process_Do_Undo *wire_do_undo = get_process_do_undo_from_process(context, p);
+    for (Process *wire = view->processes.first; wire != 0;) {
       B32 in_match = wire->in == p;
       B32 out_match = wire->out == p;
       B32 should_delete = 0;
 
       if (in_match || out_match) {
-        B32 wire_overwritten = add_process_to_process_edit_list(context, wire_do_undo, wire, Proc_Trie_Edit_Delete, (Process){0});
+        B32 wire_overwritten = add_process_to_process_edit_list(context, view, wire, Proc_Trie_Edit_Delete, (Process){0});
         if (wire_overwritten) {
-          handle_deleted_wire(context, wire, (Process_Connection_Flag_In|Process_Connection_Flag_Out));
+          handle_deleted_wire(context, view, wire, (Process_Connection_Flag_In|Process_Connection_Flag_Out));
         }
       }
 
@@ -2042,52 +1958,47 @@ function Process *connect_detached_processes(
 
 function Connection_Result connect_processes_no_gather(
   Context *context,
+  View *view,
   Process *out,
   Process *in
   ) {
   Connection_Result result = (Connection_Result){0};
 
   if (out && in) {
-    Process_Do_Undo_Kind do_undo_kind = get_process_do_undo_kind(context, out);
-    Process_Do_Undo *do_undo = get_process_do_undo_from_kind(context, do_undo_kind);
-    Process_Do_Undo *test_do_undo = get_process_do_undo_from_process(context, in);
+    result.new_wire = create_process(context, view);
 
-    if (do_undo == test_do_undo) {
-      result.new_wire = create_process(context, do_undo_kind);
+    if (result.new_wire) {
+      Process_Edit *out_edit_proc = process_edit_list_contains_process(context, view->do_undo.edit_list, out);
+      Process_Edit *in_edit_proc = process_edit_list_contains_process(context, view->do_undo.edit_list, in);
 
-      if (result.new_wire) {
-        Process_Edit *out_edit_proc = process_edit_list_contains_process(context, context->views[View_Kind_Procs].do_undo.edit_list, out);
-        Process_Edit *in_edit_proc = process_edit_list_contains_process(context, context->views[View_Kind_Procs].do_undo.edit_list, in);
-
-        if (out_edit_proc) {
-          result.new_wire->which_out = out_edit_proc->new_process.out_count;
-          out_edit_proc->new_process.out_count += 1;
-        }
-        else {
-          Editable_Process new_out = get_editable_process(context->views[View_Kind_Procs].do_undo.edit_list, out);
-          result.new_wire->which_out = new_out.process.out_count;
-          new_out.process.out_count += 1;
-          add_process_to_process_edit_list(context, do_undo, out, Proc_Trie_Edit_Update, new_out.process);
-        }
-
-        if (in_edit_proc) {
-          result.new_wire->which_in = in_edit_proc->new_process.in_count;
-          in_edit_proc->new_process.in_count += 1;
-        }
-        else {
-          Editable_Process new_in = get_editable_process(context->views[View_Kind_Procs].do_undo.edit_list, in);
-          result.new_wire->which_in = new_in.process.in_count;
-          new_in.process.in_count += 1;
-          add_process_to_process_edit_list(context, do_undo, in, Proc_Trie_Edit_Update, new_in.process);
-        }
-
-        result.out = out;
-        result.in = in;
-
-        Set_Flag(result.new_wire->flags, Process_Flag_Wire);
-        result.new_wire->out = result.out;
-        result.new_wire->in = result.in;
+      if (out_edit_proc) {
+        result.new_wire->which_out = out_edit_proc->new_process.out_count;
+        out_edit_proc->new_process.out_count += 1;
       }
+      else {
+        Editable_Process new_out = get_editable_process(view->do_undo.edit_list, out);
+        result.new_wire->which_out = new_out.process.out_count;
+        new_out.process.out_count += 1;
+        add_process_to_process_edit_list(context, view, out, Proc_Trie_Edit_Update, new_out.process);
+      }
+
+      if (in_edit_proc) {
+        result.new_wire->which_in = in_edit_proc->new_process.in_count;
+        in_edit_proc->new_process.in_count += 1;
+      }
+      else {
+        Editable_Process new_in = get_editable_process(view->do_undo.edit_list, in);
+        result.new_wire->which_in = new_in.process.in_count;
+        new_in.process.in_count += 1;
+        add_process_to_process_edit_list(context, view, in, Proc_Trie_Edit_Update, new_in.process);
+      }
+
+      result.out = out;
+      result.in = in;
+
+      Set_Flag(result.new_wire->flags, Process_Flag_Wire);
+      result.new_wire->out = result.out;
+      result.new_wire->in = result.in;
     }
   }
 
@@ -2097,13 +2008,13 @@ function Connection_Result connect_processes_no_gather(
 
 function Connection_Result connect_processes(
   Context *context,
+  View *view,
   Process *out,
   Process *in
   ) {
-  Connection_Result result = connect_processes_no_gather(context, out, in);
+  Connection_Result result = connect_processes_no_gather(context, view, out, in);
 
-  // TODO: don't assume we are connecting main procs......
-  gather_processes_from_trie(context, &context->views[View_Kind_Procs].do_undo);
+  gather_processes_from_trie(context, view);
 
   return result;
 }
@@ -2383,7 +2294,7 @@ function Process_Shape get_process_shape(
   B32 rounded = Get_Flag(context->flags, Context_Flag_RoundedShapes);
 
   if (Get_Flag(p->flags, Process_Flag_Wire)) {
-    B32 is_active = is_active_process(context, p) || context->hot_process.process == p;
+    B32 is_active = is_active_process(context, view, p) || context->hot_process.process == p;
     F32 thickness = is_active ? global_active_line_thickness : global_line_thickness;
     thickness *= view->camera.zoom;
 
@@ -2612,7 +2523,7 @@ get_process_selection(Context *context, View *view, Process *p) {
         if (rectangle_contains_point(r, context->ui_state.mouse_position)) {
           selection.type = Process_Selection_In;
           selection.index = i;
-          Process *wire = get_wire_from_selection(context, selection);
+          Process *wire = get_wire_from_selection(context, view, selection);
           context->hot_process.process = wire;
           selection.hot_id_assigned = 1;
           break;
@@ -2627,7 +2538,7 @@ get_process_selection(Context *context, View *view, Process *p) {
           if (rectangle_contains_point(r, context->ui_state.mouse_position)) {
             selection.type = Process_Selection_Out;
             selection.index = i;
-            Process *wire = get_wire_from_selection(context, selection);
+            Process *wire = get_wire_from_selection(context, view, selection);
             context->hot_process.process = wire;
             selection.hot_id_assigned = 1;
             break;
@@ -2883,6 +2794,7 @@ function void create_keybind_array(Context *context) {
 
 function Process *decl_ui_init(
   Context *context,
+  View *view,
   Process **parent_process,
   Vector2 padding,
   F32 menu_button_y_offset,
@@ -2892,7 +2804,6 @@ function Process *decl_ui_init(
   Process *process = proc_to_copy;
 
   if (process && parent_process) {
-    Process_Do_Undo *do_undo = get_process_do_undo_from_kind(context, do_undo_kind);
     { // store old parent
       U64 gen_id = process->gen_id;
       process->parent = *parent_process;
@@ -3006,7 +2917,7 @@ function Process *decl_ui_init(
             }
             // call func
             if (process->func) {
-              process->func(context, process);
+              process->func(context, view, process);
             }
           }
         }
@@ -3021,7 +2932,7 @@ function Process *decl_ui_init(
         }
         if (process->label) {
           Process_List p_list = (Process_List){process, process};
-          handle_label_editing(context, p_list);
+          handle_label_editing(context, view, p_list);
         }
       }
 #endif
@@ -3135,62 +3046,62 @@ function void decl_ui_next(
   global_ui_procs[Global_Ui_Proc_Id_##n].ui_box.layout_offset = old_offset__##n
 
 
-#define D(c, n)\
-  for (Process *n = decl_ui_init((c), &parent_process, padding, menu_button_y_offset, &global_ui_procs[Global_Ui_Proc_Id_##n], Process_Do_Undo_Kind_Ui);\
+#define D(c, v, n)\
+  for (Process *n = decl_ui_init((c), (v), &parent_process, padding, menu_button_y_offset, &global_ui_procs[Global_Ui_Proc_Id_##n], Process_Do_Undo_Kind_Ui);\
        n != 0;\
        decl_ui_next((c), &n, &parent_process))
 
-function void do_ui_elements(Context *c) {
+function void do_ui_elements(Context *c, View *v) {
   Process *parent_process = 0;
   B32 mouse_button_0_pressed = Get_Flag(c->ui_state.flags, Ui_State_Flag_mouse0_pressed);
 
   Vector2 padding = global_button_padding;
   F32 menu_button_y_offset = global_panel_font_size + 2.0f*padding.y;
 
-  D(c, root) {
-    D(c, top_menu_box) {
+  D(c, v, root) {
+    D(c, v, top_menu_box) {
       global_ui_procs[Global_Ui_Proc_Id_top_menu_box].ui_box.layout_offset = (Vector2){0};
-      D(c, file_menu_button) {
+      D(c, v, file_menu_button) {
         Ui_Push_Offset_Y(file_menu_button, global_ui_procs[Global_Ui_Proc_Id_file_menu_button].ui_box.layout_offset.y + menu_button_y_offset);
         {
-          D(c, open_file_button);
-          D(c, save_file_button);
-          D(c, save_as_file_button);
+          D(c, v, open_file_button);
+          D(c, v, save_file_button);
+          D(c, v, save_as_file_button);
         }
         Ui_Pop_Offset_Y(file_menu_button);
       }
-      D(c, edit_menu_button) {
+      D(c, v, edit_menu_button) {
         Ui_Push_Offset_Y(edit_menu_button, global_ui_procs[Global_Ui_Proc_Id_edit_menu_button].ui_box.layout_offset.y + menu_button_y_offset);
         {
-          D(c, copy_button);
-          D(c, paste_button);
+          D(c, v, copy_button);
+          D(c, v, paste_button);
         }
         Ui_Pop_Offset_Y(edit_menu_button);
       }
       #if 1
-      D(c, open_file_box) {
+      D(c, v, open_file_box) {
         Ui_Push_Offset(open_file_box, Vector2Scale(global_window_size, 0.5f));
         {
-          D(c, open_file_label);
-          D(c, open_file_confirm_box) {
+          D(c, v, open_file_label);
+          D(c, v, open_file_confirm_box) {
             global_ui_procs[Global_Ui_Proc_Id_top_menu_box].ui_box.layout_offset =
               global_ui_procs[Global_Ui_Proc_Id_open_file_box].ui_box.layout_offset;
-            D(c, open_button);
-            D(c, cancel_button);
+            D(c, v, open_button);
+            D(c, v, cancel_button);
           }
         }
         Ui_Pop_Offset(open_file_box);
       }
       #endif
       {
-        D(c, save_file_as_box) {
+        D(c, v, save_file_as_box) {
           Ui_Push_Offset(save_file_as_box, Vector2Scale(global_window_size, 0.5f));
           if (save_file_as_box) {
             save_file_as_box->position = global_ui_procs[Global_Ui_Proc_Id_save_file_as_box].ui_box.layout_offset;
           }
           {
-            D(c, save_file_as_text_input);
-            D(c, save_button);
+            D(c, v, save_file_as_text_input);
+            D(c, v, save_button);
           }
           Ui_Pop_Offset(save_file_as_box);
         }
@@ -3225,16 +3136,14 @@ int main(void) {
   uint64_t cpu_freq;
 
   {
-    // Init window
-    {
+    { // Init window
       InitWindow(800, 500, "proc");
       SetExitKey(0);
       SetWindowState(FLAG_WINDOW_RESIZABLE);
       SetTargetFPS(60);
     }
 
-    // init context
-    {
+    { // init context
       context.render_arena    = arena_alloc_reserve(Context_Render_Arena_Size, 0);
       context.permanent_arena = arena_alloc_reserve(Context_Permanent_Arena_Size, 0);
       context.ui_arena        = arena_alloc_reserve(Megabytes(1), 0);
@@ -3246,35 +3155,17 @@ int main(void) {
       prc = &context.process_render_context;
 
       context.proc_gen_id = 1;
-
-      // init views
-      {
-        for (U32 i = 0; i < View_Kind__Count; ++i) {
-          context.views[i].camera.zoom = 1.0f;
-          Set_Flag(context.views[i].flags, View_Flag_Active);
-        }
-
-        Set_Flag(context.views[View_Kind_Procs].flags, View_Flag_Editable);
-      }
-
       context.time_to_wait_for_label_edit = 1.0f;
 
       Set_Flag(context.flags, Context_Flag_AutoAlignChains);
       Set_Flag(context.flags, Context_Flag_DataStructureView);
-
-      // init do-undo tries
-      context.views[View_Kind_Procs].do_undo.trie = proc_trie_create_trie(context.permanent_arena);
-      gather_processes_from_trie(&context, &context.views[View_Kind_Procs].do_undo);
-      clear_ui_state(&context);
     }
 
-    // init keybinds
-    {
+    { // init keybinds
       create_keybind_array(&context);
     }
 
-    // init globals
-    {
+    { // init globals
       S32 monitor_id = GetCurrentMonitor();
       S32 screen_width = GetMonitorWidth(monitor_id);
       S32 screen_height = GetMonitorHeight(monitor_id);
@@ -3314,6 +3205,7 @@ int main(void) {
 
 
 
+
       // init common filepaths
 #if OS_WINDOWS
 # define _ "\\"
@@ -3326,6 +3218,20 @@ int main(void) {
 
       // ensure saves directory exists
       os_file_make_directory(Saves_Filepath);
+    }
+
+    { // init views
+      View *view = push_struct(context.permanent_arena, View);
+      if (view) {
+        Set_Flag(view->flags, View_Flag_Active|View_Flag_Panning|View_Flag_Editable);
+        view->screen_region.width = global_window_size.x;
+        view->screen_region.height = global_window_size.y;
+        view->do_undo.arena = context.permanent_arena;
+        view->do_undo.trie = proc_trie_create_trie(view->do_undo.arena);
+        view->camera.zoom = 1.0f;
+        context.root_view = view;
+        gather_processes_from_trie(&context, view);
+      }
     }
 
     { // misc. init
@@ -3346,9 +3252,6 @@ int main(void) {
     if (IsWindowResized()) {
       set_global_window_render_size();
     }
-
-    Assert(!process_list_has_cycles(context.views[View_Kind_Procs].processes.first));
-    Assert(!active_process_list_has_cycles(context.active_processes.first));
 
     //////////////////////////////////////////
     // Handle User Input
@@ -3411,17 +3314,23 @@ int main(void) {
         //////////////////////////////////////////
         // Handle Process Interaction
         //////////////////////////////////////////
-        for (U32 i = 0; i < env->context->keybind_count; ++i) {
-          Keybind *keybind = env->context->keybinds + i;
-          env->keybind = keybind;
-          env->view = &env->context->views[View_Kind_Procs];
-          keybind->handle(env);
+        View_Iterate(view, &context) {
+          for (U32 i = 0; i < env->context->keybind_count; ++i) {
+            Keybind *keybind = env->context->keybinds + i;
+            env->keybind = keybind;
+            env->view = view;
+            keybind->handle(env);
+            check_process_list(view->active_processes);
+          }
         }
       }
     }
 
 
-    check_context(&context);
+    { // check_context
+      check_process_list(context.free_processes);
+      check_process_list(context.copy_processes);
+    }
 
 
     //////////////////////////////////////////
@@ -3445,12 +3354,8 @@ int main(void) {
         Color box_hover_color = (Color){5, 250, 20, 255};
         B32 rounded = Get_Flag(context.flags, Context_Flag_RoundedShapes);
 
-        for (U32 v = 0; v < View_Kind__Count; ++v) {
-          View *view = context.views + v;
-          B32 should_draw = (v == View_Kind_Trie
-                             ? Get_Flag(context.flags, Context_Flag_DataStructureView) != 0
-                             : 1);
-          Process *processes_to_draw = should_draw ? view->processes.first : 0;
+        View_Iterate(view, &context) {
+          Process *processes_to_draw = view->processes.first;
           F32 font_size = view->camera.zoom * global_process_font_size;
 
           // @Speed
@@ -3499,7 +3404,7 @@ int main(void) {
               Process_Shape shape = get_process_shape(&context, view, p);
 
               B32 is_hot = context.hot_process.process == p;
-              B32 is_active = is_active_process(&context, p);
+              B32 is_active = is_active_process(&context, view, p);
               F32 thickness = (is_hot||is_active) ? global_active_line_thickness : global_line_thickness;
               thickness *= view->camera.zoom;
               F32 cup_cap_control_offset = 10.0f*view->camera.zoom;
@@ -3599,7 +3504,7 @@ int main(void) {
               }
 
               // draw new-wire-box
-              if (v == View_Kind_Procs && (is_active || is_hot)) {
+              if (is_active || is_hot) {
                 Rectangle new_wire_box = get_new_wire_box(&context, view, p, shape);
                 B32 new_wire_box_is_active = (
                   (is_active && Get_Flag(context.flags, Context_Flag_NewWire)) ||
@@ -3622,10 +3527,10 @@ int main(void) {
               Vector2 out_position = get_wire_position_from_wire(&context, view, p, out_shape, Process_Connection_Out);
               Vector2 in_position = get_wire_position_from_wire(&context, view, p, in_shape, Process_Connection_In);
 
-              B32 is_active = is_active_process(&context, p) || context.hot_process.process == p;
-              B32 connected_in_active = (is_active_process(&context, p->in) ||
+              B32 is_active = is_active_process(&context, view, p) || context.hot_process.process == p;
+              B32 connected_in_active = (is_active_process(&context, view, p->in) ||
                                          context.hot_process.process == p->in);
-              B32 connected_out_active = (is_active_process(&context, p->out) ||
+              B32 connected_out_active = (is_active_process(&context, view, p->out) ||
                                           context.hot_process.process == p->out);
               F32 thickness = is_active ? global_active_line_thickness : global_line_thickness;
               thickness *= view->camera.zoom;
@@ -3662,8 +3567,8 @@ int main(void) {
 
           // draw new wire
           if (Get_Flag(context.flags, Context_Flag_NewWire) &&
-              context.active_processes.first) {
-            Process_Shape shape = get_process_shape(&context, view, context.active_processes.first);
+              view->active_processes.first) {
+            Process_Shape shape = get_process_shape(&context, view, view->active_processes.first);
             Vector2 position = shape.new_wire_position;
 
             Vector2 from_control = position;

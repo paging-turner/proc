@@ -52,7 +52,7 @@ Freeze_Member(Cold_Process, which_out    , 60);
 //////////////////////////////////////
 // Saves Functions
 //////////////////////////////////////
-function void write_save_file(Context *context, Arena *arena, U8 *file_name);
+function void write_save_file(Context *context, View *view, Arena *arena, U8 *file_name);
 
 
 
@@ -62,91 +62,76 @@ function void set_as_current_file(Context *context, U8 *file_name) {
   context->save_file_name = file_name;
 }
 
-function void write_save_file_v1(Context *context, Arena *arena, U8 *file_name) {
+function void write_save_file_v1(Context *context, View *view, Arena *arena, U8 *file_name) {
   // TODO: ensure that the Saves_Filepath directory exists before writing a file into it.
   os_set_current_directory(Saves_Filepath);
 
   U64 string_cold_size = 0;
-  U64 process_count = context->views[View_Kind_Procs].process_count;
+  U64 process_count = 0;
 
-  { // string sizing and fill out id_lookup
-    U64 process_index = 0;
+  if (process_count) {
+    String8 save_file_data;
+    save_file_data.size = Save_File_Size_V1(process_count, string_cold_size);
+    save_file_data.str = arena_push(arena, save_file_data.size);
+    if (save_file_data.str == 0) goto error;
 
-    for (Process *p = context->views[View_Kind_Procs].processes.first; p != 0; p = p->next) {
-      if (process_index+1 > process_count) {
-        goto error;
-      }
-      if (p->label) {
-        string_cold_size += p->label->text_size;
-      }
-      p->cold_id = process_index;
-      process_index += 1;
-    }
+    Save_File_Header *header = (Save_File_Header *)save_file_data.str;
+    header->magic_number = Save_File_Magic_Number;
+    header->version = 1;
+    header->process_count = process_count;
+    header->string_data_size = string_cold_size;
 
-    Assert(process_count == process_index);
-  }
+    Cold_Process *first_cold_process = Save_File_Start_Of_Processes_V1(save_file_data.str);
+    U8 *start_of_cold_string = Save_File_Start_Of_Strings_V1(save_file_data.str, process_count);
 
-  String8 save_file_data;
-  save_file_data.size = Save_File_Size_V1(process_count, string_cold_size);
-  save_file_data.str = arena_push(arena, save_file_data.size);
-  if (save_file_data.str == 0) goto error;
+    { // write cold processes
+      U64 process_index = 0;
+      U64 string_cold_offset = 0;
 
-  Save_File_Header *header = (Save_File_Header *)save_file_data.str;
-  header->magic_number = Save_File_Magic_Number;
-  header->version = 1;
-  header->process_count = process_count;
-  header->string_data_size = string_cold_size;
+      for (Process *p = view->processes.first; p != 0; p = p->next) {
+        Cold_Process *cold_process = first_cold_process + process_index;
 
-  Cold_Process *first_cold_process = Save_File_Start_Of_Processes_V1(save_file_data.str);
-  U8 *start_of_cold_string = Save_File_Start_Of_Strings_V1(save_file_data.str, process_count);
+        cold_process->flags = p->flags;
+        cold_process->position = p->position;
+        cold_process->string_offset = string_cold_offset;
 
-  { // write cold processes
-    U64 process_index = 0;
-    U64 string_cold_offset = 0;
-
-    for (Process *p = context->views[View_Kind_Procs].processes.first; p != 0; p = p->next) {
-      Cold_Process *cold_process = first_cold_process + process_index;
-
-      cold_process->flags = p->flags;
-      cold_process->position = p->position;
-      cold_process->string_offset = string_cold_offset;
-
-      if (p->in) {
-        cold_process->in = p->in->cold_id;
-      }
-      if (p->out) {
-        cold_process->out = p->out->cold_id;
-      }
-
-      cold_process->which_in = p->which_in;
-      cold_process->which_out = p->which_out;
-
-      // store label
-      if (p->label) {
-        String8 string = piece_table_get_string(context->temp_arena, p->label);
-        if (string.str && string.size) {
-          if (string_cold_offset >= string_cold_size) goto error;
-          U8 *string_location = start_of_cold_string + string_cold_offset;
-          memory_move(string_location, string.str, string.size);
-          string_cold_offset += string.size;
-          cold_process->string_size = string.size;
+        if (p->in) {
+          cold_process->in = p->in->cold_id;
         }
+        if (p->out) {
+          cold_process->out = p->out->cold_id;
+        }
+
+        cold_process->which_in = p->which_in;
+        cold_process->which_out = p->which_out;
+
+        // store label
+        if (p->label) {
+          String8 string = piece_table_get_string(context->temp_arena, p->label);
+          if (string.str && string.size) {
+            if (string_cold_offset >= string_cold_size) goto error;
+            U8 *string_location = start_of_cold_string + string_cold_offset;
+            memory_move(string_location, string.str, string.size);
+            string_cold_offset += string.size;
+            cold_process->string_size = string.size;
+          }
+        }
+
+        process_index += 1;
       }
-
-      process_index += 1;
     }
+
+    set_as_current_file(context, file_name);
+
+    String8 file_name_str8 = str8_lit(file_name);
+    os_file_write(file_name_str8, save_file_data);
   }
-
-  set_as_current_file(context, file_name);
-
-  String8 file_name_str8 = str8_lit(file_name);
-  os_file_write(file_name_str8, save_file_data);
 error:;
 }
 
 
-function void write_save_file(Context *context, Arena *arena, U8 *file_name) {
-  write_save_file_v1(context, arena, file_name);
+function void write_save_file(Context *context, View *view, Arena *arena, U8 *file_name) {
+  write_save_file_v1(context, view, arena, file_name);
 }
 
 

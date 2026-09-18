@@ -252,13 +252,14 @@ function Keybind_Environment create_keybind_environment(
    ? (con_expr)\
    : 1)
 
-function Keybind_Result check_keybind(Keybind_Environment *keybind_env) {
+function Keybind_Result check_keybind(Keybind_Environment *env) {
   Keybind_Result result = 0;
-  Context *context = keybind_env->context;
-  Keybind *keybind = keybind_env->keybind;
-  Process_Selection selection = keybind_env->selection;
+  Context *context = env->context;
+  View *view = env->view;
+  Keybind *keybind = env->keybind;
+  Process_Selection selection = env->selection;
 
-  if (keybind) {
+  if (context && view && keybind) {
     Ui_State *ui_state = &context->ui_state;
 
     B32 key_is_pressed = 0;
@@ -321,7 +322,7 @@ function Keybind_Result check_keybind(Keybind_Environment *keybind_env) {
       B32 con_active_processes = Keybind_Constraint_Holds(
         keybind,
         ActiveProcesses,
-        (context->active_processes.first != 0));
+        (view->active_processes.first != 0));
 
 
       constraints_met = (con_hover_process &&

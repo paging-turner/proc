@@ -40,47 +40,50 @@ Define_Keybind_Action(
   ) {
   B32 handled = 0;
   Context *context = env->context;
+  View *view = env->view;
 
-  if (Test_Keybind(env, Enter)) {
-    handled = 1;
+  if (context && view) {
+    if (Test_Keybind(env, Enter)) {
+      handled = 1;
 
-    Assert(context->active_processes.first);
-    Assert(context->hot_process.process);
+      Assert(view->active_processes.first);
+      Assert(context->hot_process.process);
 
-    // @Speed
-    U32 active_count = 0;
-    Process **sorted_processes = 0;
-    {
-      for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
-        if (!Get_Flag(a->flags, Process_Flag_Wire)) {
-          active_count += 1;
+      // @Speed
+      U32 active_count = 0;
+      Process **sorted_processes = 0;
+      {
+        for (Process *a = view->active_processes.first; a != 0; a = a->next_active) {
+          if (!Get_Flag(a->flags, Process_Flag_Wire)) {
+            active_count += 1;
+          }
+        }
+        sorted_processes = arena_push(context->temp_arena, active_count*sizeof(Process *));
+        U32 i = 0;
+        for (Process *a = view->active_processes.first; a != 0; a = a->next_active) {
+          if (!Get_Flag(a->flags, Process_Flag_Wire)) {
+            sorted_processes[i] = a;
+            i += 1;
+          }
+        }
+        sort_merge(sorted_processes, sizeof(Process *), active_count, process_compare_pos_x, 0);
+      }
+
+      if (sorted_processes) {
+        Connection_Result conn_res = (Connection_Result){0};
+        conn_res.in = context->hot_process.process;
+        for (U32 i = 0; i < active_count; ++i) {
+          B32 out_is_not_wire = !Get_Flag(sorted_processes[i]->flags, Process_Flag_Wire);
+          B32 in_is_not_wire = !Get_Flag(conn_res.in->flags, Process_Flag_Wire);
+          if (out_is_not_wire && in_is_not_wire) {
+            conn_res = connect_processes_no_gather(context, view, sorted_processes[i], conn_res.in);
+          }
         }
       }
-      sorted_processes = arena_push(context->temp_arena, active_count*sizeof(Process *));
-      U32 i = 0;
-      for (Process *a = context->active_processes.first; a != 0; a = a->next_active) {
-        if (!Get_Flag(a->flags, Process_Flag_Wire)) {
-          sorted_processes[i] = a;
-          i += 1;
-        }
-      }
-      sort_merge(sorted_processes, sizeof(Process *), active_count, process_compare_pos_x, 0);
+
+      // TODO: ensure that procs are from main-procs, or allow connected procs from ui or other places???
+      gather_processes_from_trie(context, view);
     }
-
-    if (sorted_processes) {
-      Connection_Result conn_res = (Connection_Result){0};
-      conn_res.in = context->hot_process.process;
-      for (U32 i = 0; i < active_count; ++i) {
-        B32 out_is_not_wire = !Get_Flag(sorted_processes[i]->flags, Process_Flag_Wire);
-        B32 in_is_not_wire = !Get_Flag(conn_res.in->flags, Process_Flag_Wire);
-        if (out_is_not_wire && in_is_not_wire) {
-          conn_res = connect_processes_no_gather(context, sorted_processes[i], conn_res.in);
-        }
-      }
-    }
-
-    // TODO: ensure that procs are from main-procs, or allow connected procs from ui or other places???
-    gather_processes_from_trie(context, &env->view->do_undo);
   }
 
   return handled;
@@ -131,19 +134,22 @@ Define_Keybind_And_Action(
   ) {
   B32 handled = 0;
   Context *context = env->context;
+  View *view = env->view;
   Process_Selection selection = env->selection;
 
-  if (Test_Keybind(env, Enter)) {
-    if (selection.view == context->views + View_Kind_Trie) {
-      if (selection.type == Process_Selection_Process) {
-        if (selection.process->ref) {
-          handled = 1;
+  if (context && view) {
+    if (Test_Keybind(env, Enter)) {
+      if (selection.view == view) {
+        if (selection.type == Process_Selection_Process) {
+          if (selection.process->ref) {
+            handled = 1;
 
-          Process_Do_Undo *do_undo = &context->views[View_Kind_Procs].do_undo;
-          if (do_undo->trie) {
-            do_undo->trie->current_root = selection.process->ref;
-            // TODO: if we ever display undo trie from other than main procs, we need to switch on that here......
-            gather_processes_from_trie(context, do_undo);
+            Process_Do_Undo *do_undo = &view->do_undo;
+            if (do_undo->trie) {
+              do_undo->trie->current_root = selection.process->ref;
+              // TODO: if we ever display undo trie from other than main procs, we need to switch on that here......
+              gather_processes_from_trie(context, view);
+            }
           }
         }
       }
