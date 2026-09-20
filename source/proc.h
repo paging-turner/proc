@@ -273,21 +273,6 @@ struct Process_Selection {
   View *view;
 };
 
-function View *view_iter_next(View *view) {
-  View *next_view = 0;
-
-  if (view) {
-  }
-
-  return next_view;
-}
-
-
-#define View_Iterate(view_name, ctx)\
-  for (View *view_name = (ctx)->root_view;\
-       view_name != 0;\
-       view_name = view_iter_next(view_name))
-
 
 typedef struct Process_Shape Process_Shape;
 typedef struct Process_Selection Process_Selection;
@@ -535,6 +520,7 @@ struct Process_Do_Undo {
 
 
 typedef enum View_Kind {
+  View_Kind__Null,
   View_Kind_Procs,
   View_Kind_Ui,
   View_Kind_Trie,
@@ -554,6 +540,7 @@ typedef enum View_Flag {
 } View_Flag;
 
 struct View {
+  View_Kind kind;
   U32 flags;
   Rectangle screen_region;
   Camera2D camera;
@@ -564,10 +551,10 @@ struct View {
   Process_Do_Undo do_undo;
 
   View_Layout layout;
+  View *next;
   View *first;
   View *last;
 };
-
 
 
 
@@ -615,6 +602,62 @@ struct Context {
   F32 time_to_wait_for_label_edit; // TODO: move edit-timeout stuff to ui_state?
   F32 edit_timeout;
 };
+
+
+
+
+typedef struct View_Stack {
+  struct View_Stack *next;
+  View *view;
+  B32 visited;
+} View_Stack;
+
+
+function View_Stack *view_iter_init(Context *context) {
+  View_Stack *stack = push_struct(context->per_frame_arena, View_Stack);
+
+  if (stack) {
+    stack->view = context->root_view;
+  }
+
+
+  return stack;
+}
+
+
+function void view_iter_next(Context *context, View_Stack **stack) {
+  if (stack && *stack && (*stack)->view) {
+    if (!(*stack)->visited && (*stack)->view->first && (*stack)->view->last) {
+      (*stack)->visited = 1;
+      // view has children, so descend
+      View_Stack *new_stack = push_struct(context->per_frame_arena, View_Stack);
+      if (new_stack) {
+        new_stack->view = (*stack)->view ? (*stack)->view->first : 0;
+        SLLStackPush((*stack), new_stack);
+      }
+      else {
+        *(*stack) = (View_Stack){0};
+      }
+    }
+    else if ((*stack)->view->next) {
+      // move to the sibling
+      (*stack)->view = (*stack)->view->next;
+      (*stack)->visited = 0;
+    }
+    else {
+      // no more siblings, so pop
+      SLLStackPop(*stack);
+    }
+  }
+}
+
+
+#define View_Iterate(view_name, ctx)\
+  for (View_Stack *view_name = view_iter_init(ctx);\
+       (view_name != 0 && view_name->view != 0);\
+       view_iter_next((ctx), &view_name))
+
+
 
 
 ////////////////////////

@@ -516,7 +516,7 @@ Define_Keybind_And_Action(
   Context *context = env->context;
   View *view = env->view;
 
-  if (context && view) {
+  if (context && view && view->kind == View_Kind_Procs) {
     if (check_keybind(env)) {
       handled = 1;
 

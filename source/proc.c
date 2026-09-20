@@ -1419,8 +1419,13 @@ function Process *create_button(Arena *arena, Vector2 position, String_Chunk_Lis
 // View BEGIN //
 ////////////////
 
-function View *view_create(View_Kind kind) {
-  View *result = 0;
+function View *view_create(Arena *arena) {
+  View *result = push_struct(arena, View);
+
+  if (result) {
+    result->do_undo.arena = arena;
+    result->camera.zoom = 1.0f;
+  }
 
   return result;
 }
@@ -1437,12 +1442,6 @@ function View *view_get_child(View *view, U32 index) {
   View *result = 0;
 
   return result;
-}
-
-function View_Kind view_get_kind(View *view) {
-  View_Kind kind = 0;
-
-  return kind;
 }
 
 //////////////
@@ -3221,16 +3220,33 @@ int main(void) {
     }
 
     { // init views
-      View *view = push_struct(context.permanent_arena, View);
-      if (view) {
-        Set_Flag(view->flags, View_Flag_Active|View_Flag_Panning|View_Flag_Editable);
-        view->screen_region.width = global_window_size.x;
-        view->screen_region.height = global_window_size.y;
-        view->do_undo.arena = context.permanent_arena;
-        view->do_undo.trie = proc_trie_create_trie(view->do_undo.arena);
-        view->camera.zoom = 1.0f;
-        context.root_view = view;
-        gather_processes_from_trie(&context, view);
+      View *root_view = view_create(context.permanent_arena);
+      View *menu_view = view_create(context.permanent_arena);
+      View *canvas_view = view_create(context.permanent_arena);
+      if (root_view && menu_view && canvas_view) {
+        F32 menu_height = global_panel_font_size;
+        // menu view
+        Set_Flag(menu_view->flags, View_Flag_Active);
+        menu_view->kind = View_Kind_Ui;
+        menu_view->screen_region.width = global_window_size.x;
+        menu_view->screen_region.height = menu_height;
+        menu_view->do_undo.trie = proc_trie_create_trie(menu_view->do_undo.arena);
+        context.root_view = menu_view;
+        gather_processes_from_trie(&context, menu_view);
+        SLLQueuePush(root_view->first, root_view->last, menu_view);
+
+        // canvas view
+        Set_Flag(canvas_view->flags, View_Flag_Active|View_Flag_Panning|View_Flag_Editable);
+        canvas_view->kind = View_Kind_Procs;
+        canvas_view->screen_region.width = global_window_size.x;
+        canvas_view->screen_region.height = global_window_size.y - menu_height;
+        canvas_view->do_undo.trie = proc_trie_create_trie(canvas_view->do_undo.arena);
+        context.root_view = canvas_view;
+        gather_processes_from_trie(&context, canvas_view);
+        SLLQueuePush(root_view->first, root_view->last, canvas_view);
+
+        // root view
+        context.root_view = root_view;
       }
     }
 
@@ -3314,13 +3330,17 @@ int main(void) {
         //////////////////////////////////////////
         // Handle Process Interaction
         //////////////////////////////////////////
-        View_Iterate(view, &context) {
-          for (U32 i = 0; i < env->context->keybind_count; ++i) {
-            Keybind *keybind = env->context->keybinds + i;
-            env->keybind = keybind;
-            env->view = view;
-            keybind->handle(env);
-            check_process_list(view->active_processes);
+        View_Iterate(stack, &context) {
+          if (stack->view->first && stack->view->last) {
+          }
+          else {
+            for (U32 i = 0; i < env->context->keybind_count; ++i) {
+              Keybind *keybind = env->context->keybinds + i;
+              env->keybind = keybind;
+              env->view = stack->view;
+              keybind->handle(env);
+              check_process_list(stack->view->active_processes);
+            }
           }
         }
       }
@@ -3354,19 +3374,19 @@ int main(void) {
         Color box_hover_color = (Color){5, 250, 20, 255};
         B32 rounded = Get_Flag(context.flags, Context_Flag_RoundedShapes);
 
-        View_Iterate(view, &context) {
-          Process *processes_to_draw = view->processes.first;
-          F32 font_size = view->camera.zoom * global_process_font_size;
+        View_Iterate(stack, &context) {
+          Process *processes_to_draw = stack->view->processes.first;
+          F32 font_size = stack->view->camera.zoom * global_process_font_size;
 
           // @Speed
           // draw lines
           for (Process *p = processes_to_draw; p != 0; p = p->next) {
             if (Get_Flag(p->flags, Process_Flag_Line)) {
               if (p->in && p->out) {
-                Vector2 in_pos = get_process_position(&context, view, p->in);
-                in_pos = GetWorldToScreen2D(in_pos, view->camera);
-                Vector2 out_pos = get_process_position(&context, view, p->out);
-                out_pos = GetWorldToScreen2D(out_pos, view->camera);
+                Vector2 in_pos = get_process_position(&context, stack->view, p->in);
+                in_pos = GetWorldToScreen2D(in_pos, stack->view->camera);
+                Vector2 out_pos = get_process_position(&context, stack->view, p->out);
+                out_pos = GetWorldToScreen2D(out_pos, stack->view->camera);
                 Color c = (Color){0, 0, 0, 255}; // TODO: use some existing color
                 render_DrawLine(rc, in_pos.x, in_pos.y, out_pos.x, out_pos.y, 2.0f, c);
               }
@@ -3401,13 +3421,13 @@ int main(void) {
             B32 is_invisible = Get_Flag(p->flags, Process_Flag_Invisible);
 
             if (!(is_wire || is_invisible)) {
-              Process_Shape shape = get_process_shape(&context, view, p);
+              Process_Shape shape = get_process_shape(&context, stack->view, p);
 
               B32 is_hot = context.hot_process.process == p;
-              B32 is_active = is_active_process(&context, view, p);
+              B32 is_active = is_active_process(&context, stack->view, p);
               F32 thickness = (is_hot||is_active) ? global_active_line_thickness : global_line_thickness;
-              thickness *= view->camera.zoom;
-              F32 cup_cap_control_offset = 10.0f*view->camera.zoom;
+              thickness *= stack->view->camera.zoom;
+              F32 cup_cap_control_offset = 10.0f*stack->view->camera.zoom;
 
               if (Get_Flag(p->flags, Process_Flag_Empty)) {
                 // draw line through empty shape
@@ -3419,9 +3439,9 @@ int main(void) {
                   Vector2 p1 = (Vector2){0};
                   if (rounded) {
                     // rounded half-circle
-                    Vector2 position = get_process_position(&context, view, p);
-                    position = GetWorldToScreen2D(position, view->camera);
-                    Half_Circle_Points points = get_half_circle_points(&context, view, shape, p, position, text_width, downward);
+                    Vector2 position = get_process_position(&context, stack->view, p);
+                    position = GetWorldToScreen2D(position, stack->view->camera);
+                    Half_Circle_Points points = get_half_circle_points(&context, stack->view, shape, p, position, text_width, downward);
                     p0 = points.middle_of_line;
                     p1 = points.middle_of_curve;
                   } else {
@@ -3445,22 +3465,22 @@ int main(void) {
                 }
               } else if (Get_Flag(p->flags, Process_Flag_Cup)) {
                 // draw cup
-                Vector2 pos0 = get_wire_position_from_conn_index(&context, view, p, shape, Process_Connection_Out, 0);
-                Vector2 pos1 = get_wire_position_from_conn_index(&context, view, p, shape, Process_Connection_Out, 1);
+                Vector2 pos0 = get_wire_position_from_conn_index(&context, stack->view, p, shape, Process_Connection_Out, 0);
+                Vector2 pos1 = get_wire_position_from_conn_index(&context, stack->view, p, shape, Process_Connection_Out, 1);
                 Vector2 ctrl0 = (Vector2){pos0.x, pos0.y+cup_cap_control_offset};
                 Vector2 ctrl1 = (Vector2){pos1.x, pos1.y+cup_cap_control_offset};
                 render_DrawLineBezierCubic(rc, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color, 0);
               } else if (Get_Flag(p->flags, Process_Flag_Cap)) {
                 // draw cap
-                Vector2 pos0 = get_wire_position_from_conn_index(&context, view, p, shape, Process_Connection_In, 0);
-                Vector2 pos1 = get_wire_position_from_conn_index(&context, view, p, shape, Process_Connection_In, 1);
+                Vector2 pos0 = get_wire_position_from_conn_index(&context, stack->view, p, shape, Process_Connection_In, 0);
+                Vector2 pos1 = get_wire_position_from_conn_index(&context, stack->view, p, shape, Process_Connection_In, 1);
                 Vector2 ctrl0 = (Vector2){pos0.x, pos0.y-cup_cap_control_offset};
                 Vector2 ctrl1 = (Vector2){pos1.x, pos1.y-cup_cap_control_offset};
                 render_DrawLineBezierCubic(rc, pos0, pos1, ctrl0, ctrl1, thickness, stroke_color ,0);
               } else if (Get_Flag(p->flags, Process_Flag_Identity)) {
                 // draw "identity" process (just a wire)
-                Vector2 pos0 = get_wire_position_from_conn_index(&context, view, p, shape, Process_Connection_In, 0);
-                Vector2 pos1 = get_wire_position_from_conn_index(&context, view, p, shape, Process_Connection_Out, 0);
+                Vector2 pos0 = get_wire_position_from_conn_index(&context, stack->view, p, shape, Process_Connection_In, 0);
+                Vector2 pos1 = get_wire_position_from_conn_index(&context, stack->view, p, shape, Process_Connection_Out, 0);
                 render_DrawLineBezierCubic(rc, pos0, pos1, pos1, pos0, thickness, stroke_color, 0);
               } else {
                 switch(shape.kind) {
@@ -3473,9 +3493,9 @@ int main(void) {
                 case Process_Shape_HalfCircle: {
                   // draw half-circle background
                   render_DrawTriangleFan(rc, shape.points, shape.point_count, bg_color);
-                  Vector2 position = get_process_position(&context, view, p);
-                  position = GetWorldToScreen2D(position, view->camera);
-                  Half_Circle_Points hc_points = get_half_circle_points(&context, view, shape, p, position, text_width, shape.downward);
+                  Vector2 position = get_process_position(&context, stack->view, p);
+                  position = GetWorldToScreen2D(position, stack->view->camera);
+                  Half_Circle_Points hc_points = get_half_circle_points(&context, stack->view, shape, p, position, text_width, shape.downward);
                   render_DrawLineBezierCubic(rc, hc_points.first_point, hc_points.second_point, hc_points.first_control, hc_points.second_control, thickness, stroke_color, 1);
                 } break;
                 default: Assert(0);
@@ -3505,7 +3525,7 @@ int main(void) {
 
               // draw new-wire-box
               if (is_active || is_hot) {
-                Rectangle new_wire_box = get_new_wire_box(&context, view, p, shape);
+                Rectangle new_wire_box = get_new_wire_box(&context, stack->view, p, shape);
                 B32 new_wire_box_is_active = (
                   (is_active && Get_Flag(context.flags, Context_Flag_NewWire)) ||
                   rectangle_contains_point(new_wire_box, context.ui_state.mouse_position));
@@ -3521,21 +3541,21 @@ int main(void) {
             B32 is_invisible = Get_Flag(p->flags, Process_Flag_Invisible);
 
             if (is_wire && !is_invisible) {
-              Process_Shape out_shape = get_process_shape(&context, view, p->out);
-              Process_Shape in_shape = get_process_shape(&context, view, p->in);
+              Process_Shape out_shape = get_process_shape(&context, stack->view, p->out);
+              Process_Shape in_shape = get_process_shape(&context, stack->view, p->in);
 
-              Vector2 out_position = get_wire_position_from_wire(&context, view, p, out_shape, Process_Connection_Out);
-              Vector2 in_position = get_wire_position_from_wire(&context, view, p, in_shape, Process_Connection_In);
+              Vector2 out_position = get_wire_position_from_wire(&context, stack->view, p, out_shape, Process_Connection_Out);
+              Vector2 in_position = get_wire_position_from_wire(&context, stack->view, p, in_shape, Process_Connection_In);
 
-              B32 is_active = is_active_process(&context, view, p) || context.hot_process.process == p;
-              B32 connected_in_active = (is_active_process(&context, view, p->in) ||
+              B32 is_active = is_active_process(&context, stack->view, p) || context.hot_process.process == p;
+              B32 connected_in_active = (is_active_process(&context, stack->view, p->in) ||
                                          context.hot_process.process == p->in);
-              B32 connected_out_active = (is_active_process(&context, view, p->out) ||
+              B32 connected_out_active = (is_active_process(&context, stack->view, p->out) ||
                                           context.hot_process.process == p->out);
               F32 thickness = is_active ? global_active_line_thickness : global_line_thickness;
-              thickness *= view->camera.zoom;
+              thickness *= stack->view->camera.zoom;
 
-              Bezier_Points bez_points = get_wire_bezier_points(&context, view, p, is_active);
+              Bezier_Points bez_points = get_wire_bezier_points(&context, stack->view, p, is_active);
               Buffer_V2 strip = get_connected_path(context.render_arena, bez_points.path.points, bez_points.path.point_count, thickness, 0);
               render_DrawTriangleStrip_P(rc, strip.points, strip.point_count, stroke_color);
 
@@ -3543,7 +3563,7 @@ int main(void) {
                 // draw bezier controls
                 for (U32 i = 0; i < bez_points.controls.point_count; ++i) {
                   Vector2 center = bez_points.controls.points[i];
-                  F32 radius = 4.0f * view->camera.zoom;
+                  F32 radius = 4.0f * stack->view->camera.zoom;
                   Color color = (Color){200, 20, 180, 255};
                   render_DrawCircleLines(rc, center.x, center.y, radius, 2.0f, color);
                 }
@@ -3551,14 +3571,14 @@ int main(void) {
 
               // draw out wire-box
               if (connected_out_active || is_active) {
-                Rectangle box = get_wire_box(&context, view, out_position);
+                Rectangle box = get_wire_box(&context, stack->view, out_position);
                 Color c = is_active ? box_hover_color : box_color;
                 render_DrawRectangleRec(rc, box, c);
               }
 
               // draw in wire-box
               if (connected_in_active || is_active) {
-                Rectangle box = get_wire_box(&context, view, in_position);
+                Rectangle box = get_wire_box(&context, stack->view, in_position);
                 Color c = is_active ? box_hover_color : box_color;
                 render_DrawRectangleRec(rc, box, c);
               }
@@ -3567,16 +3587,16 @@ int main(void) {
 
           // draw new wire
           if (Get_Flag(context.flags, Context_Flag_NewWire) &&
-              view->active_processes.first) {
-            Process_Shape shape = get_process_shape(&context, view, view->active_processes.first);
+              stack->view->active_processes.first) {
+            Process_Shape shape = get_process_shape(&context, stack->view, stack->view->active_processes.first);
             Vector2 position = shape.new_wire_position;
 
             Vector2 from_control = position;
-            from_control.y -= view->camera.zoom * 30.f;
+            from_control.y -= stack->view->camera.zoom * 30.f;
             Vector2 to_control = context.ui_state.mouse_position;
-            to_control.y += view->camera.zoom * 30.0f;
+            to_control.y += stack->view->camera.zoom * 30.0f;
 
-            F32 thickness = view->camera.zoom * global_line_thickness;
+            F32 thickness = stack->view->camera.zoom * global_line_thickness;
 
             render_DrawLineBezierCubic(rc, position, context.ui_state.mouse_position, from_control, to_control, thickness, stroke_color, 0);
           }
