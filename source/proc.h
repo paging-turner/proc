@@ -549,6 +549,7 @@ struct View {
   Process_List active_processes;
   Process *root_process;
   Process_Do_Undo do_undo;
+  Color color;
 
   View_Layout layout;
   View *next;
@@ -557,11 +558,15 @@ struct View {
 };
 
 
-
 typedef struct Process_Loc {
   View *view;
   Process *process;
 } Process_Loc;
+
+
+
+
+
 
 struct Context {
   Arena *render_arena;
@@ -615,12 +620,9 @@ typedef struct View_Stack {
 
 function View_Stack *view_iter_init(Context *context) {
   View_Stack *stack = push_struct(context->per_frame_arena, View_Stack);
-
   if (stack) {
     stack->view = context->root_view;
   }
-
-
   return stack;
 }
 

@@ -1414,12 +1414,7 @@ function Process *create_button(Arena *arena, Vector2 position, String_Chunk_Lis
 
 
 
-
-////////////////
-// View BEGIN //
-////////////////
-
-function View *view_create(Arena *arena) {
+function View *create_view(Arena *arena) {
   View *result = push_struct(arena, View);
 
   if (result) {
@@ -1430,23 +1425,7 @@ function View *view_create(Arena *arena) {
   return result;
 }
 
-function View *view_stack_push(View *view, View *view_to_push) {
-  return view;
-}
 
-function View *view_queue_push(View *view, View *view_to_push) {
-  return view;
-}
-
-function View *view_get_child(View *view, U32 index) {
-  View *result = 0;
-
-  return result;
-}
-
-//////////////
-// View END //
-//////////////
 
 
 
@@ -3220,9 +3199,9 @@ int main(void) {
     }
 
     { // init views
-      View *root_view = view_create(context.permanent_arena);
-      View *menu_view = view_create(context.permanent_arena);
-      View *canvas_view = view_create(context.permanent_arena);
+      View *root_view = create_view(context.permanent_arena);
+      View *menu_view = create_view(context.permanent_arena);
+      View *canvas_view = create_view(context.permanent_arena);
       if (root_view && menu_view && canvas_view) {
         F32 menu_height = global_panel_font_size;
         // menu view
@@ -3231,18 +3210,17 @@ int main(void) {
         menu_view->screen_region.width = global_window_size.x;
         menu_view->screen_region.height = menu_height;
         menu_view->do_undo.trie = proc_trie_create_trie(menu_view->do_undo.arena);
-        context.root_view = menu_view;
-        gather_processes_from_trie(&context, menu_view);
+        menu_view->color = (Color){30, 50, 30, 255};
         SLLQueuePush(root_view->first, root_view->last, menu_view);
 
         // canvas view
         Set_Flag(canvas_view->flags, View_Flag_Active|View_Flag_Panning|View_Flag_Editable);
         canvas_view->kind = View_Kind_Procs;
+        canvas_view->screen_region.y = menu_height;
         canvas_view->screen_region.width = global_window_size.x;
         canvas_view->screen_region.height = global_window_size.y - menu_height;
         canvas_view->do_undo.trie = proc_trie_create_trie(canvas_view->do_undo.arena);
-        context.root_view = canvas_view;
-        gather_processes_from_trie(&context, canvas_view);
+        canvas_view->color = (Color){130, 150, 130, 255};
         SLLQueuePush(root_view->first, root_view->last, canvas_view);
 
         // root view
@@ -3375,8 +3353,21 @@ int main(void) {
         B32 rounded = Get_Flag(context.flags, Context_Flag_RoundedShapes);
 
         View_Iterate(stack, &context) {
+          {
+            Vector2 position = (Vector2){stack->view->screen_region.x,
+                                         stack->view->screen_region.y};
+            Vector2 size = (Vector2){stack->view->screen_region.width,
+                                     stack->view->screen_region.height};
+            render_BeginScissorMode(rc, position, size);
+          }
+
           Process *processes_to_draw = stack->view->processes.first;
           F32 font_size = stack->view->camera.zoom * global_process_font_size;
+
+          if (stack->view->color.a > 0) {
+            Rectangle r = stack->view->screen_region;
+            render_DrawRectangle(rc, r.x, r.y, r.width, r.height, stack->view->color);
+          }
 
           // @Speed
           // draw lines
@@ -3600,6 +3591,8 @@ int main(void) {
 
             render_DrawLineBezierCubic(rc, position, context.ui_state.mouse_position, from_control, to_control, thickness, stroke_color, 0);
           }
+
+          render_EndScissorMode(rc);
         }
 
         // draw selection rectangle
