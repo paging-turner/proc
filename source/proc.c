@@ -10,17 +10,6 @@
 #include "../source/_include_platform.h"
 #include "../libraries/ryn_prof.h"
 #include "../source/render.h"
-
-
-//////////////////////////////////////
-// Paths
-//////////////////////////////////////
-global_variable String8 Saves_Filepath;
-global_variable String8 Build_Filepath;
-
-
-
-
 #include "../source/proc.h"
 
 Define_Cycle_Detector_Function(
@@ -41,6 +30,8 @@ Define_Cycle_Detector_Function(
 //////////////////////////////////////
 
 global_variable Vector2 global_window_size;
+global_variable String8 Saves_Filepath;
+global_variable String8 Build_Filepath;
 
 #include "../source/keybind.h"
 #include "../source/piece_table.h"
