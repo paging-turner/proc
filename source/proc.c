@@ -52,15 +52,11 @@ Define_Cycle_Detector_Function(
 
 global_variable Vector2 global_window_size;
 
-
 #include "../source/keybind.h"
-#include "../source/keybind.c"
-
 #include "../source/standard_keybinds.h"
 #include "../source/piece_table.h"
 #include "../source/ui.h"
 #include "../source/saves.h"
-
 
 global_variable F32 global_process_wire_padding = 8.0f;
 global_variable F32 global_process_wire_spacing = 22.0f;

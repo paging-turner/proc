@@ -254,12 +254,6 @@ function Process *ui_decl_init(
   Process_Do_Undo_Kind do_undo_kind
   ) {
   Process *process = proc_to_copy;
-  if (parent_process) {
-    printf("process=%p   parent=%p\n", process, *parent_process);
-  }
-  else {
-    printf("process=%p   parent=__NULL__\n", process);
-  }
 
   if (process && parent_process) {
     { // store old parent
@@ -297,12 +291,10 @@ function Process *ui_decl_init(
 
         if (should_fit_x) {
           if (horizontal_layout) {
-            printf("x h\n");
             (*parent_process)->ui_box.size.x += process->ui_box.size.x;
           }
           else if (vertical_layout) {
             if ((*parent_process)->ui_box.size.x < process->ui_box.size.x) {
-              printf("x v\n");
               (*parent_process)->ui_box.size.x = process->ui_box.size.x;
             }
           }
@@ -311,12 +303,10 @@ function Process *ui_decl_init(
           /* (*parent_process)->ui_box.size.y = (*parent_process)->ui_box.min_size.y; */
           if (horizontal_layout) {
             if ((*parent_process)->ui_box.size.y < process->ui_box.size.y) {
-              printf("y h\n");
               (*parent_process)->ui_box.size.y = process->ui_box.size.y;
             }
           }
           else if (vertical_layout) {
-            printf("y v\n");
             (*parent_process)->ui_box.size.y += process->ui_box.size.y;
           }
         }
