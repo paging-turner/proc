@@ -1,12 +1,45 @@
-#ifndef PROC_CORE_INCLUDE_H
-# define PROC_CORE_INCLUDE_H
-//
-// NOTE: Ideally we would just use a single core/base codebase like Mr4th's, but that doesn't support non-Windows OSs at the moment. One of these days we should bite the bullet and implement some stuff for Linux/Mac.
+///////////
+// Mr4th //
+///////////
+#define MR4TH_NO_INCLUDES 1
+#define MR4TH_NO_CLAMP 1
+#if !No_Assert
+# define MR4TH_ASSERTS 1
+#endif
+#include "../libraries/mr4th/src/mr4th_base.h"
+#include "../libraries/macho_objdump.h"
+// NOTE: This project currently uses a non-standard, experimental version of "mr4th_symbol_set.h".
+// TODO: Stop using the experimental version
+#include "../libraries/mr4th/src/mr4th_symbol_set.h"
+#define push_struct(a, s) arena_push((a), sizeof(s))
 
 
 
 
 
+////////////
+// Raylib //
+////////////
+#if OS_WINDOWS
+# include "../libraries/raylib-5.5_win32_msvc16/include/raylib.h"
+# include "../libraries/raylib-5.5_win32_msvc16/include/raymath.h"
+#elif OS_MAC
+# include "../libraries/raylib-5.5_macos/include/raylib.h"
+# include "../libraries/raylib-5.5_macos/include/raymath.h"
+#else
+# error We have not included the raylib release for this OS yet.
+#endif
+
+
+
+
+
+
+
+
+//////////////////////////
+// Other platform stuff //
+//////////////////////////
 #define function static
 #define global_variable static
 #define Kilobytes(n) (1024 * (n))
@@ -91,11 +124,11 @@ typedef struct {
 ///////////////////////////////////////
 function B32 c_strings_equal(char *a, char *b);
 
-function F32 which_side_of_line(Vector2 a, Vector2 b, Vector2 p);
-function F32 which_side_of_bezier(Vector2 first_point, Vector2 second_point, Vector2 first_control, Vector2 second_control, Vector2 test_point);
+/* function F32 which_side_of_line(Vector2 a, Vector2 b, Vector2 p); */
+/* function F32 which_side_of_bezier(Vector2 first_point, Vector2 second_point, Vector2 first_control, Vector2 second_control, Vector2 test_point); */
 
-function Vector2 get_bezier_point(Vector2 first_point, Vector2 second_point, Vector2 first_control, Vector2 second_control, F32 t);
-function S32 create_bezier_triangle_fan(Vector2 first_point, Vector2 second_point, Vector2 first_control, Vector2 second_control, Vector2 *points, S32 max_points, S32 triangle_count);
+/* function Vector2 get_bezier_point(Vector2 first_point, Vector2 second_point, Vector2 first_control, Vector2 second_control, F32 t); */
+/* function S32 create_bezier_triangle_fan(Vector2 first_point, Vector2 second_point, Vector2 first_control, Vector2 second_control, Vector2 *points, S32 max_points, S32 triangle_count); */
 
 
 ///////////////////////////////////////
@@ -573,6 +606,3 @@ function B32 arena_has_space_for(Arena *arena, U64 size) {
 
   return has_space;
 }
-
-
-#endif // PROC_CORE_INCLUDE_H

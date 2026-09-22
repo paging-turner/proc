@@ -5,20 +5,10 @@
 
 #include <stdio.h> // printf
 
-#include "../source/_include_mr4th.h"
-#include "../libraries/macho_objdump.h"
-// NOTE: This project currently uses a non-standard, experimental version of "mr4th_symbol_set.h".
-// TODO: Stop using the experimental version
-#include "../libraries/mr4th/src/mr4th_symbol_set.h"
-
-
-#include "../source/_include_raylib.h"
-#include "../libraries/ryn_prof.h"
-
-
 // TODO: Points_Per_Wire should probably be dynamic...
 #define Points_Per_Wire 24
-#include "../source/core.h"
+#include "../source/_include_platform.h"
+#include "../libraries/ryn_prof.h"
 #include "../source/render.h"
 
 
