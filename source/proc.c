@@ -43,7 +43,6 @@ Define_Cycle_Detector_Function(
 global_variable Vector2 global_window_size;
 
 #include "../source/keybind.h"
-#include "../source/standard_keybinds.h"
 #include "../source/piece_table.h"
 #include "../source/ui.h"
 #include "../source/saves.h"
