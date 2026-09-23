@@ -85,15 +85,16 @@ function render_command *create_render_command(Render_Context *rc) {
 }
 
 
-function void render_ClearBackground(Render_Context *rc, Color C) {
+function render_command *render_ClearBackground(Render_Context *rc, Color C) {
   render_command *Command = create_render_command(rc);
   if (Command) {
     Command->Kind = render_command_ClearBackground;
     Command->Color = C;
   }
+  return Command;
 }
 
-function void render_DrawRectangleRec(Render_Context *rc, Rectangle R, Color C) {
+function render_command *render_DrawRectangleRec(Render_Context *rc, Rectangle R, Color C) {
   render_command *Command = create_render_command(rc);
 
   if (Command) {
@@ -101,6 +102,7 @@ function void render_DrawRectangleRec(Render_Context *rc, Rectangle R, Color C) 
     Command->Rectangle = R;
     Command->Color = C;
   }
+  return Command;
 }
 
 function char *render_PushTempString(const char *CString) {
@@ -128,7 +130,7 @@ function char *render_PushTempString(const char *CString) {
   return Result;
 }
 
-function void render_DrawText(Render_Context *rc, const char *Text, F32 X, F32 Y, S32 FontSize, Color C, B32 copy_string) {
+function render_command *render_DrawText(Render_Context *rc, const char *Text, F32 X, F32 Y, S32 FontSize, Color C, B32 copy_string) {
   render_command *Command = create_render_command(rc);
   const char *RenderString;
   if (copy_string) {
@@ -145,10 +147,11 @@ function void render_DrawText(Render_Context *rc, const char *Text, F32 X, F32 Y
     Command->FontSize = FontSize;
     Command->Color = C;
   }
+  return Command;
 }
 
 
-function void render_DrawRectangle(Render_Context *rc, F32 X, F32 Y, F32 W, F32 H, Color C) {
+function render_command *render_DrawRectangle(Render_Context *rc, F32 X, F32 Y, F32 W, F32 H, Color C) {
   render_command *Command = create_render_command(rc);
 
   if (Command) {
@@ -159,9 +162,10 @@ function void render_DrawRectangle(Render_Context *rc, F32 X, F32 Y, F32 W, F32 
     Command->Height = H;
     Command->Color = C;
   }
+  return Command;
 }
 
-function void render_DrawLine(Render_Context *rc, int startPosX, int startPosY, int endPosX, int endPosY, F32 thickness, Color color) {
+function render_command *render_DrawLine(Render_Context *rc, int startPosX, int startPosY, int endPosX, int endPosY, F32 thickness, Color color) {
   render_command *Command = create_render_command(rc);
 
   // HACK: Fudge the line length to avoid gaps between adjoined lines.
@@ -184,12 +188,13 @@ function void render_DrawLine(Render_Context *rc, int startPosX, int startPosY, 
     Command->Thickness = thickness;
     Command->Color = color;
   }
+  return Command;
 }
 
 
 
 
-function void render_DrawLineBezierCubic(Render_Context *rc, Vector2 startPos, Vector2 endPos, Vector2 startControlPos, Vector2 endControlPos, float thick, Color color, B32 closed) {
+function render_command *render_DrawLineBezierCubic(Render_Context *rc, Vector2 startPos, Vector2 endPos, Vector2 startControlPos, Vector2 endControlPos, float thick, Color color, B32 closed) {
   render_command *Command = create_render_command(rc);
 
   if (Command) {
@@ -212,11 +217,12 @@ function void render_DrawLineBezierCubic(Render_Context *rc, Vector2 startPos, V
       Command->Color = color;
     }
   }
+  return Command;
 }
 
 
 
-function void render_DrawTriangleStrip_P(Render_Context *rc, Vector2 *Points, S32 PointCount, Color Color) {
+function render_command *render_DrawTriangleStrip_P(Render_Context *rc, Vector2 *Points, S32 PointCount, Color Color) {
   render_command *Command = create_render_command(rc);
 
   if (Command) {
@@ -225,11 +231,12 @@ function void render_DrawTriangleStrip_P(Render_Context *rc, Vector2 *Points, S3
     Command->PointCount = PointCount;
     Command->Color = Color;
   }
+  return Command;
 }
 
 
 
-function void render_DrawTriangleStrip(Render_Context *rc, Vector2 *Points, S32 PointCount, Color Color) {
+function render_command *render_DrawTriangleStrip(Render_Context *rc, Vector2 *Points, S32 PointCount, Color Color) {
   render_command *Command = create_render_command(rc);
 
   if (Command && PointCount <= render_Max_Points) {
@@ -240,9 +247,10 @@ function void render_DrawTriangleStrip(Render_Context *rc, Vector2 *Points, S32 
     Command->PointCount = PointCount;
     Command->Color = Color;
   }
+  return Command;
 }
 
-function void render_DrawTriangleFan(Render_Context *rc, Vector2 *Points, int PointCount, Color Color) {
+function render_command *render_DrawTriangleFan(Render_Context *rc, Vector2 *Points, int PointCount, Color Color) {
   render_command *Command = create_render_command(rc);
 
   if (Command && PointCount <= render_Max_Points) {
@@ -253,9 +261,10 @@ function void render_DrawTriangleFan(Render_Context *rc, Vector2 *Points, int Po
     Command->PointCount = PointCount;
     Command->Color = Color;
   }
+  return Command;
 }
 
-function void render_DrawCircle(Render_Context *rc, Vector2 center, F32 radius, Color color) {
+function render_command *render_DrawCircle(Render_Context *rc, Vector2 center, F32 radius, Color color) {
   render_command *Command = create_render_command(rc);
 
   if (Command) {
@@ -265,10 +274,11 @@ function void render_DrawCircle(Render_Context *rc, Vector2 center, F32 radius, 
     Command->Radius = radius;
     Command->Color = color;
   }
+  return Command;
 }
 
 
-function void render_DrawCircleLines(Render_Context *rc, int centerX, int centerY, float radius, F32 thickness, Color color) {
+function render_command *render_DrawCircleLines(Render_Context *rc, int centerX, int centerY, float radius, F32 thickness, Color color) {
   render_command *Command = create_render_command(rc);
   U32 point_count = 24; // TODO: figure out a better way to determine the number of points to use
   Vector2 *points = push_array(rc->arena, Vector2, point_count);
@@ -289,10 +299,11 @@ function void render_DrawCircleLines(Render_Context *rc, int centerX, int center
       Command->Color = color;
     }
   }
+  return Command;
 }
 
 
-function void render_BeginScissorMode(Render_Context *rc, Vector2 position, Vector2 size) {
+function render_command *render_BeginScissorMode(Render_Context *rc, Vector2 position, Vector2 size) {
   render_command *Command = create_render_command(rc);
 
   if (Command) {
@@ -302,14 +313,16 @@ function void render_BeginScissorMode(Render_Context *rc, Vector2 position, Vect
     Command->Width = size.x;
     Command->Height = size.y;
   }
+  return Command;
 }
 
-function void render_EndScissorMode(Render_Context *rc) {
+function render_command *render_EndScissorMode(Render_Context *rc) {
   render_command *Command = create_render_command(rc);
 
   if (Command) {
     Command->Kind = render_command_EndScissorMode;
   }
+  return Command;
 }
 
 

@@ -135,6 +135,7 @@ global_variable Process global_ui_procs[] = {
       .flags = Ui_Box_Flag_OnlyOneActive,
       .align = Ui_Align_TopLeft,
       .layout = Ui_Layout_Horizontal,
+      .sizing = Ui_Sizing_FitContents,
     }
   },
   [Global_Ui_Proc_Id_sub_menu_box] = (Process){
@@ -276,8 +277,17 @@ function Process *ui_decl_init(
     Color hot_bg_color = global_button_hot_bg_color;
     Color font_color = global_button_font_color;
 
-    // set initial size
-    process->ui_box.size = ui_get_element_size(context, process);
+    {
+      // set initial size
+      process->ui_box.size = ui_get_element_size(context, process);
+
+      if (process->ui_box.sizing == Ui_Sizing_FitContents || process->ui_box.sizing == Ui_Sizing_FitContentsX) {
+        process->ui_box.size.x = 0.0f;
+      }
+      if (process->ui_box.sizing == Ui_Sizing_FitContents || process->ui_box.sizing == Ui_Sizing_FitContentsY) {
+        process->ui_box.size.y = 0.0f;
+      }
+    }
 
     { // adjust parent size if fitting contents
       if (*parent_process) {
@@ -323,8 +333,8 @@ function Process *ui_decl_init(
     if ((*parent_process)) {
       box_rect = (Rectangle){(*parent_process)->position.x,
                              (*parent_process)->position.y,
-                             process->ui_box.size.x,
-                             process->ui_box.size.y};
+                             (*parent_process)->ui_box.size.x,
+                             (*parent_process)->ui_box.size.y};
     }
     else {
       box_rect = (Rectangle){0};
@@ -513,6 +523,8 @@ function void ui_decl_next(
 
 
 
+
+
 Define_Keybind_And_Action(
   Do_Elements, Ui,
   Keybind_Behavior_Overwrite, OnlyOnce,
@@ -524,59 +536,71 @@ Define_Keybind_And_Action(
   View *v = env->view;
 
   if (c && v && v->kind == View_Kind_Ui) {
+    Render_Context *rc = &c->ui_render_context;
     Process *parent_process = 0;
     B32 mouse_pressed = Get_Flag(c->ui_state.flags, Ui_State_Flag_mouse0_pressed);
 
     Vector2 padding = global_button_padding;
     F32 menu_button_y_offset = global_panel_font_size + 2.0f*padding.y;
 
-    D(c, v, root) {
-      D(c, v, top_menu_box) {
-        D(c, v, file_menu_button) {
-          Ui_Push_Offset_Y(file_menu_button, file_menu_button->ui_box.layout_offset.y + menu_button_y_offset);
-          {
-            D(c, v, open_file_button);
-            D(c, v, save_file_button);
-            D(c, v, save_as_file_button);
-          }
-          Ui_Pop_Offset_Y(file_menu_button);
+    D(c, v, top_menu_box) {
+      Rectangle r = v->screen_region;
+      render_command *command = render_DrawRectangle(rc, r.x, r.y, r.width, r.height, v->color);
+      D(c, v, file_menu_button) {
+        Ui_Push_Offset_Y(file_menu_button, file_menu_button->ui_box.layout_offset.y + menu_button_y_offset);
+        {
+          D(c, v, open_file_button);
+          D(c, v, save_file_button);
+          D(c, v, save_as_file_button);
         }
-        D(c, v, edit_menu_button) {
-          Ui_Push_Offset_Y(edit_menu_button, edit_menu_button->ui_box.layout_offset.y + menu_button_y_offset);
-          {
-            D(c, v, copy_button);
-            D(c, v, paste_button);
-          }
-          Ui_Pop_Offset_Y(edit_menu_button);
+        Ui_Pop_Offset_Y(file_menu_button);
+      }
+      D(c, v, edit_menu_button) {
+        Ui_Push_Offset_Y(edit_menu_button, edit_menu_button->ui_box.layout_offset.y + menu_button_y_offset);
+        {
+          D(c, v, copy_button);
+          D(c, v, paste_button);
         }
+        Ui_Pop_Offset_Y(edit_menu_button);
+      }
+
+      { // retroactively resize view background for top_menu_box
+        v->screen_region = (Rectangle){
+          top_menu_box->position.x,
+          top_menu_box->position.y,
+          global_window_size.x,
+          top_menu_box->ui_box.size.y};
+        command->Width = v->screen_region.width;
+        command->Height = v->screen_region.height;
+      }
+
 
 #if 1
-        D(c, v, open_file_box) {
-          Ui_Push_Offset(open_file_box, Vector2Scale(global_window_size, 0.5f));
-          {
-            D(c, v, open_file_label);
-            D(c, v, open_file_confirm_box) {
-              top_menu_box->ui_box.layout_offset =
-                open_file_box->ui_box.layout_offset;
-              D(c, v, open_button);
-              D(c, v, cancel_button);
-            }
-          }
-          Ui_Pop_Offset(open_file_box);
-        }
-#endif
+      D(c, v, open_file_box) {
+        Ui_Push_Offset(open_file_box, Vector2Scale(global_window_size, 0.5f));
         {
-          D(c, v, save_file_as_box) {
-            Ui_Push_Offset(save_file_as_box, Vector2Scale(global_window_size, 0.5f));
-            if (save_file_as_box) {
-              save_file_as_box->position = save_file_as_box->ui_box.layout_offset;
-            }
-            {
-              D(c, v, save_file_as_text_input);
-              D(c, v, save_button);
-            }
-            Ui_Pop_Offset(save_file_as_box);
+          D(c, v, open_file_label);
+          D(c, v, open_file_confirm_box) {
+            top_menu_box->ui_box.layout_offset =
+              open_file_box->ui_box.layout_offset;
+            D(c, v, open_button);
+            D(c, v, cancel_button);
           }
+        }
+        Ui_Pop_Offset(open_file_box);
+      }
+#endif
+      {
+        D(c, v, save_file_as_box) {
+          Ui_Push_Offset(save_file_as_box, Vector2Scale(global_window_size, 0.5f));
+          if (save_file_as_box) {
+            save_file_as_box->position = save_file_as_box->ui_box.layout_offset;
+          }
+          {
+            D(c, v, save_file_as_text_input);
+            D(c, v, save_button);
+          }
+          Ui_Pop_Offset(save_file_as_box);
         }
       }
     }
@@ -589,8 +613,9 @@ Define_Keybind_And_Action(
         top_menu_box->ref = 0;
       }
     }
-#undef D
   }
 
   return handled;
 }
+
+#undef D

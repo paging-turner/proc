@@ -2544,7 +2544,6 @@ function void create_keybind_array(Context *context) {
 
 
 
-
 //////////////////////////////////////////
 // Main
 //////////////////////////////////////////
@@ -2650,7 +2649,7 @@ int main(void) {
         menu_view->screen_region.width = global_window_size.x;
         menu_view->screen_region.height = menu_height;
         menu_view->do_undo.trie = proc_trie_create_trie(menu_view->do_undo.arena);
-        menu_view->color = (Color){30, 50, 30, 255};
+        menu_view->color = (Color){50, 55, 50, 255};
         SLLQueuePush(root_view->first, root_view->last, menu_view);
 
         // canvas view
@@ -2731,12 +2730,6 @@ int main(void) {
         }
       }
 
-      /* // handle ui */
-      /* { */
-      /*   // TODO: handle ui elements  */
-      /*   do_ui_elements(&context); */
-      /* } */
-
       if (!Get_Flag(context.ui_state.flags, Ui_State_Flag_action_occured)) {
         // environment
         Process_Selection selection = (Process_Selection){0};
@@ -2803,11 +2796,6 @@ int main(void) {
 
           Process *processes_to_draw = stack->view->processes.first;
           F32 font_size = stack->view->camera.zoom * global_process_font_size;
-
-          if (stack->view->color.a > 0) {
-            Rectangle r = stack->view->screen_region;
-            render_DrawRectangle(rc, r.x, r.y, r.width, r.height, stack->view->color);
-          }
 
           // @Speed
           // draw lines
