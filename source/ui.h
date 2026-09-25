@@ -528,14 +528,14 @@ function void ui_decl_next(
 Define_Keybind_And_Action(
   Do_Elements, Ui,
   Keybind_Behavior_Overwrite, OnlyOnce,
-  0, 0, 0,
+  0, 0, 0, View_Kind_Flag_Ui,
   "Do the UI."
   ) {
   B32 handled = 0;
   Context *c = env->context;
   View *v = env->view;
 
-  if (c && v && v->kind == View_Kind_Ui) {
+  if (c && v) {
     Render_Context *rc = &c->ui_render_context;
     Process *parent_process = 0;
     B32 mouse_pressed = Get_Flag(c->ui_state.flags, Ui_State_Flag_mouse0_pressed);

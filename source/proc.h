@@ -53,7 +53,7 @@ typedef enum Ui_Box_Kind {
 } Ui_Box_Kind;
 
 typedef enum {
-  Ui_Box_Flag_Clip           = (1 << 0),
+  Ui_Box_Flag_Clip           = (1 << 0), // TODO: does this flag conflict with the View's clip flag?
   Ui_Box_Flag_ScrollY        = (1 << 1),
   Ui_Box_Flag_Stretch        = (1 << 2),
   Ui_Box_Flag_OnlyOneActive  = (1 << 3),
@@ -298,12 +298,6 @@ typedef struct Process_Edit_List {
   Process_Edit *last;
 } Process_Edit_List;
 
-enum Keybind_Result {
-  Keybind_Result__Null,
-  Keybind_Result_Enter,
-  Keybind_Result_Exit,
-};
-
 typedef struct Keybind_Environment Keybind_Environment;
 
 typedef enum Process_Connection Process_Connection;
@@ -317,27 +311,18 @@ function              void clear_process_list(Context *context, Process_List *li
 function              void clear_active_process_list(Process_List *list);
 function              void clear_active_processes(Context *context, View *view);
 
-function              void clear_ds_view_process_list(Context *context);
 function          Process *push_permanent_process(Context *context);
-function          Process *create_detached_process(Context *context);
 function          Process *create_process(Context *context, View *view);
-function     String_Chunk *create_string_chunk(Context *context);
-function String_Chunk_List string_chunk_list_from_string8(Context *context, String8 string8);
 function         V2_Chunk *create_v2_chunk(Context *context);
-function              void free_v2_chunk(Context *context, V2_Chunk *chunk);
-function          Vector2 *get_fresh_v2_from_v2_chunk(Context *context, V2_Chunk *chunk);
-function               S32 collect_save_files(Context *context);
 function               B32 rectangle_contains_point(Rectangle r, Vector2 p);
 function           Vector2 get_wire_position_from_wire(Context *context, View *view, Process *wire, Process_Shape shape, Process_Connection conn);
 function          Process *get_wire_from_selection(Context *context, View *view, Process_Selection selection);
 function     Process_Shape get_process_shape(Context *context, View *view, Process *p);
-function           Vector2 get_process_size(Context *context, Process *p, Process_Shape shape);
 function         Rectangle get_selection_rectangle(Context *context);
 function           Vector2 get_process_position(Context *context, View *view, Process *process);
 function Process_Selection get_process_selection(Context *context, View *view, Process *p);
 function               B32 is_active_process(Context *context, View *view, Process *p);
 function              void remove_process_from_active_processes(Context *context, View *view, Process *p);
-function    Keybind_Result check_keybind(Keybind_Environment *keybind_env);
 function              void exit_add_wire_mode(Context *context, View *view);
 
 function  Editable_Process get_editable_process(Process_Edit_List edit_list, Process *p);
@@ -346,23 +331,17 @@ function               B32 add_process_to_process_edit_list(Context *context, Vi
 function              void delete_process(Context *context, View *view, Process *p, U32 which_conn_flags);
 
 function              void copy_active_processes(Context *context, View *view);
-
 function              void paste_processes(Context *context, View *view);
 
 function              void gather_processes_from_trie(Context *context, View *view);
 
-function              void remove_process_from_process_list(Context *context, Process_List *list, Process *p);
-function          Process *connect_detached_processes(Context *context, Process *out, Process *in);
 function Connection_Result connect_processes_no_gather(Context *context, View *view, Process *out, Process *in);
 function Connection_Result connect_processes(Context *context, View *view, Process *out, Process *in);
-function              void delete_wire(Context *context, Process *wire, Process_Connection_Flag conn_flags);
 function              void add_wire_connection(Context *context, View *view, Process *wire, Process *process, Process_Connection conn, U32 which_conn);
 function              void handle_label_editing(Context *context, View *view, Process_List ps);
-function          Process *find_process_connection(Context *context, View *view, Process *p, Process_Connection conn, U32 which_conn);
 
 function              void set_save_file_as_as_active_element(Context *context, View *view, Process *element);
 function              void handle_copy(Context *context, View *view, Process *element);
-
 function              void handle_paste(Context *context, View *view, Process *element);
 
 
@@ -518,14 +497,25 @@ struct Process_Do_Undo {
 
 
 
+#define View_Kind_Xlist(X)\
+  X(Procs)\
+  X(Ui)\
+  X(Trie)
 
 typedef enum View_Kind {
-  View_Kind__Null,
-  View_Kind_Procs,
-  View_Kind_Ui,
-  View_Kind_Trie,
+#define X(n)\
+  View_Kind_##n,
+  View_Kind_Xlist(X)
+#undef X
   View_Kind__Count,
 } View_Kind;
+
+typedef enum View_Kind_Flag {
+#define X(n)\
+  View_Kind_Flag_##n = (1 << (View_Kind_##n)),
+  View_Kind_Xlist(X)
+#undef X
+} View_Kind_Flag;
 
 typedef enum View_Layout {
   View_Layout__Null,
@@ -537,10 +527,11 @@ typedef enum View_Flag {
   View_Flag_Active   = 1 << 0,
   View_Flag_Panning  = 1 << 1,
   View_Flag_Editable = 1 << 2,
+  View_Flag_Clip = 1 << 3, // TODO: does this clip conflict with Process' clip flag?
 } View_Flag;
 
 struct View {
-  View_Kind kind;
+  View_Kind_Flag kind_flags;
   U32 flags;
   Rectangle screen_region;
   Camera2D camera;

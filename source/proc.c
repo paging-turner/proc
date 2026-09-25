@@ -2246,8 +2246,7 @@ function B32 process_shape_contains_point(
 
 
 
-function Process_Selection
-get_process_selection(Context *context, View *view, Process *p) {
+function Process_Selection get_process_selection(Context *context, View *view, Process *p) {
   Ui_State *ui_state = &context->ui_state;
   Process_Selection selection = {0};
   selection.index = -1;
@@ -2645,7 +2644,7 @@ int main(void) {
         F32 menu_height = global_panel_font_size;
         // menu view
         Set_Flag(menu_view->flags, View_Flag_Active);
-        menu_view->kind = View_Kind_Ui;
+        Set_Flag(menu_view->kind_flags, View_Kind_Flag_Ui);
         menu_view->screen_region.width = global_window_size.x;
         menu_view->screen_region.height = menu_height;
         menu_view->do_undo.trie = proc_trie_create_trie(menu_view->do_undo.arena);
@@ -2654,7 +2653,7 @@ int main(void) {
 
         // canvas view
         Set_Flag(canvas_view->flags, View_Flag_Active|View_Flag_Panning|View_Flag_Editable);
-        canvas_view->kind = View_Kind_Procs;
+        Set_Flag(canvas_view->kind_flags, View_Kind_Flag_Procs);
         canvas_view->screen_region.y = menu_height;
         canvas_view->screen_region.width = global_window_size.x;
         canvas_view->screen_region.height = global_window_size.y - menu_height;
@@ -2786,7 +2785,8 @@ int main(void) {
         B32 rounded = Get_Flag(context.flags, Context_Flag_RoundedShapes);
 
         View_Iterate(stack, &context) {
-          {
+          B32 should_clip = Get_Flag(stack->view->flags, View_Flag_Clip);
+          if (should_clip) {
             Vector2 position = (Vector2){stack->view->screen_region.x,
                                          stack->view->screen_region.y};
             Vector2 size = (Vector2){stack->view->screen_region.width,
@@ -3020,7 +3020,9 @@ int main(void) {
             render_DrawLineBezierCubic(rc, position, context.ui_state.mouse_position, from_control, to_control, thickness, stroke_color, 0);
           }
 
-          render_EndScissorMode(rc);
+          if (should_clip) {
+            render_EndScissorMode(rc);
+          }
         }
 
         // draw selection rectangle
