@@ -259,7 +259,7 @@ function B32 add_process_to_process_edit_list(
     }
 
     if (found_proc_edit == 0) {
-      found_proc_edit = arena_push(context->temp_arena, sizeof(Process_Edit));
+      found_proc_edit = arena_push(context->per_frame_arena, sizeof(Process_Edit));
       SLLQueuePush(view->do_undo.edit_list.first, view->do_undo.edit_list.last, found_proc_edit);
     }
 
@@ -1237,7 +1237,7 @@ function S32 collect_save_files(Context *context) {
 
 function void save_file(Context *context, View *view, Process *element) {
   if (context->save_file_name) {
-    write_save_file(context, view, context->temp_arena, context->save_file_name);
+    write_save_file(context, view, context->per_frame_arena, context->save_file_name);
   }
 }
 
@@ -1927,7 +1927,7 @@ function Bezier_Points get_wire_bezier_points(
         }
 
         // TODO: this will need to eventually handle arbitrary inner-positions
-        Vector2 *points = push_array(context->temp_arena, Vector2, 3);
+        Vector2 *points = push_array(context->per_frame_arena, Vector2, 3);
         if (points) {
           result.controls.point_count = 3;
           result.controls.points = points;
@@ -1937,7 +1937,7 @@ function Bezier_Points get_wire_bezier_points(
         }
       }
       else {
-        Vector2 *points = push_array(context->temp_arena, Vector2, 2);
+        Vector2 *points = push_array(context->per_frame_arena, Vector2, 2);
         if (points) {
           result.controls.point_count = 2;
           result.controls.points = points;
@@ -1950,7 +1950,7 @@ function Bezier_Points get_wire_bezier_points(
 
   if (result.controls.point_count >= 2) {
     U32 bez_curve_count = result.controls.point_count-1;
-    Buffer_V2 *inner_bez_buffers = push_array(context->temp_arena, Buffer_V2, bez_curve_count);
+    Buffer_V2 *inner_bez_buffers = push_array(context->per_frame_arena, Buffer_V2, bez_curve_count);
     U32 total_bez_points = 0;
 
     if (inner_bez_buffers) {
@@ -2019,11 +2019,11 @@ function Process_Shape get_process_shape(
   ) {
   // TODO: process wire shapes, so that we can make wires hot by hovering
   Process_Shape shape = {0};
-  U64 arena_pop_pos = arena_current_pos(context->temp_arena);
+  U64 arena_pop_pos = arena_current_pos(context->per_frame_arena);
   if (p == 0) goto error;
 
   F32 font_size = view->camera.zoom * global_process_font_size;
-  String8 string = piece_table_get_string(context->temp_arena, p->label);
+  String8 string = piece_table_get_string(context->per_frame_arena, p->label);
   U8 *label_c_string = string.str;
   S32 text_width = MeasureText((char *)label_c_string, font_size);
 
@@ -2157,7 +2157,7 @@ function Process_Shape get_process_shape(
   }
 
 error:;
-  arena_pop_to(context->temp_arena, arena_pop_pos);
+  arena_pop_to(context->per_frame_arena, arena_pop_pos);
 
   return shape;
 }
@@ -2394,9 +2394,6 @@ function S32 debug_process_active_list_count(Process_List list) {
 
 
 
-#define    Context_Render_Arena_Size   Megabytes(10)
-#define Context_Permanent_Arena_Size   Megabytes(100)
-#define      Context_Temp_Arena_Size   Megabytes(10)
 
 
 
@@ -2563,11 +2560,11 @@ int main(void) {
     }
 
     { // init context
-      context.render_arena    = arena_alloc_reserve(Context_Render_Arena_Size, 0);
-      context.permanent_arena = arena_alloc_reserve(Context_Permanent_Arena_Size, 0);
+      context.render_arena    = arena_alloc_reserve(Megabytes(10), 0);
+      context.permanent_arena = arena_alloc_reserve(Megabytes(100), 0);
       context.ui_arena        = arena_alloc_reserve(Megabytes(1), 0);
-      context.temp_arena      = arena_alloc_reserve(Context_Temp_Arena_Size, 0);
-      context.per_frame_arena = arena_alloc_reserve(Context_Temp_Arena_Size, 0);
+      /* context.temp_arena      = arena_alloc_reserve(Megabytes(10), 0); */
+      context.per_frame_arena = arena_alloc_reserve(Megabytes(10), 0);
 
       context.ui_render_context.arena = context.render_arena;
       context.process_render_context.arena = context.render_arena;
@@ -2618,10 +2615,6 @@ int main(void) {
       global_container_bg_color = (Color){170, 170, 170, 255};
       global_process_bg_color = (Color){190, 190, 199, 255};
 
-
-
-
-
       // init common filepaths
 #if OS_WINDOWS
 # define _ "\\"
@@ -2668,7 +2661,7 @@ int main(void) {
 
     { // misc. init
       SetWindowSize(global_window_size.x, global_window_size.y);
-      render_Initialize(context.temp_arena);
+      render_Initialize(context.per_frame_arena);
       set_global_window_render_size();
       cpu_freq = ryn_EstimateCpuFrequency(100);
     }
@@ -2817,7 +2810,7 @@ int main(void) {
             B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
 
             // @Copypasta decl_ui_init
-            String8 label_string = piece_table_get_string(context.temp_arena, p->label);
+            String8 label_string = piece_table_get_string(context.per_frame_arena, p->label);
             if (label_string.str == 0 || label_string.size == 0) {
               if (p->label_c_string) {
                 label_string = str8_lit(p->label_c_string);
@@ -2827,7 +2820,7 @@ int main(void) {
             S32 cursor_offset = 0;
             if (p->label_cursor) {
               // @Speed: It's silly to copy this string just to measure where the cursor needs to be.......
-              String8 label_cursor_string = str8_push_copy(context.temp_arena, label_string);
+              String8 label_cursor_string = str8_push_copy(context.per_frame_arena, label_string);
               Assert_If(p->label_cursor <= label_cursor_string.size) {
                 printf("[ Error ] Process(%p) label-cursor (%d) greater than label-cursor-string size (%llu).\n", p, p->label_cursor, label_cursor_string.size);
                 p->label_cursor = label_cursor_string.size;
@@ -3059,7 +3052,6 @@ int main(void) {
           Debug_Draw_Arena_Info(render_arena);
           Debug_Draw_Arena_Info(permanent_arena);
           Debug_Draw_Arena_Info(ui_arena);
-          Debug_Draw_Arena_Info(temp_arena);
           Debug_Draw_Arena_Info(per_frame_arena);
 #undef Debug_Draw_Arena_Info
         }
@@ -3082,10 +3074,8 @@ int main(void) {
     //////////////////////////////////////////
     ryn_EndAndPrintProfile(cpu_freq);
     // clear profile timers
-    for(uint32_t TimerIndex = 0; TimerIndex < SymbolCount(ryn_sym_timer); ++TimerIndex)
-    {
+    for(uint32_t TimerIndex = 0; TimerIndex < SymbolCount(ryn_sym_timer); ++TimerIndex) {
       ryn_timer_data *Timer = SymbolMetadataFromID(ryn_sym_timer, TimerIndex+1);
-
       Timer->ElapsedExclusive = 0;
       Timer->ElapsedInclusive = 0;
       Timer->HitCount = 0;
@@ -3097,7 +3087,6 @@ int main(void) {
     //////////////////////////////////////////
     {
       arena_pop_to(context.render_arena, 0);
-      arena_pop_to(context.temp_arena, 0);
       arena_pop_to(context.per_frame_arena, 0);
       context.ui_render_context.command_list.first = 0;
       context.ui_render_context.command_list.last = 0;

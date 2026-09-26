@@ -375,7 +375,7 @@ function void debug_print_piece_table(Piece_Table *table) {
 
 
 function void debug_print_piece_table_range(Context *context, Piece_Table *table) {
-  String8 string = piece_table_get_string(context->temp_arena, table);
+  String8 string = piece_table_get_string(context->per_frame_arena, table);
   printf("%s\n", string.str);
 }
 

@@ -563,7 +563,6 @@ struct Context {
   Arena *render_arena;
   Arena *permanent_arena;
   Arena *ui_arena;
-  Arena *temp_arena;
   Arena *per_frame_arena;
 
   Keybind *keybinds;
