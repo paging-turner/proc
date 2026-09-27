@@ -83,6 +83,7 @@ struct Keybind_Environment {
   Process *p;
   Process *moved_wire;
   Process_Connection moved_wire_conn;
+  Keybind_Result kb_res;
 };
 
 
@@ -249,8 +250,9 @@ function Keybind_Environment create_keybind_environment(
   (Check_Keybind((env)) == Keybind_Result_##_kb_res)
 
 #define Keybind_Modifier_Matches(kb, _mod_name, _ui_flag_name)\
-  !(Get_Flag_Bool((kb)->modifiers, Modifier_Key_##_mod_name) ^\
-    Get_Flag_Bool(ui_state->flags, Ui_State_Flag_##_ui_flag_name))
+  (((kb)->modifiers == 0) ||\
+   (!(Get_Flag_Bool((kb)->modifiers, Modifier_Key_##_mod_name) ^\
+      Get_Flag_Bool(ui_state->modifier_flags, Ui_State_Modifier_Flag_##_ui_flag_name))))
 
 #define Keybind_Constraint_Holds(kb, _con_name, con_expr)\
   (Get_Flag((kb)->constraint, Ui_Constraint_##_con_name)\
@@ -368,6 +370,19 @@ function Keybind_Result check_keybind(Keybind_Environment *env) {
 
 
 
+
+
+function void keybind_handle(Keybind_Environment *env, Keybind *keybind) {
+  Context *context = env->context;
+  View *view = env->view;
+  if (context && view) {
+    Keybind_Result kb_res = check_keybind(env);
+    if (kb_res) {
+      env->kb_res = kb_res;
+      keybind->handle(env);
+    }
+  }
+}
 
 
 
@@ -681,7 +696,7 @@ Define_Keybind_And_Action(
           env->keybind = keybind;
 
           if (keybind->for_all_processes) {
-            keybind->handle(env);
+            keybind_handle(env, keybind);
           }
         }
       }

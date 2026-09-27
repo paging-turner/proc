@@ -434,23 +434,27 @@ typedef enum {
 
 
 typedef enum {
+  Ui_State_Modifier_Flag_control_down    = 1 << 0,
+  Ui_State_Modifier_Flag_shift_down      = 1 << 1,
+  Ui_State_Modifier_Flag_alt_down        = 1 << 2,
+  Ui_State_Modifier_Flag_super_down      = 1 << 3,
+} Ui_State_Modifier_Flag;
+
+typedef enum {
   Ui_State_Flag_mouse0_pressed  = 1 << 0,
   Ui_State_Flag_mouse1_pressed  = 1 << 1,
   Ui_State_Flag_mouse0_down     = 1 << 2,
   Ui_State_Flag_mouse1_down     = 1 << 3,
   Ui_State_Flag_hot_id_assigned = 1 << 4,
-  Ui_State_Flag_control_down    = 1 << 5,
-  Ui_State_Flag_shift_down      = 1 << 6,
-  Ui_State_Flag_alt_down        = 1 << 7,
-  Ui_State_Flag_super_down      = 1 << 8,
-  Ui_State_Flag_action_occured  = 1 << 9,
+  Ui_State_Flag_action_occured  = 1 << 5,
 } Ui_State_Flag;
 
 typedef struct {
   F32 frame_delta;
   F32 last_frame_time;
 
-  U32 flags;
+  Ui_State_Flag flags;
+  Ui_State_Modifier_Flag modifier_flags;
   U32 kb_action;
 
   Vector2 mouse_position;

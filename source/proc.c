@@ -2705,10 +2705,12 @@ int main(void) {
         Assign_Flag(ui_state->flags, Ui_State_Flag_mouse0_down, IsMouseButtonDown(0));
         Assign_Flag(ui_state->flags, Ui_State_Flag_mouse1_down, IsMouseButtonDown(1));
         Unset_Flag(ui_state->flags, Ui_State_Flag_hot_id_assigned);
-        Assign_Flag(ui_state->flags, Ui_State_Flag_control_down, IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL));
-        Assign_Flag(ui_state->flags, Ui_State_Flag_shift_down, IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT));
-        Assign_Flag(ui_state->flags, Ui_State_Flag_alt_down, IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT));
-        Assign_Flag(ui_state->flags, Ui_State_Flag_super_down, IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER));
+        {
+          Assign_Flag(ui_state->modifier_flags, Ui_State_Modifier_Flag_control_down, IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL));
+          Assign_Flag(ui_state->modifier_flags, Ui_State_Modifier_Flag_shift_down, IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT));
+          Assign_Flag(ui_state->modifier_flags, Ui_State_Modifier_Flag_alt_down, IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT));
+          Assign_Flag(ui_state->modifier_flags, Ui_State_Modifier_Flag_super_down, IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER));
+        }
         Unset_Flag(ui_state->flags, Ui_State_Flag_action_occured);
       }
 
@@ -2741,7 +2743,7 @@ int main(void) {
               Keybind *keybind = env->context->keybinds + i;
               env->keybind = keybind;
               env->view = stack->view;
-              keybind->handle(env);
+              keybind_handle(env, keybind);
               check_process_list(stack->view->active_processes);
             }
           }
