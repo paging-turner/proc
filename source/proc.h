@@ -1,15 +1,9 @@
-//////////////////////////////////////
-// Forward Declarations
-//////////////////////////////////////
-typedef struct Piece_Table Piece_Table;
-typedef struct Piece_Table_Memory Piece_Table_Memory;
 typedef struct Piece_Table_Row Piece_Table_Row;
 typedef struct Piece_Table_Chunk Piece_Table_Chunk;
-struct Piece_Table_Memory {
+typedef struct Piece_Table_Memory {
   Piece_Table_Row *free_rows;
   Piece_Table_Chunk *free_chunks;
-};
-
+} Piece_Table_Memory;
 
 
 
@@ -90,38 +84,6 @@ typedef struct {
 
 
 
-#define Process_Connection_Xlist\
-  X(In, 0) X(Out, 1)
-
-#define Process_Branch_Xlist\
-  X(Child, 0) X(Sibling, 1)
-
-enum Process_Connection {
-#define X(conn, ...)\
-  Process_Connection_##conn,
-  Process_Connection_Xlist
-#undef X
-  Process_Connection__Count,
-};
-
-enum Process_Connection_Flag {
-#define X(conn, i)\
-  Process_Connection_Flag_##conn = (1 << i),
-  Process_Connection_Xlist
-#undef X
-};
-
-typedef enum Process_Branch {
-#define X(conn, ...)\
-  Process_Branch_##conn,
-  Process_Branch_Xlist
-#undef X
-  Process_Branch__Count,
-} Process_Branch;
-
-StaticAssert((U32)Process_Connection__Count == (U32)Process_Branch__Count,
-             process_connection_and_process_branch_index_the_same_pointers_in_process_struct);
-
 typedef struct Process Process;
 typedef struct Context Context;
 typedef struct View View;
@@ -169,92 +131,11 @@ typedef enum {
 } Process_Flag;
 
 
-struct Process {
-  //////////////
-  // Members that need to be saved when serializing.
-  //////////////
-  B32 flags;
-  U64 gen_id;
-  Vector2 position;
-
-  V2_Chunk *inner_positions; // NOTE: used for extra points in a wire's curve
-
-  Piece_Table *label;
-
-  union {
-    struct {
-      Process *in;
-      Process *out;
-    };
-    Process *conn[Process_Connection__Count]; // NOTE: also indexed by Process_Branch
-  };
-
-  union {
-    struct {
-      U32 which_in;
-      U32 which_out;
-    };
-    U32 which_conn[Process_Connection__Count];
-  };
-
-  //////////////
-  // Members that are "ephemeral", which can be constructed from serialized members.
-  //     or it's for UI...
-  //////////////
-  union {
-    struct {
-      S32 in_count;
-      S32 out_count;
-    };
-    S32 conn_count[Process_Connection__Count];
-  };
-
-  void (*func)(Context*, View*, Process*); // TODO: What do we do about this func? It's only used for UI elements, so maybe we should stop using Processes as UI elements and give up on the idea of process-ui?
-
-  Vector2 margin;
-  Ui_Box ui_box;
-
-  Process *to_copied;
-
-  Process *next;
-  Process *next_active;
-  Process *parent;
-
-  U8 *label_c_string;
-  U32 label_cursor;
-
-  Ref_Kind ref_kind;
-  void *ref;
-
-  U64 cold_id;
-};
 
 
+#include "../source/core.h" // TODO: move this
 
 
-
-// Process Trie
-#define Use_Gen_Id_For_Trie_Key 1
-#define Proc_Trie_Key_Bits               64
-#define Proc_Trie_Slot_Bits              2
-#if Use_Gen_Id_For_Trie_Key
-# define Proc_Trie_Use_Key_Value_Pair    1
-#else
-# define Proc_Trie_Use_Key_Value_Pair    0
-#endif
-#define Steady_Trie_Use_Key_Value_Pair  Proc_Trie_Use_Key_Value_Pair
-#define Steady_Trie(ident)               Proc_Trie_##ident
-#define steady_trie(ident)               proc_trie_##ident
-#define Steady_Trie_Root_Is_Least_Significant_Byte 1
-#define Steady_Trie_Value_Type           Process
-Process global_default_steady_trie_process;
-#define Steady_Trie_Default_Value        (&global_default_steady_trie_process)
-#define Steady_Trie_Use_Debug_Log        0
-#include "../libraries/steady_trie.h"
-#define Proc_Trie_Iterate(iter_name, arena, trie)\
-  for (Proc_Trie_Iterator *iter_name = proc_trie_iter_init(arena, trie->current_root->node);\
-       proc_trie_iter_test(iter_name);\
-       proc_trie_iter_next(iter_name))
 
 
 typedef enum {
@@ -276,43 +157,16 @@ struct Process_Selection {
 
 typedef struct Process_Shape Process_Shape;
 typedef struct Process_Selection Process_Selection;
-typedef struct Process_List Process_List;
 typedef struct Process_Ref Process_Ref;
-typedef struct Process_Do_Undo Process_Do_Undo;
-
-typedef struct Editable_Process {
-  B32 is_being_edited;
-  Process process;
-} Editable_Process;
-
-typedef struct Process_Edit {
-  Proc_Trie_Edit_Kind kind;
-  Process *process;
-  Process new_process;
-  Process *new_process_ptr;
-  struct Process_Edit *next;
-} Process_Edit;
-
-typedef struct Process_Edit_List {
-  Process_Edit *first;
-  Process_Edit *last;
-} Process_Edit_List;
 
 typedef struct Keybind_Environment Keybind_Environment;
 
-typedef enum Process_Connection Process_Connection;
-typedef enum Process_Connection_Flag Process_Connection_Flag;
-typedef struct Connection_Result Connection_Result;
 typedef enum Keybind_Result Keybind_Result;
-typedef enum Process_Do_Undo_Kind Process_Do_Undo_Kind;
-typedef enum Process_Do_Undo_Kind_Flag Process_Do_Undo_Kind_Flag;
+typedef enum Process_Do_Undo_Kind Process_Do_Undo_Kind; // TODO: delete?
+typedef enum Process_Do_Undo_Kind_Flag Process_Do_Undo_Kind_Flag; // TODO: delete?
 typedef struct Keybind Keybind;
-function              void clear_process_list(Context *context, Process_List *list);
-function              void clear_active_process_list(Process_List *list);
-function              void clear_active_processes(Context *context, View *view);
 
-function          Process *push_permanent_process(Context *context);
-function          Process *create_process(Context *context, View *view);
+
 function         V2_Chunk *create_v2_chunk(Context *context);
 function               B32 rectangle_contains_point(Rectangle r, Vector2 p);
 function           Vector2 get_wire_position_from_wire(Context *context, View *view, Process *wire, Process_Shape shape, Process_Connection conn);
@@ -325,19 +179,12 @@ function               B32 is_active_process(Context *context, View *view, Proce
 function              void remove_process_from_active_processes(Context *context, View *view, Process *p);
 function              void exit_add_wire_mode(Context *context, View *view);
 
-function  Editable_Process get_editable_process(Process_Edit_List edit_list, Process *p);
 
-function               B32 add_process_to_process_edit_list(Context *context, View *view, Process *p, Proc_Trie_Edit_Kind edit_kind, Process new_process);
-function              void delete_process(Context *context, View *view, Process *p, U32 which_conn_flags);
 
 function              void copy_active_processes(Context *context, View *view);
 function              void paste_processes(Context *context, View *view);
 
-function              void gather_processes_from_trie(Context *context, View *view);
 
-function Connection_Result connect_processes_no_gather(Context *context, View *view, Process *out, Process *in);
-function Connection_Result connect_processes(Context *context, View *view, Process *out, Process *in);
-function              void add_wire_connection(Context *context, View *view, Process *wire, Process *process, Process_Connection conn, U32 which_conn);
 function              void handle_label_editing(Context *context, View *view, Process_List ps);
 
 function              void set_save_file_as_as_active_element(Context *context, View *view, Process *element);
@@ -347,13 +194,6 @@ function              void handle_paste(Context *context, View *view, Process *e
 
 
 
-
-
-struct Connection_Result {
-  Process *out;
-  Process *in;
-  Process *new_wire;
-};
 
 
 
@@ -366,11 +206,6 @@ struct Process_Ref {
 
 
 
-
-struct Process_List {
-  Process *first;
-  Process *last;
-};
 
 typedef struct {
   Vector2 first_point;
@@ -470,36 +305,6 @@ typedef struct {
 
 
 
-#define Process_Do_Undo_Kind_Xlist(X)\
-  X(Proc) X(Ui)
-
-enum Process_Do_Undo_Kind {
-  Process_Do_Undo_Kind__Null,
-#define X(kind)\
-  Process_Do_Undo_Kind_##kind,
-  Process_Do_Undo_Kind_Xlist(X)
-#undef X
-  Process_Do_Undo_Kind__Count,
-};
-
-#define Process_Do_Undo_Kind_Flag_From_Kind(kind)\
-  (((kind) > 0 && (kind) < Process_Do_Undo_Kind__Count) ? (1<<(kind)) : 0)
-
-enum Process_Do_Undo_Kind_Flag {
-#define X(kind)\
-  Process_Do_Undo_Kind_Flag_##kind = (1 << Process_Do_Undo_Kind_##kind),
-  Process_Do_Undo_Kind_Xlist(X)
-#undef X
-};
-
-struct Process_Do_Undo {
-  Proc_Trie_Trie *trie;
-  Process_Edit_List edit_list;
-  Arena *arena;
-};
-
-
-
 
 #define View_Kind_Xlist(X)\
   X(Procs)\
@@ -564,6 +369,7 @@ typedef struct Process_Loc {
 
 
 struct Context {
+  WhatIsThis what_is_this; // TODO: use this instead?
   Arena *render_arena;
   Arena *permanent_arena;
   Arena *ui_arena;
@@ -656,28 +462,6 @@ function void view_iter_next(Context *context, View_Stack **stack) {
 
 
 
-////////////////////////
-// Shared Globals
-////////////////////////
-global_variable Process global_null_process;
-#define The_Null_Process() (global_null_process=(Process){0}, &global_null_process)
 
 
 
-////////////////////////
-// Helper Macros
-////////////////////////
-#define List_For_N(t, n, i, next)\
-  for (t n = (i); n != 0; n = n->next)
-
-#define List_For(t, n, i)\
-  List_For_N(t, n, i, next)
-
-#define Robust_Assertions 1
-
-// NOTE: It's a little confusing that we do the if on the negation... maybe there's a better way to word this construct.
-#if Robust_Assertions
-# define Assert_If(exp)   if(!(exp))
-#else
-# define Assert_If(exp)   Assert(exp);if(0)
-#endif

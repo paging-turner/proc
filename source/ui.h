@@ -16,12 +16,6 @@ global_variable Color global_button_font_color = (Color){220, 220, 160, 255};
 
 
 
-
-
-
-
-
-
 ////////////////////////
 // UI Globals
 ////////////////////////

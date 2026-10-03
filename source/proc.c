@@ -34,7 +34,6 @@ global_variable String8 Saves_Filepath;
 global_variable String8 Build_Filepath;
 
 #include "../source/keybind.h"
-#include "../source/piece_table.h"
 #include "../source/ui.h"
 #include "../source/saves.h"
 
@@ -62,8 +61,6 @@ global_variable F32 global_panel_text_input_min_height;
 global_variable Color global_container_bg_color;
 global_variable Color global_process_bg_color;
 
-global_variable String_Chunk global_null_string_chunk;
-#define The_Null_String_Chunk() (global_null_string_chunk=(String_Chunk){0}, &global_null_string_chunk)
 
 #define Half_Circle_Fudge 1.32f
 #define Half_Circle_Radius_Fudge 1.0f
@@ -80,690 +77,6 @@ global_variable String_Chunk global_null_string_chunk;
 
 
 
-//////////////////////////
-// Debug diagnostics
-//////////////////////////
-function void check_process_list(Process_List list) {
-  Assert(!process_list_has_cycles(list.first));
-  Assert(!process_list_has_cycles(list.last));
-}
-
-
-
-
-
-
-
-
-function B32 rectangle_contains_point(Rectangle r, Vector2 p) {
-  F32 x2 = r.x + r.width;
-  F32 y2 = r.y + r.height;
-  B32 contains = (p.x >= r.x) && (p.y >= r.y) && (p.x <= x2) && (p.y <= y2);
-  return contains;
-}
-
-
-function String_Chunk *create_string_chunk(Context *context) {
-  String_Chunk *c = context->free_strings.first;
-
-  if (c) {
-    SLLQueuePop(context->free_strings.first,context->free_strings.last);
-  } else {
-    c = push_struct(context->permanent_arena, String_Chunk);
-  }
-
-  if (c) {
-    *c = (String_Chunk){0};
-  } else {
-    c = The_Null_String_Chunk();
-  }
-
-  return c;
-}
-
-
-function void free_string_chunk(Context *context, String_Chunk *chunk) {
-  SLLQueuePush(context->free_strings.first, context->free_strings.last, chunk);
-  chunk->next = 0;
-}
-
-
-function String_Chunk_List string_chunk_list_from_string8(Context *context, String8 string8) {
-  String_Chunk_List list = (String_Chunk_List){0};
-
-  U64 remaining_size = string8.size;
-  U64 string8_index = 0;
-
-  for (;;) {
-    if (remaining_size == 0) {
-      break;
-    }
-
-    String_Chunk *chunk = create_string_chunk(context);
-    SLLQueuePush(list.first, list.last, chunk);
-
-    U64 amount_to_write = Min(remaining_size, String_Chunk_Size);
-    remaining_size -= amount_to_write;
-
-    for (S32 i = 0; i < amount_to_write; ++i) {
-      chunk->str_array[i] = string8.str[string8_index];
-      string8_index += 1;
-    }
-  }
-
-  // add null-termination chunk if the last byte is not 0
-  if (list.last && list.last->str_array[String_Chunk_Size-1] != 0) {
-    String_Chunk *chunk = create_string_chunk(context);
-    SLLQueuePush(list.first, list.last, chunk);
-  }
-
-  return list;
-}
-
-
-
-
-
-
-
-function V2_Chunk *create_v2_chunk(Context *context) {
-  V2_Chunk *chunk = context->free_v2_chunks;
-
-  if (chunk) {
-    SLLStackPop(context->free_v2_chunks);
-    *chunk = (V2_Chunk){0};
-  }
-  else {
-    chunk = push_struct(context->permanent_arena, V2_Chunk);
-  }
-
-  return chunk;
-}
-
-
-function void free_v2_chunk(Context *context, V2_Chunk *chunk) {
-  if (chunk) {
-    SLLStackPush(context->free_v2_chunks, chunk);
-  }
-}
-
-
-function Vector2 *get_fresh_v2_from_v2_chunk(Context *context, V2_Chunk *chunk) {
-  Vector2 *result = 0;
-
-  if (chunk) {
-    if (chunk->count >= V2_Chunk_Size) {
-      // TODO: push new chunk
-      V2_Chunk *new_chunk = create_v2_chunk(context);
-      if (new_chunk) {
-        result = new_chunk->e;
-        new_chunk->count = 1;
-      }
-    }
-    else {
-      result = chunk->e + chunk->count;
-      chunk->count += 1;
-    }
-  }
-
-  return result;
-}
-
-
-
-
-
-
-
-// TODO: Rename `process_edit_list_contains_process` now that we return the process-edit itself.
-function Process_Edit *process_edit_list_contains_process(
-  Context *context,
-  Process_Edit_List proc_edit_list,
-  Process *p
-  ) {
-  Process_Edit *result = 0;
-
-  for (Process_Edit *proc_edit = proc_edit_list.first;
-       proc_edit != 0;
-       proc_edit = proc_edit->next) {
-    if (proc_edit->process == p) {
-      result = proc_edit;
-      break;
-    }
-  }
-
-  return result;
-}
-
-
-
-function B32 add_process_to_process_edit_list(
-  Context *context,
-  View *view,
-  Process *p,
-  Proc_Trie_Edit_Kind edit_kind,
-  Process new_process
-  ) {
-  B32 overwritten = 0;
-  Process_Edit *found_proc_edit = 0;
-
-  // ensure that do-undo matches the do-undo of the passed-in process
-  if (view) {
-    for (Process_Edit *proc_edit = view->do_undo.edit_list.first;
-         proc_edit != 0;
-         proc_edit = proc_edit->next) {
-      if (proc_edit->process == p) {
-        found_proc_edit = proc_edit;
-        break;
-      }
-    }
-
-    if (found_proc_edit == 0) {
-      found_proc_edit = arena_push(context->per_frame_arena, sizeof(Process_Edit));
-      SLLQueuePush(view->do_undo.edit_list.first, view->do_undo.edit_list.last, found_proc_edit);
-    }
-
-    // TODO: Overwrite if we are deleting, if we are updating again... then we need to consider that an error or figure out a better way to merge updates.
-    if (found_proc_edit) {
-      if (found_proc_edit->kind != Proc_Trie_Edit_Delete) {
-        found_proc_edit->process = p;
-        found_proc_edit->kind = edit_kind;
-        found_proc_edit->new_process = new_process;
-        overwritten = 1;
-      }
-    }
-  }
-
-  return overwritten;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-function void update_edited_wire_pointers(
-  Context *context,
-  Process_Do_Undo *do_undo,
-  Process_Edit *proc_edit,
-  B32 inserting
-  ) {
-  // update the pointers of the wire if the connected processes have been updated
-  for (Process_Edit *test_edit = do_undo->edit_list.first;
-       test_edit != 0;
-       test_edit = test_edit->next) {
-    if (!Get_Flag(test_edit->process->flags, Process_Flag_Wire)) {
-      if (inserting) {
-        if (proc_edit->process->in == test_edit->process) {
-          proc_edit->process->in = test_edit->new_process_ptr;
-        }
-
-        if (proc_edit->process->out == test_edit->process) {
-          proc_edit->process->out = test_edit->new_process_ptr;
-        }
-      }
-      else {
-        if (proc_edit->new_process.in == test_edit->process) {
-          proc_edit->new_process.in = test_edit->new_process_ptr;
-        }
-
-        if (proc_edit->new_process.out == test_edit->process) {
-          proc_edit->new_process.out = test_edit->new_process_ptr;
-        }
-      }
-    }
-  }
-}
-
-
-
-
-
-function void apply_process_edits_by_kind(
-  Context *context,
-  View *view,
-  B32 handle_wires
-  ) {
-  Assert(handle_wires == 0 || handle_wires == 1);
-  if (context == 0) goto error;
-  Process_Do_Undo *do_undo = &view->do_undo;
-  if (do_undo == 0) goto error;
-  Arena *arena = do_undo->arena;
-  if (arena == 0) goto error;
-
-  // TODO: @Speed
-  for (Process_Edit *proc_edit = do_undo->edit_list.first;
-       proc_edit != 0;
-       proc_edit = proc_edit->next) {
-    B32 is_wire = Get_Flag(proc_edit->process->flags, Process_Flag_Wire) ? 1 : 0;
-    B32 should_edit = !(handle_wires ^ is_wire);
-
-    if (should_edit) {
-      switch(proc_edit->kind) {
-      case Proc_Trie_Edit_Insert: {
-        Assert(proc_edit->process);
-
-        if (is_wire) {
-          update_edited_wire_pointers(context, do_undo, proc_edit, 1);
-        }
-
-#if Use_Gen_Id_For_Trie_Key
-# if Proc_Trie_Use_Key_Value_Pair
-        proc_trie_set(arena, do_undo->trie, proc_edit->process->gen_id, proc_edit->process);
-# else
-        Assert(!"This should not happen.....");
-# endif
-#else
-# if Proc_Trie_Use_Key_Value_Pair
-        Assert(!"This should not happen.....");
-# else
-        proc_trie_insert(arena, do_undo->trie, IntFromPtr(proc_edit->process));
-# endif
-#endif
-      } break;
-      case Proc_Trie_Edit_Delete: {
-#if Use_Gen_Id_For_Trie_Key
-        proc_trie_delete(arena, do_undo->trie, proc_edit->process->gen_id);
-#else
-        proc_trie_delete(arena, do_undo->trie, IntFromPtr(proc_edit->process));
-#endif
-      } break;
-      case Proc_Trie_Edit_Update: {
-        Process *new_p = push_permanent_process(context);
-        if (new_p) {
-          proc_edit->new_process_ptr = new_p;
-
-          if (is_wire) {
-            update_edited_wire_pointers(context, do_undo, proc_edit, 0);
-          }
-          else {
-            // update any non-edited wires connected to proc being updated
-            for (Process *w = view->processes.first; w != 0; w = w->next) {
-              if (Get_Flag(w->flags, Process_Flag_Wire)) {
-                B32 wire_in_edit_list = 0;
-                // TODO: We should be able to call the new `get_editable_process` here, right?
-                Process new_wire_lit = *w;
-                // find current new-wire lit if it exists, and overwrite `new_wire_lit`
-                for (Process_Edit *proc_edit = view->do_undo.edit_list.first;
-                     proc_edit != 0;
-                     proc_edit = proc_edit->next) {
-                  if (proc_edit->process == w) {
-                    wire_in_edit_list = 1;
-                    new_wire_lit = proc_edit->new_process;
-                    break;
-                  }
-                }
-                B32 in_match = w->in == proc_edit->process;
-                B32 out_match = w->out == proc_edit->process;
-
-                if (in_match) {
-                  new_wire_lit.in = proc_edit->new_process_ptr;
-                }
-
-                if (out_match) {
-                  new_wire_lit.out = proc_edit->new_process_ptr;
-                }
-
-                if (!wire_in_edit_list && (in_match || out_match)) {
-                  // TODO: Use `get_editable_process` for new_wire_lit
-                  add_process_to_process_edit_list(context, view, w, Proc_Trie_Edit_Update, new_wire_lit);
-                }
-              }
-            }
-          }
-
-          // copy proc
-          U64 new_gen_id = new_p->gen_id;
-          *new_p = proc_edit->new_process;
-          new_p->gen_id = new_gen_id;
-          // copy proc label
-          if (new_p->label) {
-            B32 error = 0;
-            Piece_Table *new_piece_table = push_struct(context->permanent_arena, Piece_Table);
-            if (new_piece_table) {
-              new_piece_table->text_size = new_p->label->text_size;
-              new_piece_table->insertion_chunk = new_p->label->insertion_chunk;
-              for (Piece_Table_Row *row = new_p->label->first_row;
-                   row != 0;
-                   row = row->next) {
-                Piece_Table_Row *new_row = push_struct(context->permanent_arena, Piece_Table_Row);
-                if (new_row) {
-                  *new_row = *row;
-                  DLLPushBack(new_piece_table->first_row, new_piece_table->last_row, new_row);
-                }
-                else {
-                  printf("[ Error ] Pushing Piece_Table_Row while copying piece-table in `apply_process_edits_by_kind`\n");
-                  new_p->label = 0;
-                  error = 1;
-                  break;
-                }
-              }
-            }
-            else {
-              printf("[ Error ] Pushing Piece_Table while copying piece-table in `apply_process_edits_by_kind`\n");
-            }
-
-            if (!error) {
-              new_p->label = new_piece_table;
-            }
-          }
-
-#if Use_Gen_Id_For_Trie_Key
-          proc_trie_delete(arena, do_undo->trie, proc_edit->process->gen_id);
-# if Proc_Trie_Use_Key_Value_Pair
-          proc_trie_set(arena, do_undo->trie, new_p->gen_id, new_p);
-# else
-          Assert(!"This should not happen");
-# endif
-#else
-          proc_trie_delete(arena, do_undo->trie, IntFromPtr(proc_edit->process));
-# if Proc_Trie_Use_Key_Value_Pair
-          Assert(!"This should not happen");
-# else
-          proc_trie_insert(arena, do_undo->trie, IntFromPtr(new_p));
-# endif
-#endif
-        }
-      } break;
-      default: Assert(0);
-      }
-    }
-  }
-error:;
-}
-
-
-
-
-
-
-function void gather_processes_from_trie(Context *context, View *view) {
-  if (view == 0) goto error;
-  Process_Do_Undo *do_undo = &view->do_undo;
-  if (do_undo == 0) goto error;
-  Proc_Trie_Trie *trie = do_undo->trie;
-  if (trie == 0) goto error;
-
-  { // apply process edits
-    apply_process_edits_by_kind(context, view, 0);
-    apply_process_edits_by_kind(context, view, 1);
-  }
-
-  // transfer active, edited procs
-  Process_List new_active_procs = (Process_List){0};
-  for (Process_Edit *proc_edit = do_undo->edit_list.first;
-       proc_edit != 0;
-       proc_edit = proc_edit->next) {
-    for (Process *a = view->active_processes.first; a != 0; a = a->next_active) {
-      if (proc_edit->process == a && proc_edit->new_process_ptr) {
-        SLLQueuePush_NZ(new_active_procs.first, new_active_procs.last, proc_edit->new_process_ptr, next_active, 0);
-      }
-    }
-  }
-  view->active_processes = new_active_procs;
-
-  do_undo->edit_list = (Process_Edit_List){0};
-  proc_trie_commit(trie);
-
-  { // what is this block?
-    Arena *arena = context->per_frame_arena;
-    clear_process_list(context, &view->processes);
-
-    view->process_count = 0;
-    for (Proc_Trie_Iterator *iter = proc_trie_iter_init(arena, trie->current_root->node);
-         proc_trie_iter_test(iter);
-         proc_trie_iter_next(iter)) {
-#if Use_Gen_Id_For_Trie_Key
-      Process *p = iter->value;
-#else
-      Process *p = (Process *)iter->key;
-#endif
-      if (p) {
-        SLLQueuePush(view->processes.first, view->processes.last, p);
-        view->process_count += 1;
-      }
-    }
-
-#if 0 // TODO: Find a way to switch between kinds of views and draw the data-structure view
-    { // Update data-structure view processes
-      Process_List *ds_proc_list = &view->processes;
-      clear_process_list(context, ds_proc_list);
-
-      for (Proc_Trie_Iterator *iter = proc_trie_iter_root_init(context->per_frame_arena, do_undo->trie);
-           proc_trie_iter_root_test(iter);
-           proc_trie_iter_root_next(iter)) {
-        Process *p = create_detached_process(context);
-        p->position.x = (F32)iter->stack->indent * 60.0f;
-        p->position.y = (F32)iter->stack->depth * 60.0f;
-        if (iter->stack->root == do_undo->trie->current_root) {
-          Set_Flag(p->flags, Process_Flag_IsActive);
-        }
-        p->ref = iter->stack->root;
-        { // set the label_c_string
-          String8 gen_id_string = str8_lit(TextFormat("%llu", p->gen_id));
-          if (gen_id_string.str && gen_id_string.size) {
-            U8 *label_c_string = arena_push(context->per_frame_arena, gen_id_string.size);
-            if (label_c_string) {
-              MemoryCopy(label_c_string, gen_id_string.str, gen_id_string.size);
-              p->label_c_string = label_c_string;
-            }
-          }
-        }
-        iter->stack->root->ref = p;
-        SLLQueuePush(ds_proc_list->first, ds_proc_list->last, p);
-
-        // add line to prev_edit
-        if (iter->stack->root->prev_edit) {
-          Process *l = create_detached_process(context);
-          Set_Flag(l->flags, Process_Flag_Line);
-          l->in = iter->stack->root->prev_edit->ref;
-          l->out = iter->stack->root->ref;
-          SLLQueuePush(ds_proc_list->first, ds_proc_list->last, l);
-        }
-
-        // add line to prev_branch
-        if (iter->stack->root->prev_branch) {
-          Process *l = create_detached_process(context);
-          Set_Flag(l->flags, Process_Flag_Line);
-          l->in = iter->stack->root->prev_branch->ref;
-          l->out = iter->stack->root->ref;
-          SLLQueuePush(ds_proc_list->first, ds_proc_list->last, l);
-        }
-
-      }
-    }
-#endif
-  }
-error:;
-}
-
-
-
-
-
-function Process *push_permanent_process(Context *context) {
-  Process *p = 0;
-
-  if (context) {
-    p = push_struct(context->permanent_arena, Process);
-    if (p) {
-      p->gen_id = context->proc_gen_id++;
-    }
-  }
-
-  return p;
-}
-
-
-function Process *create_process(
-  Context *context,
-  View *view
-  ) {
-  Process *p = push_permanent_process(context);
-
-  if (p) {
-    add_process_to_process_edit_list(context, view, p, Proc_Trie_Edit_Insert, (Process){0});
-  }
-
-  return p;
-}
-
-
-
-
-
-function void remove_string_chunk_list(Context *context, String_Chunk_List *scl) {
-  if (scl->first && scl->last) {
-    if (context->free_strings.first && context->free_strings.last) {
-      context->free_strings.last->next = scl->first;
-      context->free_strings.last = scl->last;
-    } else {
-      context->free_strings.first = scl->first;
-      context->free_strings.last = scl->last;
-    }
-
-    scl->first = 0;
-    scl->last = 0;
-  }
-}
-
-function void clear_process_list(Context *context, Process_List *list) {
-  if (list && list->first) {
-    for (Process *p = list->first; p != 0;) {
-      Process *next = p->next;
-      if (Get_Flag(p->flags, Process_Flag_IsDetached)) {
-        SLLQueuePush(context->free_processes.first, context->free_processes.last, p);
-      }
-      else {
-        p->next = 0;
-      }
-      p = next;
-    }
-
-    list->first = 0;
-    list->last = 0;
-  }
-}
-
-function void clear_active_process_list(Process_List *list) {
-  if (list && list->first) {
-    for (Process *p = list->first; p != 0;) {
-      Process *next = p->next_active;
-      p->next_active = 0;
-      Unset_Flag(p->flags, Process_Flag_IsActive);
-      p = next;
-    }
-
-    list->first = 0;
-    list->last = 0;
-  }
-}
-
-
-
-function void clear_active_processes(Context *context, View *view) {
-  clear_active_process_list(&view->active_processes);
-}
-
-
-
-
-function Process *create_detached_process(Context *context) {
-  Process *p = context->free_processes.first;
-
-  if (p) {
-    SLLQueuePop(context->free_processes.first, context->free_processes.last);
-    // TODO: do we need to update the gen-id here??
-  } else {
-    p = push_permanent_process(context);
-  }
-
-  if (p) {
-    *p = (Process){0};
-    Set_Flag(p->flags, Process_Flag_IsDetached);
-    p->gen_id = context->proc_gen_id++;
-  } else {
-    p = The_Null_Process();
-  }
-
-  return p;
-}
-
-
-
-function Process *create_processes(
-  Context *context,
-  View *view,
-  U32 process_count
-  ) {
-  Process *ps = push_array(context->permanent_arena, Process, process_count);
-
-  if (ps) {
-    for (U32 i = 0; i < process_count; ++i) {
-      Process *p = ps + i;
-      p->gen_id = context->proc_gen_id++;
-      add_process_to_process_edit_list(context, view, p, Proc_Trie_Edit_Insert, (Process){0});
-    }
-
-    // TODO: if we end up allowing dynamic creation of procs for ui, we need to switch with kind of do-undo to pass to the gather func........
-    gather_processes_from_trie(context, view);
-  }
-
-  return ps;
-}
-
-
-
-
-function void remove_process_from_process_list(Context *context, Process_List *list, Process *p) {
-  if (list->first == p) {
-    SLLQueuePop(list->first, list->last);
-  } else {
-    for (Process *test_p = list->first; test_p != 0; test_p = test_p->next) {
-      if (test_p->next == p) {
-        test_p->next = p->next;
-        if (p == list->last) {
-          list->last = test_p;
-        }
-        break;
-      }
-    }
-  }
-}
-
-
-
-function Piece_Table *copy_piece_table(Context *context, Piece_Table *table) {
-  Assert(!"TODO");
-  return 0;
-}
-
-
-function String_Chunk_List copy_string_chunk_list(Context *context, String_Chunk_List *scl) {
-  String_Chunk_List result = (String_Chunk_List){0};
-
-  for (String_Chunk *sc = scl->first; sc != 0; sc = sc->next) {
-    String_Chunk *new_sc = create_string_chunk(context);
-    if (new_sc) {
-      *new_sc = *sc;
-      SLLQueuePush(result.first, result.last, new_sc);
-    }
-  }
-
-  return result;
-}
-
-
-
-
 
 
 
@@ -772,7 +85,7 @@ function void remove_copy_process_list(Context *context, Process_List *list) {
   // TODO: @Speed can probably do some fancy stuff with just the ends of the list?
   for (Process *p = list->first; p != 0;) {
     Process *next_process = p->next;
-    remove_process_from_process_list(context, &context->copy_processes, p);
+    remove_process_from_process_list(&context->copy_processes, p);
     p = next_process;
   }
 }
@@ -786,7 +99,8 @@ function Process *add_process_to_copy_list(
   Vector2 *copy_center,
   F32 *copy_count
   ) {
-  Process *copied_p = create_detached_process(context);
+  WhatIsThis wit = (WhatIsThis){0}; // TODO: handle passing/returning wits
+  Process *copied_p = create_detached_process(&wit);
   *copied_p = *p;
   p->to_copied = copied_p;
   *copy_center = Vector2Add(*copy_center, p->position);
@@ -828,7 +142,8 @@ function void copy_active_processes(Context *context, View *view) {
         }
       }
       // add wire to copied-list
-      Process *copied_wire = create_detached_process(context);
+      WhatIsThis wit = (WhatIsThis){0}; // TODO: handle passing/returning wits
+      Process *copied_wire = create_detached_process(&wit);
       *copied_wire = *a;
       // connect copied wire to copied processes
       for (S32 conn = 0; conn < Process_Connection__Count; ++conn) {
@@ -902,7 +217,7 @@ function void copy_active_processes(Context *context, View *view) {
 
     // copy label
     if (c->label) {
-      c->label = copy_piece_table(context, c->label);
+      c->label = copy_piece_table(c->label);
     }
   }
 
@@ -933,7 +248,8 @@ function void paste_processes(Context *context, View *view) {
     }
 
     if (process_count) {
-      Process *ps = create_processes(context, view, process_count);
+      WhatIsThis wit = (WhatIsThis){0}; // TODO: handle passing/returning wits
+      Process *ps = create_processes(&wit);
       U32 i = 0;
 
       for (Process *p = context->copy_processes.first; p != 0; p = p->next) {
@@ -1000,6 +316,134 @@ function Process *find_process_connection(
 
 
 
+
+//////////////////////////
+// Debug diagnostics
+//////////////////////////
+function void check_process_list(Process_List list) {
+  Assert(!process_list_has_cycles(list.first));
+  Assert(!process_list_has_cycles(list.last));
+}
+
+
+
+
+
+
+
+
+function B32 rectangle_contains_point(Rectangle r, Vector2 p) {
+  F32 x2 = r.x + r.width;
+  F32 y2 = r.y + r.height;
+  B32 contains = (p.x >= r.x) && (p.y >= r.y) && (p.x <= x2) && (p.y <= y2);
+  return contains;
+}
+
+
+function String_Chunk_List string_chunk_list_from_string8(Context *context, String8 string8) {
+  String_Chunk_List list = (String_Chunk_List){0};
+
+  U64 remaining_size = string8.size;
+  U64 string8_index = 0;
+
+  for (;;) {
+    if (remaining_size == 0) {
+      break;
+    }
+
+    String_Chunk *chunk = create_string_chunk(&context->what_is_this, context->permanent_arena, &context->free_strings);
+    SLLQueuePush(list.first, list.last, chunk);
+
+    U64 amount_to_write = Min(remaining_size, String_Chunk_Size);
+    remaining_size -= amount_to_write;
+
+    for (S32 i = 0; i < amount_to_write; ++i) {
+      chunk->str_array[i] = string8.str[string8_index];
+      string8_index += 1;
+    }
+  }
+
+  // add null-termination chunk if the last byte is not 0
+  if (list.last && list.last->str_array[String_Chunk_Size-1] != 0) {
+    String_Chunk *chunk = create_string_chunk(&context->what_is_this, context->permanent_arena, &context->free_strings);
+    SLLQueuePush(list.first, list.last, chunk);
+  }
+
+  return list;
+}
+
+
+
+
+
+
+
+function V2_Chunk *create_v2_chunk(Context *context) {
+  V2_Chunk *chunk = context->free_v2_chunks;
+
+  if (chunk) {
+    SLLStackPop(context->free_v2_chunks);
+    *chunk = (V2_Chunk){0};
+  }
+  else {
+    chunk = push_struct(context->permanent_arena, V2_Chunk);
+  }
+
+  return chunk;
+}
+
+
+function void free_v2_chunk(Context *context, V2_Chunk *chunk) {
+  if (chunk) {
+    SLLStackPush(context->free_v2_chunks, chunk);
+  }
+}
+
+
+function Vector2 *get_fresh_v2_from_v2_chunk(Context *context, V2_Chunk *chunk) {
+  Vector2 *result = 0;
+
+  if (chunk) {
+    if (chunk->count >= V2_Chunk_Size) {
+      // TODO: push new chunk
+      V2_Chunk *new_chunk = create_v2_chunk(context);
+      if (new_chunk) {
+        result = new_chunk->e;
+        new_chunk->count = 1;
+      }
+    }
+    else {
+      result = chunk->e + chunk->count;
+      chunk->count += 1;
+    }
+  }
+
+  return result;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ////////////////////////////////////////
 // UI Functions
 ////////////////////////////////////////
@@ -1010,7 +454,8 @@ function void clear_ui_state(Context *context, View *view) {
 
   arena_pop_to(context->ui_arena, 0);
   view->do_undo.trie = proc_trie_create_trie(context->ui_arena);
-  gather_processes_from_trie(context, view);
+  /* gather_processes_from_trie(context, view); */
+  gather_processes_from_trie(&context->what_is_this);
 }
 
 
@@ -1034,6 +479,7 @@ function void handle_label_editing(Context *context, View *view, Process_List ps
   B32 should_update_process = context->edit_timeout <= 0.0f;
   Process_List new_active_list = (Process_List){0};
   B32 editing_occured = 0;
+  WhatIsThis wit = (WhatIsThis){0}; // TODO: handle wits
 
   while ((key = context->ui_state.key_presses[k++])) {
     for (Process *a = ps.first; a != 0; a = a->next_active) {
@@ -1058,7 +504,7 @@ function void handle_label_editing(Context *context, View *view, Process_List ps
           }
 
           if (edit_a.label) {
-            piece_table_insert(context, edit_a.label, edit_a.label_cursor, (String8){&c, 1});
+            piece_table_insert(&wit, edit_a.label, edit_a.label_cursor, (String8){&c, 1});
             edit_a.label_cursor += 1;
             editing_occured = 1;
           }
@@ -1068,7 +514,7 @@ function void handle_label_editing(Context *context, View *view, Process_List ps
         } else if (key == KEY_BACKSPACE) {
           // handle backspace
           if (edit_a.label_cursor > 0) {
-            piece_table_delete(context, edit_a.label, edit_a.label_cursor, 1);
+            piece_table_delete(&wit, edit_a.label, edit_a.label_cursor, 1);
             edit_a.label_cursor -= 1;
             editing_occured = 1;
           }
@@ -1083,7 +529,7 @@ function void handle_label_editing(Context *context, View *view, Process_List ps
 
         // update active proc
         if (should_update_process && editing_occured) {
-          add_process_to_process_edit_list(context, view, a, Proc_Trie_Edit_Update, edit_a);
+          add_process_to_process_edit_list(&wit, a, Proc_Trie_Edit_Update, edit_a);
         }
         else {
           *a = edit_a;
@@ -1093,7 +539,8 @@ function void handle_label_editing(Context *context, View *view, Process_List ps
   }
 
   if (should_update_process && editing_occured) {
-    gather_processes_from_trie(context, view);
+    /* gather_processes_from_trie(context, view); */
+    gather_processes_from_trie(&context->what_is_this);
   }
 }
 
@@ -1172,7 +619,6 @@ function Process *create_button(Arena *arena, Vector2 position, String_Chunk_Lis
 
     Set_Flag(button->flags, Process_Flag_Clickable|Process_Flag_FitToText);
     button->position = position;
-    /* button->label = label; */
     button->label_c_string = label_c_string;
   }
 
@@ -1435,34 +881,6 @@ function Process *get_wire_from_selection(Context *context, View *view, Process_
 
 
 
-function Editable_Process get_editable_process(
-  Process_Edit_List edit_list,
-  Process *p
-  ) {
-  Editable_Process editable_proc = (Editable_Process){0};
-
-  for (Process_Edit *proc_edit = edit_list.first;
-       proc_edit != 0;
-       proc_edit = proc_edit->next) {
-    if (proc_edit->process == p) {
-      editable_proc.is_being_edited = 1;
-      if (proc_edit->kind == Proc_Trie_Edit_Update) {
-        editable_proc.process = proc_edit->new_process;
-      }
-      else {
-        editable_proc.process = *proc_edit->process;
-      }
-    }
-  }
-
-  if (!editable_proc.is_being_edited) {
-    editable_proc.process = *p;
-  }
-
-  return editable_proc;
-}
-
-
 
 function void remove_process_from_active_processes(Context *context, View *view, Process *p) {
   if (view->active_processes.first == p) {
@@ -1481,291 +899,6 @@ function void remove_process_from_active_processes(Context *context, View *view,
 }
 
 
-
-function void exit_add_wire_mode(Context *context, View *view) {
-  clear_active_processes(context, view);
-  Unset_Flag(context->flags, Context_Flag_NewWire);
-}
-
-
-
-function void add_wire_connection(
-  Context *context,
-  View *view,
-  Process *wire,
-  Process *process,
-  Process_Connection conn,
-  U32 which_conn
-  ) {
-  if (context && wire && process) {
-    { // what is this block?
-      {
-        B32 wire_moved_to_same_process = wire->conn[conn] == process;
-        B32 wire_is_to_the_left_of_itself = which_conn > wire->which_conn[conn];
-
-        Editable_Process new_wire = get_editable_process(view->do_undo.edit_list, wire);
-        new_wire.process.conn[conn] = process;
-        if (wire_moved_to_same_process && wire_is_to_the_left_of_itself) {
-          new_wire.process.which_conn[conn] = which_conn - 1;
-        }
-        else {
-          new_wire.process.which_conn[conn] = which_conn;
-        }
-        add_process_to_process_edit_list(context, view, wire, Proc_Trie_Edit_Update, new_wire.process);
-      }
-
-      // decrement currently connected process' conn-count
-      {
-        Editable_Process new_process = get_editable_process(view->do_undo.edit_list, wire->conn[conn]);
-        new_process.process.conn_count[conn] -= 1;
-        add_process_to_process_edit_list(context, view, wire->conn[conn], Proc_Trie_Edit_Update, new_process.process);
-      }
-
-      // increment newly connected process' conn-count
-      {
-        Editable_Process new_process = get_editable_process(view->do_undo.edit_list, process);
-        new_process.process.conn_count[conn] += 1;
-        add_process_to_process_edit_list(context, view, process, Proc_Trie_Edit_Update, new_process.process);
-      }
-
-      for (Process *test_wire = view->processes.first;
-           test_wire != 0;
-           test_wire = test_wire->next) {
-        if (Get_Flag(test_wire->flags, Process_Flag_Wire)) {
-          B32 not_the_moved_wire = wire != test_wire;
-          B32 test_wire_to_the_right_of_old_process = test_wire->which_conn[conn] >= wire->which_conn[conn];
-          B32 test_wire_to_the_right_of_new_process = test_wire->which_conn[conn] >= which_conn;
-          B32 test_wire_connected_to_old_process = test_wire->conn[conn] == wire->conn[conn];
-          B32 test_wire_connected_to_new_process = test_wire->conn[conn] == process;
-
-          if (not_the_moved_wire) {
-            // decrement which_conn
-            if (test_wire_connected_to_old_process &&
-                test_wire_to_the_right_of_old_process) {
-              Editable_Process new_test_wire = get_editable_process(view->do_undo.edit_list, test_wire);
-              new_test_wire.process.which_conn[conn] -= 1;
-              add_process_to_process_edit_list(context, view, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
-            }
-
-            // increment which_conn
-            if (test_wire_connected_to_new_process &&
-                test_wire_to_the_right_of_new_process) {
-              Editable_Process new_test_wire = get_editable_process(view->do_undo.edit_list, test_wire);
-              new_test_wire.process.which_conn[conn] += 1;
-              add_process_to_process_edit_list(context, view, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
-            }
-          }
-        }
-      }
-    }
-  }
-
-  exit_add_wire_mode(context, view);
-}
-
-
-
-function void handle_deleted_wire(
-  Context *context,
-  View *view,
-  Process *wire,
-  Process_Connection_Flag conn_flags
-  ) {
-  if (wire) {
-    // Remove a wire and move wires to the right of the moved wire to the left.
-    B32 in_matched = 0;
-    B32 out_matched = 0;
-
-    // TODO: Now that we set both remove_in/remove_out as true, we should clean up some code below.
-    B32 remove_in = Get_Flag(conn_flags, Process_Connection_Flag_In);
-    B32 remove_out = Get_Flag(conn_flags, Process_Connection_Flag_Out);
-
-    for (Process *test_wire = view->processes.first;
-         test_wire != 0;
-         test_wire = test_wire->next) {
-      B32 should_replace = 0;
-      B32 is_wire = Get_Flag(test_wire->flags, Process_Flag_Wire);
-
-      if (is_wire && test_wire != wire) {
-        Editable_Process new_test_wire = get_editable_process(view->do_undo.edit_list, test_wire);
-
-        // adjust in-connections that come after deleted wire
-        if (remove_in && test_wire->in == wire->in) {
-          if (test_wire->which_in > wire->which_in) {
-            new_test_wire.process.which_in -= 1;
-            should_replace = 1;
-          }
-          in_matched = 1;
-        }
-
-        // adjust out-connections that come after deleted wire
-        if (remove_out && test_wire->out == wire->out) {
-          if (test_wire->which_out > wire->which_out) {
-            new_test_wire.process.which_out -= 1;
-            should_replace = 1;
-          }
-          out_matched = 1;
-        }
-
-        if (should_replace) {
-          add_process_to_process_edit_list(context, view, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
-        }
-      }
-    }
-
-    B32 only_in_conn = wire->in != 0 && wire->which_in == 0;
-    B32 only_out_conn = wire->out != 0 && wire->which_out == 0;
-
-    // decrement process' in-count
-    if (remove_in && (in_matched || only_in_conn)) {
-      if (wire->in) {
-        Editable_Process new_in = get_editable_process(view->do_undo.edit_list, wire->in);
-        new_in.process.in_count -= 1;
-        add_process_to_process_edit_list(context, view, wire->in, Proc_Trie_Edit_Update, new_in.process);
-      }
-    }
-
-    // decrement process' out-count
-    if (remove_out && (out_matched || only_out_conn)) {
-      if (wire->out) {
-        Editable_Process new_out = get_editable_process(view->do_undo.edit_list, wire->out);
-        new_out.process.out_count -= 1;
-        add_process_to_process_edit_list(context, view, wire->out, Proc_Trie_Edit_Update, new_out.process);
-      }
-    }
-  }
-}
-
-
-
-
-
-
-
-function void delete_process(Context *context, View *view, Process *p, U32 which_conn_flags) {
-  B32 p_overwritten = add_process_to_process_edit_list(context, view, p, Proc_Trie_Edit_Delete, (Process){0});
-
-  // if deleting a wire, adjust connected processes
-  if (Get_Flag(p->flags, Process_Flag_Wire)) {
-    Process_Connection_Flag which_conn_flags_resolved = which_conn_flags
-      ? which_conn_flags
-      : (Process_Connection_Flag_In | Process_Connection_Flag_Out);
-    if (p_overwritten) {
-      handle_deleted_wire(context, view, p, which_conn_flags_resolved); // TODO: inline this function since it's only used in `delete_process`
-    }
-  }
-  else {
-    // check for wires connected to the deleted process, and delete those also
-    for (Process *wire = view->processes.first; wire != 0;) {
-      B32 in_match = wire->in == p;
-      B32 out_match = wire->out == p;
-      B32 should_delete = 0;
-
-      if (in_match || out_match) {
-        B32 wire_overwritten = add_process_to_process_edit_list(context, view, wire, Proc_Trie_Edit_Delete, (Process){0});
-        if (wire_overwritten) {
-          handle_deleted_wire(context, view, wire, (Process_Connection_Flag_In|Process_Connection_Flag_Out));
-        }
-      }
-
-      wire = wire->next;
-    }
-  }
-}
-
-
-
-function Process *connect_detached_processes(
-  Context *context,
-  Process *out,
-  Process *in
-  ) {
-  Process *new_wire = 0;
-
-  if (out && in) {
-    new_wire = create_detached_process(context);
-
-    if (new_wire) {
-      Set_Flag(new_wire->flags, Process_Flag_Wire);
-
-      new_wire->out = out;
-      new_wire->in = in;
-
-      new_wire->which_out = out->out_count;
-      new_wire->which_in = in->in_count;
-
-      out->out_count += 1;
-      in->in_count += 1;
-    }
-  }
-
-  return new_wire;
-}
-
-
-
-function Connection_Result connect_processes_no_gather(
-  Context *context,
-  View *view,
-  Process *out,
-  Process *in
-  ) {
-  Connection_Result result = (Connection_Result){0};
-
-  if (out && in) {
-    result.new_wire = create_process(context, view);
-
-    if (result.new_wire) {
-      Process_Edit *out_edit_proc = process_edit_list_contains_process(context, view->do_undo.edit_list, out);
-      Process_Edit *in_edit_proc = process_edit_list_contains_process(context, view->do_undo.edit_list, in);
-
-      if (out_edit_proc) {
-        result.new_wire->which_out = out_edit_proc->new_process.out_count;
-        out_edit_proc->new_process.out_count += 1;
-      }
-      else {
-        Editable_Process new_out = get_editable_process(view->do_undo.edit_list, out);
-        result.new_wire->which_out = new_out.process.out_count;
-        new_out.process.out_count += 1;
-        add_process_to_process_edit_list(context, view, out, Proc_Trie_Edit_Update, new_out.process);
-      }
-
-      if (in_edit_proc) {
-        result.new_wire->which_in = in_edit_proc->new_process.in_count;
-        in_edit_proc->new_process.in_count += 1;
-      }
-      else {
-        Editable_Process new_in = get_editable_process(view->do_undo.edit_list, in);
-        result.new_wire->which_in = new_in.process.in_count;
-        new_in.process.in_count += 1;
-        add_process_to_process_edit_list(context, view, in, Proc_Trie_Edit_Update, new_in.process);
-      }
-
-      result.out = out;
-      result.in = in;
-
-      Set_Flag(result.new_wire->flags, Process_Flag_Wire);
-      result.new_wire->out = result.out;
-      result.new_wire->in = result.in;
-    }
-  }
-
-  return result;
-}
-
-
-function Connection_Result connect_processes(
-  Context *context,
-  View *view,
-  Process *out,
-  Process *in
-  ) {
-  Connection_Result result = connect_processes_no_gather(context, view, out, in);
-
-  gather_processes_from_trie(context, view);
-
-  return result;
-}
 
 
 function Half_Circle_Points get_half_circle_points(
@@ -3102,3 +2235,9 @@ int main(void) {
   CloseWindow();
   return 0;
 }
+
+
+
+
+
+
