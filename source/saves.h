@@ -88,7 +88,7 @@ function void write_save_file_v1(Context *context, View *view, Arena *arena, U8 
       U64 process_index = 0;
       U64 string_cold_offset = 0;
 
-      for (Process *p = view->processes.first; p != 0; p = p->next) {
+      for (Process *p = view->and_whats_this.processes.first; p != 0; p = p->next) {
         Cold_Process *cold_process = first_cold_process + process_index;
 
         cold_process->flags = p->flags;
@@ -107,7 +107,7 @@ function void write_save_file_v1(Context *context, View *view, Arena *arena, U8 
 
         // store label
         if (p->label) {
-          String8 string = piece_table_get_string(context->per_frame_arena, p->label);
+          String8 string = piece_table_get_string(context->what_is_this.per_frame_arena, p->label);
           if (string.str && string.size) {
             if (string_cold_offset >= string_cold_size) goto error;
             U8 *string_location = start_of_cold_string + string_cold_offset;

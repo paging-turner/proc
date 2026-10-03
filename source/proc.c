@@ -120,13 +120,13 @@ function void copy_active_processes(Context *context, View *view) {
   remove_copy_process_list(context, &context->copy_processes);
 
   // copy processes from active-list to copy-list
-  for (Process *a = view->active_processes.first; a != 0; a = a->next_active) {
+  for (Process *a = view->and_whats_this.active_processes.first; a != 0; a = a->next_active) {
     if (Get_Flag(a->flags, Process_Flag_Wire)) {
       // add connected processes if they have not been added yet
       for (S32 conn = 0; conn < Process_Connection__Count; ++conn) {
         if (a->conn[conn] && a->conn[conn]->to_copied == 0) {
           B32 found_conn = 0;
-          for (Process *test_p = view->active_processes.first; test_p != 0; test_p = test_p->next_active) {
+          for (Process *test_p = view->and_whats_this.active_processes.first; test_p != 0; test_p = test_p->next_active) {
             if (test_p == a->conn[conn]) {
               found_conn = 1;
               // add connected process to copied list
@@ -159,7 +159,7 @@ function void copy_active_processes(Context *context, View *view) {
   }
 
   // remove all to_copied fields
-  for (Process *p = view->processes.first; p != 0; p = p->next) {
+  for (Process *p = view->and_whats_this.processes.first; p != 0; p = p->next) {
     p->to_copied = 0;
   }
 
@@ -277,7 +277,7 @@ function B32 is_active_process(Context *context, View *view, Process *p) {
     is_active = 1;
   }
   else {
-    for (Process *test_p = view->active_processes.first; test_p != 0; test_p = test_p->next_active) {
+    for (Process *test_p = view->and_whats_this.active_processes.first; test_p != 0; test_p = test_p->next_active) {
       if (test_p == p) {
         is_active = 1;
         break;
@@ -298,7 +298,7 @@ function Process *find_process_connection(
   ) {
   Process *target_wire = 0;
 
-  for (Process *w = view->processes.first; w != 0; w = w->next) {
+  for (Process *w = view->and_whats_this.processes.first; w != 0; w = w->next) {
     if (Get_Flag(w->flags, Process_Flag_Wire)) {
       if ((p == w->conn[conn]) && (w->which_conn[conn] == which_conn)) {
         target_wire = w;
@@ -351,7 +351,7 @@ function String_Chunk_List string_chunk_list_from_string8(Context *context, Stri
       break;
     }
 
-    String_Chunk *chunk = create_string_chunk(&context->what_is_this, context->permanent_arena, &context->free_strings);
+    String_Chunk *chunk = create_string_chunk(&context->what_is_this, context->what_is_this.permanent_arena, &context->free_strings);
     SLLQueuePush(list.first, list.last, chunk);
 
     U64 amount_to_write = Min(remaining_size, String_Chunk_Size);
@@ -365,7 +365,7 @@ function String_Chunk_List string_chunk_list_from_string8(Context *context, Stri
 
   // add null-termination chunk if the last byte is not 0
   if (list.last && list.last->str_array[String_Chunk_Size-1] != 0) {
-    String_Chunk *chunk = create_string_chunk(&context->what_is_this, context->permanent_arena, &context->free_strings);
+    String_Chunk *chunk = create_string_chunk(&context->what_is_this, context->what_is_this.permanent_arena, &context->free_strings);
     SLLQueuePush(list.first, list.last, chunk);
   }
 
@@ -386,7 +386,7 @@ function V2_Chunk *create_v2_chunk(Context *context) {
     *chunk = (V2_Chunk){0};
   }
   else {
-    chunk = push_struct(context->permanent_arena, V2_Chunk);
+    chunk = push_struct(context->what_is_this.permanent_arena, V2_Chunk);
   }
 
   return chunk;
@@ -453,7 +453,7 @@ function void clear_ui_state(Context *context, View *view) {
   context->save_file_list.last = 0;
 
   arena_pop_to(context->ui_arena, 0);
-  view->do_undo.trie = proc_trie_create_trie(context->ui_arena);
+  view->and_whats_this.do_undo.trie = proc_trie_create_trie(context->ui_arena);
   /* gather_processes_from_trie(context, view); */
   gather_processes_from_trie(&context->what_is_this);
 }
@@ -488,7 +488,7 @@ function void handle_label_editing(Context *context, View *view, Process_List ps
 
         if (should_update_process) {
           context->edit_timeout = context->time_to_wait_for_label_edit;
-          Editable_Process editable_a = get_editable_process(view->do_undo.edit_list, a);
+          Editable_Process editable_a = get_editable_process(view->and_whats_this.do_undo.edit_list, a);
           edit_a = editable_a.process;
         }
         else {
@@ -500,7 +500,7 @@ function void handle_label_editing(Context *context, View *view, Process_List ps
         if (is_ascii && c != 0) {
           // insert character
           if (edit_a.label == 0) {
-            edit_a.label = push_struct(context->permanent_arena, Piece_Table);
+            edit_a.label = push_struct(context->what_is_this.permanent_arena, Piece_Table);
           }
 
           if (edit_a.label) {
@@ -634,7 +634,7 @@ function View *create_view(Arena *arena) {
   View *result = push_struct(arena, View);
 
   if (result) {
-    result->do_undo.arena = arena;
+    result->and_whats_this.do_undo.arena = arena;
     result->camera.zoom = 1.0f;
   }
 
@@ -683,7 +683,7 @@ function S32 collect_save_files(Context *context) {
 
 function void save_file(Context *context, View *view, Process *element) {
   if (context->save_file_name) {
-    write_save_file(context, view, context->per_frame_arena, context->save_file_name);
+    write_save_file(context, view, context->what_is_this.per_frame_arena, context->save_file_name);
   }
 }
 
@@ -854,7 +854,7 @@ function Rectangle get_selection_rectangle(Context *context) {
 function Process *get_wire_from_selection(Context *context, View *view, Process_Selection selection) {
   Process *wire = 0;
 
-  for (Process *p = view->processes.first; p != 0; p = p->next) {
+  for (Process *p = view->and_whats_this.processes.first; p != 0; p = p->next) {
     if (Get_Flag(p->flags, Process_Flag_Wire)) {
       if (selection.type == Process_Selection_In &&
           p->in == selection.process &&
@@ -883,14 +883,14 @@ function Process *get_wire_from_selection(Context *context, View *view, Process_
 
 
 function void remove_process_from_active_processes(Context *context, View *view, Process *p) {
-  if (view->active_processes.first == p) {
-    SLLQueuePop_NZ(view->active_processes.first, view->active_processes.last, next_active, 0);
+  if (view->and_whats_this.active_processes.first == p) {
+    SLLQueuePop_NZ(view->and_whats_this.active_processes.first, view->and_whats_this.active_processes.last, next_active, 0);
   } else {
-    for (Process *test_p = view->active_processes.first; test_p != 0; test_p = test_p->next_active) {
+    for (Process *test_p = view->and_whats_this.active_processes.first; test_p != 0; test_p = test_p->next_active) {
       if (test_p->next_active == p) {
         test_p->next_active = p->next_active;
-        if (p == view->active_processes.last) {
-          view->active_processes.last = test_p;
+        if (p == view->and_whats_this.active_processes.last) {
+          view->and_whats_this.active_processes.last = test_p;
         }
         break;
       }
@@ -1060,7 +1060,7 @@ function Bezier_Points get_wire_bezier_points(
         }
 
         // TODO: this will need to eventually handle arbitrary inner-positions
-        Vector2 *points = push_array(context->per_frame_arena, Vector2, 3);
+        Vector2 *points = push_array(context->what_is_this.per_frame_arena, Vector2, 3);
         if (points) {
           result.controls.point_count = 3;
           result.controls.points = points;
@@ -1070,7 +1070,7 @@ function Bezier_Points get_wire_bezier_points(
         }
       }
       else {
-        Vector2 *points = push_array(context->per_frame_arena, Vector2, 2);
+        Vector2 *points = push_array(context->what_is_this.per_frame_arena, Vector2, 2);
         if (points) {
           result.controls.point_count = 2;
           result.controls.points = points;
@@ -1083,7 +1083,7 @@ function Bezier_Points get_wire_bezier_points(
 
   if (result.controls.point_count >= 2) {
     U32 bez_curve_count = result.controls.point_count-1;
-    Buffer_V2 *inner_bez_buffers = push_array(context->per_frame_arena, Buffer_V2, bez_curve_count);
+    Buffer_V2 *inner_bez_buffers = push_array(context->what_is_this.per_frame_arena, Buffer_V2, bez_curve_count);
     U32 total_bez_points = 0;
 
     if (inner_bez_buffers) {
@@ -1152,11 +1152,11 @@ function Process_Shape get_process_shape(
   ) {
   // TODO: process wire shapes, so that we can make wires hot by hovering
   Process_Shape shape = {0};
-  U64 arena_pop_pos = arena_current_pos(context->per_frame_arena);
+  U64 arena_pop_pos = arena_current_pos(context->what_is_this.per_frame_arena);
   if (p == 0) goto error;
 
   F32 font_size = view->camera.zoom * global_process_font_size;
-  String8 string = piece_table_get_string(context->per_frame_arena, p->label);
+  String8 string = piece_table_get_string(context->what_is_this.per_frame_arena, p->label);
   U8 *label_c_string = string.str;
   S32 text_width = MeasureText((char *)label_c_string, font_size);
 
@@ -1290,7 +1290,7 @@ function Process_Shape get_process_shape(
   }
 
 error:;
-  arena_pop_to(context->per_frame_arena, arena_pop_pos);
+  arena_pop_to(context->what_is_this.per_frame_arena, arena_pop_pos);
 
   return shape;
 }
@@ -1544,7 +1544,7 @@ function void set_global_window_render_size(void) {
 
 // NOTE; Kahn's algorithm
 function void create_keybind_array(Context *context) {
-  Arena *arena = context->permanent_arena;
+  Arena *arena = context->what_is_this.permanent_arena;
 
   Keybind *keybind_set_first = 0;
   Keybind *keybind_set_last = 0;
@@ -1694,16 +1694,16 @@ int main(void) {
 
     { // init context
       context.render_arena    = arena_alloc_reserve(Megabytes(10), 0);
-      context.permanent_arena = arena_alloc_reserve(Megabytes(100), 0);
+      context.what_is_this.permanent_arena = arena_alloc_reserve(Megabytes(100), 0);
       context.ui_arena        = arena_alloc_reserve(Megabytes(1), 0);
       /* context.temp_arena      = arena_alloc_reserve(Megabytes(10), 0); */
-      context.per_frame_arena = arena_alloc_reserve(Megabytes(10), 0);
+      context.what_is_this.per_frame_arena = arena_alloc_reserve(Megabytes(10), 0);
 
       context.ui_render_context.arena = context.render_arena;
       context.process_render_context.arena = context.render_arena;
       prc = &context.process_render_context;
 
-      context.proc_gen_id = 1;
+      context.what_is_this.gen_id = 1;
       context.time_to_wait_for_label_edit = 1.0f;
 
       Set_Flag(context.flags, Context_Flag_AutoAlignChains);
@@ -1763,9 +1763,9 @@ int main(void) {
     }
 
     { // init views
-      View *root_view = create_view(context.permanent_arena);
-      View *menu_view = create_view(context.permanent_arena);
-      View *canvas_view = create_view(context.permanent_arena);
+      View *root_view = create_view(context.what_is_this.permanent_arena);
+      View *menu_view = create_view(context.what_is_this.permanent_arena);
+      View *canvas_view = create_view(context.what_is_this.permanent_arena);
       if (root_view && menu_view && canvas_view) {
         F32 menu_height = global_panel_font_size;
         // menu view
@@ -1773,7 +1773,7 @@ int main(void) {
         Set_Flag(menu_view->kind_flags, View_Kind_Flag_Ui);
         menu_view->screen_region.width = global_window_size.x;
         menu_view->screen_region.height = menu_height;
-        menu_view->do_undo.trie = proc_trie_create_trie(menu_view->do_undo.arena);
+        menu_view->and_whats_this.do_undo.trie = proc_trie_create_trie(menu_view->and_whats_this.do_undo.arena);
         menu_view->color = (Color){50, 55, 50, 255};
         SLLQueuePush(root_view->first, root_view->last, menu_view);
 
@@ -1783,7 +1783,7 @@ int main(void) {
         canvas_view->screen_region.y = menu_height;
         canvas_view->screen_region.width = global_window_size.x;
         canvas_view->screen_region.height = global_window_size.y - menu_height;
-        canvas_view->do_undo.trie = proc_trie_create_trie(canvas_view->do_undo.arena);
+        canvas_view->and_whats_this.do_undo.trie = proc_trie_create_trie(canvas_view->and_whats_this.do_undo.arena);
         canvas_view->color = (Color){130, 150, 130, 255};
         SLLQueuePush(root_view->first, root_view->last, canvas_view);
 
@@ -1794,7 +1794,7 @@ int main(void) {
 
     { // misc. init
       SetWindowSize(global_window_size.x, global_window_size.y);
-      render_Initialize(context.per_frame_arena);
+      render_Initialize(context.what_is_this.per_frame_arena);
       set_global_window_render_size();
       cpu_freq = ryn_EstimateCpuFrequency(100);
     }
@@ -1877,7 +1877,7 @@ int main(void) {
               env->keybind = keybind;
               env->view = stack->view;
               keybind_handle(env, keybind);
-              check_process_list(stack->view->active_processes);
+              check_process_list(stack->view->and_whats_this.active_processes);
             }
           }
         }
@@ -1922,7 +1922,7 @@ int main(void) {
             render_BeginScissorMode(rc, position, size);
           }
 
-          Process *processes_to_draw = stack->view->processes.first;
+          Process *processes_to_draw = stack->view->and_whats_this.processes.first;
           F32 font_size = stack->view->camera.zoom * global_process_font_size;
 
           // @Speed
@@ -1945,7 +1945,7 @@ int main(void) {
             B32 is_wire = Get_Flag(p->flags, Process_Flag_Wire);
 
             // @Copypasta decl_ui_init
-            String8 label_string = piece_table_get_string(context.per_frame_arena, p->label);
+            String8 label_string = piece_table_get_string(context.what_is_this.per_frame_arena, p->label);
             if (label_string.str == 0 || label_string.size == 0) {
               if (p->label_c_string) {
                 label_string = str8_lit(p->label_c_string);
@@ -1955,7 +1955,7 @@ int main(void) {
             S32 cursor_offset = 0;
             if (p->label_cursor) {
               // @Speed: It's silly to copy this string just to measure where the cursor needs to be.......
-              String8 label_cursor_string = str8_push_copy(context.per_frame_arena, label_string);
+              String8 label_cursor_string = str8_push_copy(context.what_is_this.per_frame_arena, label_string);
               Assert_If(p->label_cursor <= label_cursor_string.size) {
                 printf("[ Error ] Process(%p) label-cursor (%d) greater than label-cursor-string size (%llu).\n", p, p->label_cursor, label_cursor_string.size);
                 p->label_cursor = label_cursor_string.size;
@@ -2134,8 +2134,8 @@ int main(void) {
 
           // draw new wire
           if (Get_Flag(context.flags, Context_Flag_NewWire) &&
-              stack->view->active_processes.first) {
-            Process_Shape shape = get_process_shape(&context, stack->view, stack->view->active_processes.first);
+              stack->view->and_whats_this.active_processes.first) {
+            Process_Shape shape = get_process_shape(&context, stack->view, stack->view->and_whats_this.active_processes.first);
             Vector2 position = shape.new_wire_position;
 
             Vector2 from_control = position;
@@ -2185,9 +2185,9 @@ int main(void) {
           S32 arena_font_size = 12;
           y = global_window_size.y - arena_font_size - padding;
           Debug_Draw_Arena_Info(render_arena);
-          Debug_Draw_Arena_Info(permanent_arena);
+          Debug_Draw_Arena_Info(what_is_this.permanent_arena);
           Debug_Draw_Arena_Info(ui_arena);
-          Debug_Draw_Arena_Info(per_frame_arena);
+          Debug_Draw_Arena_Info(what_is_this.per_frame_arena);
 #undef Debug_Draw_Arena_Info
         }
       }
@@ -2222,7 +2222,7 @@ int main(void) {
     //////////////////////////////////////////
     {
       arena_pop_to(context.render_arena, 0);
-      arena_pop_to(context.per_frame_arena, 0);
+      arena_pop_to(context.what_is_this.per_frame_arena, 0);
       context.ui_render_context.command_list.first = 0;
       context.ui_render_context.command_list.last = 0;
       context.process_render_context.command_list.first = 0;

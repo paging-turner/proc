@@ -344,11 +344,8 @@ struct View {
   U32 flags;
   Rectangle screen_region;
   Camera2D camera;
-  Process_List processes;
-  U64 process_count;
-  Process_List active_processes;
+  AndWhatsThis and_whats_this;
   Process *root_process;
-  Process_Do_Undo do_undo;
   Color color;
 
   View_Layout layout;
@@ -371,15 +368,15 @@ typedef struct Process_Loc {
 struct Context {
   WhatIsThis what_is_this; // TODO: use this instead?
   Arena *render_arena;
-  Arena *permanent_arena;
+  /* Arena *permanent_arena; */
   Arena *ui_arena;
-  Arena *per_frame_arena;
+  /* Arena *per_frame_arena; */
 
   Keybind *keybinds;
   U32 keybind_count;
 
   U32 flags;
-  U64 proc_gen_id;
+  /* U64 proc_gen_id; */
 
   Process_List free_processes;
   String_Chunk_List free_strings;
@@ -419,7 +416,7 @@ typedef struct View_Stack {
 
 
 function View_Stack *view_iter_init(Context *context) {
-  View_Stack *stack = push_struct(context->per_frame_arena, View_Stack);
+  View_Stack *stack = push_struct(context->what_is_this.per_frame_arena, View_Stack);
   if (stack) {
     stack->view = context->root_view;
   }
@@ -432,7 +429,7 @@ function void view_iter_next(Context *context, View_Stack **stack) {
     if (!(*stack)->visited && (*stack)->view->first && (*stack)->view->last) {
       (*stack)->visited = 1;
       // view has children, so descend
-      View_Stack *new_stack = push_struct(context->per_frame_arena, View_Stack);
+      View_Stack *new_stack = push_struct(context->what_is_this.per_frame_arena, View_Stack);
       if (new_stack) {
         new_stack->view = (*stack)->view ? (*stack)->view->first : 0;
         SLLStackPush((*stack), new_stack);

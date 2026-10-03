@@ -393,7 +393,7 @@ function Process *ui_decl_init(
 
       { // draw label
         // @Copypasta "draw processes"
-        String8 label_string = piece_table_get_string(context->per_frame_arena, process->label);
+        String8 label_string = piece_table_get_string(context->what_is_this.per_frame_arena, process->label);
 
         if (label_string.str == 0 || label_string.size == 0) {
           if (process->label_c_string) {

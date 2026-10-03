@@ -330,7 +330,7 @@ function Keybind_Result check_keybind(Keybind_Environment *env) {
       B32 con_active_processes = Keybind_Constraint_Holds(
         keybind,
         ActiveProcesses,
-        (view->active_processes.first != 0));
+        (view->and_whats_this.active_processes.first != 0));
 
       B32 con_satisfies_keypress = keybind->key_kind == 0 || key_is_pressed;
 
@@ -389,7 +389,7 @@ function void keybind_handle(Keybind_Environment *env, Keybind *keybind) {
 
 
 function void exit_add_wire_mode(Context *context, View *view) {
-  clear_active_processes(&context->what_is_this, &view->active_processes);
+  clear_active_processes(&context->what_is_this, &view->and_whats_this.active_processes);
   Unset_Flag(context->flags, Context_Flag_NewWire);
 }
 
@@ -410,10 +410,10 @@ Define_Keybind_And_Action(
   "handle active-process"
   ) {
   if (env->context && env->view) {
-    if (env->view->active_processes.first) {
+    if (env->view->and_whats_this.active_processes.first) {
       if (!Get_Flag(env->context->ui_state.flags, Ui_State_Flag_action_occured)) {
         // process label editing
-        handle_label_editing(env->context, env->view, env->view->active_processes);
+        handle_label_editing(env->context, env->view, env->view->and_whats_this.active_processes);
       }
     }
   }
@@ -481,13 +481,13 @@ Define_Keybind_And_Action(
 
         if (rectangle_contains_point(selection_rectangle, out_position) ||
             rectangle_contains_point(selection_rectangle, in_position)) {
-          SLLQueuePush_NZ(env->view->active_processes.first, env->view->active_processes.last, env->p, next_active, 0);
+          SLLQueuePush_NZ(env->view->and_whats_this.active_processes.first, env->view->and_whats_this.active_processes.last, env->p, next_active, 0);
         }
       } else {
         Process_Shape shape = get_process_shape(env->context, env->view, env->p);
 
         if (rectangle_contains_point(selection_rectangle, shape.center)) {
-          SLLQueuePush_NZ(env->view->active_processes.first, env->view->active_processes.last, env->p, next_active, 0);
+          SLLQueuePush_NZ(env->view->and_whats_this.active_processes.first, env->view->and_whats_this.active_processes.last, env->p, next_active, 0);
         }
       }
     }
@@ -687,7 +687,7 @@ Define_Keybind_And_Action(
 
   if (context && view) {
     if (Get_Flag(view->flags, View_Flag_Active)) {
-      for (Process *p = view->processes.first; p != 0; p = p->next) {
+      for (Process *p = view->and_whats_this.processes.first; p != 0; p = p->next) {
         // per-process environment
         env->selection = get_process_selection(context, view, p);
         env->view = view;
@@ -755,8 +755,8 @@ Define_Keybind_And_Action(
             Set_Flag(wire->flags, drag_flag);
             context->ui_state.active_position = context->ui_state.mouse_position;
             if (!is_active_wire) {
-              clear_active_processes(&context->what_is_this, &view->active_processes);
-              SLLQueuePush_NZ(view->active_processes.first, view->active_processes.last, wire, next_active, 0);
+              clear_active_processes(&context->what_is_this, &view->and_whats_this.active_processes);
+              SLLQueuePush_NZ(view->and_whats_this.active_processes.first, view->and_whats_this.active_processes.last, wire, next_active, 0);
             }
           }
         } else if ((env->is_active || context->hot_process.process == env->p) &&
@@ -764,21 +764,21 @@ Define_Keybind_And_Action(
           // begin new-wire
           Set_Flag(context->flags, Context_Flag_NewWire);
           if (!env->is_active) {
-            clear_active_processes(&context->what_is_this, &view->active_processes);
-            SLLQueuePush_NZ(view->active_processes.first, view->active_processes.last, env->p, next_active, 0);
+            clear_active_processes(&context->what_is_this, &view->and_whats_this.active_processes);
+            SLLQueuePush_NZ(view->and_whats_this.active_processes.first, view->and_whats_this.active_processes.last, env->p, next_active, 0);
           }
         } else if (selection.type == Process_Selection_Process) {
           if (Get_Flag(context->flags, Context_Flag_NewWire) &&
               !Get_Flag(env->p->flags, Process_Flag_Wire)) {
             // connect processes
             WhatIsThis wit = (WhatIsThis){0}; // TODO: handle wits
-            connect_processes(&wit, view->active_processes.first, env->p);
+            connect_processes(&wit, view->and_whats_this.active_processes.first, env->p);
             exit_add_wire_mode(context, view);
           } else {
             // select process
             if (!env->is_active) {
-              clear_active_processes(&context->what_is_this, &view->active_processes);
-              SLLQueuePush_NZ(view->active_processes.first, view->active_processes.last, env->p, next_active, 0);
+              clear_active_processes(&context->what_is_this, &view->and_whats_this.active_processes);
+              SLLQueuePush_NZ(view->and_whats_this.active_processes.first, view->and_whats_this.active_processes.last, env->p, next_active, 0);
             }
             Unset_Flag(context->flags, Context_Flag_NewWire);
             Set_Flag(context->flags, Context_Flag_Dragging);
@@ -793,11 +793,11 @@ Define_Keybind_And_Action(
         if (context->ui_state.mouse_moved) {
           // update positions of active processes
           B32 updated = 0;
-          for (Process *a = view->active_processes.first; a != 0; a = a->next_active) {
+          for (Process *a = view->and_whats_this.active_processes.first; a != 0; a = a->next_active) {
             if (Get_Flag(a->flags, Process_Flag_Wire)) {
               Camera2D *camera = &env->view->camera;
               Vector2 mouse_world_position = GetScreenToWorld2D(context->ui_state.mouse_position, *camera);
-              Editable_Process new_a = get_editable_process(env->view->do_undo.edit_list, a);
+              Editable_Process new_a = get_editable_process(env->view->and_whats_this.do_undo.edit_list, a);
               {
                 // TODO: don't just update the first inner-position
                 if (new_a.process.inner_positions == 0) {
@@ -813,7 +813,7 @@ Define_Keybind_And_Action(
             }
             else {
               Vector2 new_position = get_process_position(context, view, a);
-              Editable_Process new_a = get_editable_process(view->do_undo.edit_list, a);
+              Editable_Process new_a = get_editable_process(view->and_whats_this.do_undo.edit_list, a);
               new_a.process.position = new_position;
               add_process_to_process_edit_list(&context->what_is_this, a, Proc_Trie_Edit_Update, new_a.process);
               updated = 1;
@@ -869,14 +869,14 @@ Define_Keybind_And_Action(
           if (is_active_process(context, view, wire)) {
             remove_process_from_active_processes(context, view, wire);
           } else {
-            SLLQueuePush_NZ(view->active_processes.first, view->active_processes.last, wire, next_active, 0);
+            SLLQueuePush_NZ(view->and_whats_this.active_processes.first, view->and_whats_this.active_processes.last, wire, next_active, 0);
           }
         }
       } else if (selection.type == Process_Selection_Process) {
         if (is_active_process(context, view, selection.process)) {
           remove_process_from_active_processes(context, view, selection.process);
         } else {
-          SLLQueuePush_NZ(view->active_processes.first, view->active_processes.last, selection.process, next_active, 0);
+          SLLQueuePush_NZ(view->and_whats_this.active_processes.first, view->and_whats_this.active_processes.last, selection.process, next_active, 0);
         }
       }
     }
@@ -933,8 +933,8 @@ Define_Keybind_And_Action(
         if (new_p) {
           Set_Flag(new_p->flags, Process_Flag_TextEdit);
           new_p->position = GetScreenToWorld2D(context->ui_state.mouse_position, view->camera);
-          clear_active_processes(&context->what_is_this, &view->active_processes);
-          SLLQueuePush_NZ(view->active_processes.first, view->active_processes.last, new_p, next_active, 0);
+          clear_active_processes(&context->what_is_this, &view->and_whats_this.active_processes);
+          SLLQueuePush_NZ(view->and_whats_this.active_processes.first, view->and_whats_this.active_processes.last, new_p, next_active, 0);
         }
       }
 
@@ -962,7 +962,7 @@ Define_Keybind_And_Action(
     if (check_keybind(env)) {
       handled = 1;
       // delete processes
-      for (Process *a = view->active_processes.first; a != 0;) {
+      for (Process *a = view->and_whats_this.active_processes.first; a != 0;) {
         Process *next_active = a->next_active;
         WhatIsThis wit = (WhatIsThis){0}; // TODO: handle passing/returning wits
         delete_process(&wit, a, 0);
@@ -970,7 +970,7 @@ Define_Keybind_And_Action(
       }
       gather_processes_from_trie(&context->what_is_this);
 
-      clear_active_process_list(&context->what_is_this, &view->active_processes);
+      clear_active_process_list(&context->what_is_this, &view->and_whats_this.active_processes);
     }
   }
 
@@ -995,7 +995,7 @@ Define_Keybind_And_Action(
     if (check_keybind(env)) {
       handled = 1;
       // cycle through special process types (cups/caps/empty)
-      for (Process *a = view->active_processes.first; a != 0; a = a->next_active) {
+      for (Process *a = view->and_whats_this.active_processes.first; a != 0; a = a->next_active) {
         if (!Get_Flag(a->flags, Process_Flag_Wire)) {
           U32 toggle_flags = (Process_Flag_Empty | Process_Flag_Cup | Process_Flag_Cap | Process_Flag_Identity);
           if (Get_Flag(a->flags, toggle_flags)) {
@@ -1104,7 +1104,7 @@ Define_Keybind_And_Action(
   if (context && view) {
     if (check_keybind(env) == Keybind_Result_Enter) {
       handled = 1;
-      proc_trie_undo(view->do_undo.trie);
+      proc_trie_undo(view->and_whats_this.do_undo.trie);
       gather_processes_from_trie(&context->what_is_this);
     }
   }
@@ -1128,7 +1128,7 @@ Define_Keybind_And_Action(
   if (context && view) {
     if (check_keybind(env) == Keybind_Result_Enter) {
       handled = 1;
-      proc_trie_redo(view->do_undo.trie);
+      proc_trie_redo(view->and_whats_this.do_undo.trie);
       gather_processes_from_trie(&context->what_is_this);
     }
   }
@@ -1181,21 +1181,21 @@ Define_Keybind_Action(
     if (Test_Keybind(env, Enter)) {
       handled = 1;
 
-      Assert(view->active_processes.first);
+      Assert(view->and_whats_this.active_processes.first);
       Assert(context->hot_process.process);
 
       // @Speed
       U32 active_count = 0;
       Process **sorted_processes = 0;
       {
-        for (Process *a = view->active_processes.first; a != 0; a = a->next_active) {
+        for (Process *a = view->and_whats_this.active_processes.first; a != 0; a = a->next_active) {
           if (!Get_Flag(a->flags, Process_Flag_Wire)) {
             active_count += 1;
           }
         }
-        sorted_processes = arena_push(context->per_frame_arena, active_count*sizeof(Process *));
+        sorted_processes = arena_push(context->what_is_this.per_frame_arena, active_count*sizeof(Process *));
         U32 i = 0;
-        for (Process *a = view->active_processes.first; a != 0; a = a->next_active) {
+        for (Process *a = view->and_whats_this.active_processes.first; a != 0; a = a->next_active) {
           if (!Get_Flag(a->flags, Process_Flag_Wire)) {
             sorted_processes[i] = a;
             i += 1;
@@ -1250,7 +1250,7 @@ Define_Keybind_And_Action(
           if (selection.process->ref) {
             handled = 1;
 
-            Process_Do_Undo *do_undo = &view->do_undo;
+            Process_Do_Undo *do_undo = &view->and_whats_this.do_undo;
             if (do_undo->trie) {
               do_undo->trie->current_root = selection.process->ref;
               // TODO: if we ever display undo trie from other than main procs, we need to switch on that here......

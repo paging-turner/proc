@@ -218,23 +218,27 @@ typedef struct Connection_Result {
 
 
 
+typedef struct AndWhatsThis {
+  Process_Do_Undo do_undo;
+  U64 process_count;
+  Process_List processes;
+  Process_List active_processes;
+} AndWhatsThis;
+
+
 
 
 typedef struct WhatIsThis {
   Arena *arena;
   Arena *permanent_arena;
   Arena *per_frame_arena;
-  Process_Do_Undo do_undo;
   U64 gen_id;
-
-  Process_List processes;
-  U64 process_count;
-  Process_List active_processes;
   Process_List free_processes;
-
   Piece_Table_Memory piece_table_memory;
-} WhatIsThis;
 
+  // per-view
+  AndWhatsThis and_whats_this;
+} WhatIsThis;
 
 
 
@@ -292,7 +296,7 @@ function B32 add_process_to_process_edit_list(
 
   // ensure that do-undo matches the do-undo of the passed-in process
   if (wit && wit->per_frame_arena) {
-    for (Process_Edit *proc_edit = wit->do_undo.edit_list.first;
+    for (Process_Edit *proc_edit = wit->and_whats_this.do_undo.edit_list.first;
          proc_edit != 0;
          proc_edit = proc_edit->next) {
       if (proc_edit->process == p) {
@@ -303,7 +307,7 @@ function B32 add_process_to_process_edit_list(
 
     if (found_proc_edit == 0) {
       found_proc_edit = arena_push(wit->per_frame_arena, sizeof(Process_Edit));
-      SLLQueuePush(wit->do_undo.edit_list.first, wit->do_undo.edit_list.last, found_proc_edit);
+      SLLQueuePush(wit->and_whats_this.do_undo.edit_list.first, wit->and_whats_this.do_undo.edit_list.last, found_proc_edit);
     }
 
     // TODO: Overwrite if we are deleting, if we are updating again... then we need to consider that an error or figure out a better way to merge updates.
@@ -329,7 +333,7 @@ function void update_edited_wire_pointers(
   B32 inserting
   ) {
   // update the pointers of the wire if the connected processes have been updated
-  for (Process_Edit *test_edit = wit->do_undo.edit_list.first;
+  for (Process_Edit *test_edit = wit->and_whats_this.do_undo.edit_list.first;
        test_edit != 0;
        test_edit = test_edit->next) {
     if (!Get_Flag(test_edit->process->flags, Process_Flag_Wire)) {
@@ -428,7 +432,7 @@ function void apply_process_edits_by_kind(
   /* if (do_undo_arena == 0) goto error; */
 
   // TODO: @Speed
-  for (Process_Edit *proc_edit = wit->do_undo.edit_list.first;
+  for (Process_Edit *proc_edit = wit->and_whats_this.do_undo.edit_list.first;
        proc_edit != 0;
        proc_edit = proc_edit->next) {
     B32 is_wire = Get_Flag(proc_edit->process->flags, Process_Flag_Wire) ? 1 : 0;
@@ -445,7 +449,7 @@ function void apply_process_edits_by_kind(
 
 #if Use_Gen_Id_For_Trie_Key
 # if Proc_Trie_Use_Key_Value_Pair
-        proc_trie_set(wit->permanent_arena, wit->do_undo.trie, proc_edit->process->gen_id, proc_edit->process);
+        proc_trie_set(wit->permanent_arena, wit->and_whats_this.do_undo.trie, proc_edit->process->gen_id, proc_edit->process);
 # else
         Assert(!"This should not happen.....");
 # endif
@@ -459,7 +463,7 @@ function void apply_process_edits_by_kind(
       } break;
       case Proc_Trie_Edit_Delete: {
 #if Use_Gen_Id_For_Trie_Key
-        proc_trie_delete(wit->permanent_arena, wit->do_undo.trie, proc_edit->process->gen_id);
+        proc_trie_delete(wit->permanent_arena, wit->and_whats_this.do_undo.trie, proc_edit->process->gen_id);
 #else
         proc_trie_delete(wit->permanent_arena, do_undo->trie, IntFromPtr(proc_edit->process));
 #endif
@@ -474,13 +478,13 @@ function void apply_process_edits_by_kind(
           }
           else {
             // update any non-edited wires connected to proc being updated
-            for (Process *w = wit->processes.first; w != 0; w = w->next) {
+            for (Process *w = wit->and_whats_this.processes.first; w != 0; w = w->next) {
               if (Get_Flag(w->flags, Process_Flag_Wire)) {
                 B32 wire_in_edit_list = 0;
                 // TODO: We should be able to call the new `get_editable_process` here, right?
                 Process new_wire_lit = *w;
                 // find current new-wire lit if it exists, and overwrite `new_wire_lit`
-                for (Process_Edit *proc_edit = wit->do_undo.edit_list.first;
+                for (Process_Edit *proc_edit = wit->and_whats_this.do_undo.edit_list.first;
                      proc_edit != 0;
                      proc_edit = proc_edit->next) {
                   if (proc_edit->process == w) {
@@ -545,9 +549,9 @@ function void apply_process_edits_by_kind(
           }
 
 #if Use_Gen_Id_For_Trie_Key
-          proc_trie_delete(wit->permanent_arena, wit->do_undo.trie, proc_edit->process->gen_id);
+          proc_trie_delete(wit->permanent_arena, wit->and_whats_this.do_undo.trie, proc_edit->process->gen_id);
 # if Proc_Trie_Use_Key_Value_Pair
-          proc_trie_set(wit->permanent_arena, wit->do_undo.trie, new_p->gen_id, new_p);
+          proc_trie_set(wit->permanent_arena, wit->and_whats_this.do_undo.trie, new_p->gen_id, new_p);
 # else
           Assert(!"This should not happen");
 # endif
@@ -593,7 +597,7 @@ function void clear_process_list(Process_List *list, Process_List *free_list) {
 
 function void gather_processes_from_trie(WhatIsThis *wit) {
   if (wit == 0) goto error;
-  Proc_Trie_Trie *trie = wit->do_undo.trie;
+  Proc_Trie_Trie *trie = wit->and_whats_this.do_undo.trie;
   if (trie == 0) goto error;
 
   { // apply process edits
@@ -603,26 +607,26 @@ function void gather_processes_from_trie(WhatIsThis *wit) {
 
   // transfer active, edited procs
   Process_List new_active_procs = (Process_List){0};
-  for (Process_Edit *proc_edit = wit->do_undo.edit_list.first;
+  for (Process_Edit *proc_edit = wit->and_whats_this.do_undo.edit_list.first;
        proc_edit != 0;
        proc_edit = proc_edit->next) {
-    for (Process *a = wit->active_processes.first; a != 0; a = a->next_active) {
+    for (Process *a = wit->and_whats_this.active_processes.first; a != 0; a = a->next_active) {
       if (proc_edit->process == a && proc_edit->new_process_ptr) {
         SLLQueuePush_NZ(new_active_procs.first, new_active_procs.last, proc_edit->new_process_ptr, next_active, 0);
       }
     }
   }
 
-  wit->active_processes = new_active_procs;
+  wit->and_whats_this.active_processes = new_active_procs;
 
-  wit->do_undo.edit_list = (Process_Edit_List){0};
+  wit->and_whats_this.do_undo.edit_list = (Process_Edit_List){0};
   proc_trie_commit(trie);
 
   { // what is this block?
     Arena *arena = wit->per_frame_arena;
-    clear_process_list(&wit->processes, &wit->free_processes);
+    clear_process_list(&wit->and_whats_this.processes, &wit->free_processes);
 
-    wit->process_count = 0;
+    wit->and_whats_this.process_count = 0;
     for (Proc_Trie_Iterator *iter = proc_trie_iter_init(arena, trie->current_root->node);
          proc_trie_iter_test(iter);
          proc_trie_iter_next(iter)) {
@@ -632,8 +636,8 @@ function void gather_processes_from_trie(WhatIsThis *wit) {
       Process *p = (Process *)iter->key;
 #endif
       if (p) {
-        SLLQueuePush(wit->processes.first, wit->processes.last, p);
-        wit->process_count += 1;
+        SLLQueuePush(wit->and_whats_this.processes.first, wit->and_whats_this.processes.last, p);
+        wit->and_whats_this.process_count += 1;
       }
     }
 
@@ -642,13 +646,13 @@ function void gather_processes_from_trie(WhatIsThis *wit) {
       Process_List *ds_proc_list = &view->processes;
       clear_process_list(context, ds_proc_list);
 
-      for (Proc_Trie_Iterator *iter = proc_trie_iter_root_init(context->per_frame_arena, wit->do_undo.trie);
+      for (Proc_Trie_Iterator *iter = proc_trie_iter_root_init(context->per_frame_arena, wit->and_whats_this.do_undo.trie);
            proc_trie_iter_root_test(iter);
            proc_trie_iter_root_next(iter)) {
         Process *p = create_detached_process(context);
         p->position.x = (F32)iter->stack->indent * 60.0f;
         p->position.y = (F32)iter->stack->depth * 60.0f;
-        if (iter->stack->root == wit->do_undo.trie->current_root) {
+        if (iter->stack->root == wit->and_whats_this.do_undo.trie->current_root) {
           Set_Flag(p->flags, Process_Flag_IsActive);
         }
         p->ref = iter->stack->root;
@@ -743,10 +747,10 @@ function Process *create_detached_process(WhatIsThis *wit) {
 
 
 function Process *create_processes(WhatIsThis *wit) {
-  Process *ps = push_array(wit->permanent_arena, Process, wit->process_count);
+  Process *ps = push_array(wit->permanent_arena, Process, wit->and_whats_this.process_count);
 
   if (ps) {
-    for (U32 i = 0; i < wit->process_count; ++i) {
+    for (U32 i = 0; i < wit->and_whats_this.process_count; ++i) {
       Process *p = ps + i;
       p->gen_id = wit->gen_id++;
       add_process_to_process_edit_list(wit, p, Proc_Trie_Edit_Insert, (Process){0});
@@ -839,7 +843,7 @@ function void add_wire_connection(
         B32 wire_moved_to_same_process = wire->conn[conn] == process;
         B32 wire_is_to_the_left_of_itself = which_conn > wire->which_conn[conn];
 
-        Editable_Process new_wire = get_editable_process(wit->do_undo.edit_list, wire);
+        Editable_Process new_wire = get_editable_process(wit->and_whats_this.do_undo.edit_list, wire);
         new_wire.process.conn[conn] = process;
         if (wire_moved_to_same_process && wire_is_to_the_left_of_itself) {
           new_wire.process.which_conn[conn] = which_conn - 1;
@@ -851,18 +855,18 @@ function void add_wire_connection(
       }
 
       { // decrement currently connected process' conn-count
-        Editable_Process new_process = get_editable_process(wit->do_undo.edit_list, wire->conn[conn]);
+        Editable_Process new_process = get_editable_process(wit->and_whats_this.do_undo.edit_list, wire->conn[conn]);
         new_process.process.conn_count[conn] -= 1;
         add_process_to_process_edit_list(wit, wire->conn[conn], Proc_Trie_Edit_Update, new_process.process);
       }
 
       { // increment newly connected process' conn-count
-        Editable_Process new_process = get_editable_process(wit->do_undo.edit_list, process);
+        Editable_Process new_process = get_editable_process(wit->and_whats_this.do_undo.edit_list, process);
         new_process.process.conn_count[conn] += 1;
         add_process_to_process_edit_list(wit, process, Proc_Trie_Edit_Update, new_process.process);
       }
 
-      for (Process *test_wire = wit->processes.first;
+      for (Process *test_wire = wit->and_whats_this.processes.first;
            test_wire != 0;
            test_wire = test_wire->next) {
         if (Get_Flag(test_wire->flags, Process_Flag_Wire)) {
@@ -876,7 +880,7 @@ function void add_wire_connection(
             // decrement which_conn
             if (test_wire_connected_to_old_process &&
                 test_wire_to_the_right_of_old_process) {
-              Editable_Process new_test_wire = get_editable_process(wit->do_undo.edit_list, test_wire);
+              Editable_Process new_test_wire = get_editable_process(wit->and_whats_this.do_undo.edit_list, test_wire);
               new_test_wire.process.which_conn[conn] -= 1;
               add_process_to_process_edit_list(wit, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
             }
@@ -884,7 +888,7 @@ function void add_wire_connection(
             // increment which_conn
             if (test_wire_connected_to_new_process &&
                 test_wire_to_the_right_of_new_process) {
-              Editable_Process new_test_wire = get_editable_process(wit->do_undo.edit_list, test_wire);
+              Editable_Process new_test_wire = get_editable_process(wit->and_whats_this.do_undo.edit_list, test_wire);
               new_test_wire.process.which_conn[conn] += 1;
               add_process_to_process_edit_list(wit, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
             }
@@ -911,14 +915,14 @@ function void handle_deleted_wire(
     B32 remove_in = Get_Flag(conn_flags, Process_Connection_Flag_In);
     B32 remove_out = Get_Flag(conn_flags, Process_Connection_Flag_Out);
 
-    for (Process *test_wire = wit->processes.first;
+    for (Process *test_wire = wit->and_whats_this.processes.first;
          test_wire != 0;
          test_wire = test_wire->next) {
       B32 should_replace = 0;
       B32 is_wire = Get_Flag(test_wire->flags, Process_Flag_Wire);
 
       if (is_wire && test_wire != wire) {
-        Editable_Process new_test_wire = get_editable_process(wit->do_undo.edit_list, test_wire);
+        Editable_Process new_test_wire = get_editable_process(wit->and_whats_this.do_undo.edit_list, test_wire);
 
         // adjust in-connections that come after deleted wire
         if (remove_in && test_wire->in == wire->in) {
@@ -950,7 +954,7 @@ function void handle_deleted_wire(
     // decrement process' in-count
     if (remove_in && (in_matched || only_in_conn)) {
       if (wire->in) {
-        Editable_Process new_in = get_editable_process(wit->do_undo.edit_list, wire->in);
+        Editable_Process new_in = get_editable_process(wit->and_whats_this.do_undo.edit_list, wire->in);
         new_in.process.in_count -= 1;
         add_process_to_process_edit_list(wit, wire->in, Proc_Trie_Edit_Update, new_in.process);
       }
@@ -959,7 +963,7 @@ function void handle_deleted_wire(
     // decrement process' out-count
     if (remove_out && (out_matched || only_out_conn)) {
       if (wire->out) {
-        Editable_Process new_out = get_editable_process(wit->do_undo.edit_list, wire->out);
+        Editable_Process new_out = get_editable_process(wit->and_whats_this.do_undo.edit_list, wire->out);
         new_out.process.out_count -= 1;
         add_process_to_process_edit_list(wit, wire->out, Proc_Trie_Edit_Update, new_out.process);
       }
@@ -987,7 +991,7 @@ function void delete_process(WhatIsThis *wit, Process *p, U32 which_conn_flags) 
   }
   else {
     // check for wires connected to the deleted process, and delete those also
-    for (Process *wire = wit->processes.first; wire != 0;) {
+    for (Process *wire = wit->and_whats_this.processes.first; wire != 0;) {
       B32 in_match = wire->in == p;
       B32 out_match = wire->out == p;
       B32 should_delete = 0;
@@ -1046,15 +1050,15 @@ function Connection_Result connect_processes_no_gather(
     result.new_wire = create_process(wit);
 
     if (result.new_wire) {
-      Process_Edit *out_edit_proc = process_edit_list_contains_process(wit->do_undo.edit_list, out);
-      Process_Edit *in_edit_proc = process_edit_list_contains_process(wit->do_undo.edit_list, in);
+      Process_Edit *out_edit_proc = process_edit_list_contains_process(wit->and_whats_this.do_undo.edit_list, out);
+      Process_Edit *in_edit_proc = process_edit_list_contains_process(wit->and_whats_this.do_undo.edit_list, in);
 
       if (out_edit_proc) {
         result.new_wire->which_out = out_edit_proc->new_process.out_count;
         out_edit_proc->new_process.out_count += 1;
       }
       else {
-        Editable_Process new_out = get_editable_process(wit->do_undo.edit_list, out);
+        Editable_Process new_out = get_editable_process(wit->and_whats_this.do_undo.edit_list, out);
         result.new_wire->which_out = new_out.process.out_count;
         new_out.process.out_count += 1;
         add_process_to_process_edit_list(wit, out, Proc_Trie_Edit_Update, new_out.process);
@@ -1065,7 +1069,7 @@ function Connection_Result connect_processes_no_gather(
         in_edit_proc->new_process.in_count += 1;
       }
       else {
-        Editable_Process new_in = get_editable_process(wit->do_undo.edit_list, in);
+        Editable_Process new_in = get_editable_process(wit->and_whats_this.do_undo.edit_list, in);
         result.new_wire->which_in = new_in.process.in_count;
         new_in.process.in_count += 1;
         add_process_to_process_edit_list(wit, in, Proc_Trie_Edit_Update, new_in.process);
