@@ -74,11 +74,6 @@ typedef struct {
 } Ui_Box_List;
 
 
-#define Ui_Default_Position (Vector2){0.0f, 0.0f}
-#define Ui_Default_Offset   (Vector2){0.0f, 0.0f}
-#define Ui_Default_Align    Ui_Align_TopLeft
-#define Ui_Default_Layout   Ui_Layout_None
-#define Ui_Default_Sizing   Ui_Sizing_None
 
 
 
@@ -177,13 +172,9 @@ function           Vector2 get_process_position(Context *context, View *view, Pr
 function Process_Selection get_process_selection(Context *context, View *view, Process *p);
 function               B32 is_active_process(Context *context, View *view, Process *p);
 function              void remove_process_from_active_processes(Context *context, View *view, Process *p);
-function              void exit_add_wire_mode(Context *context, View *view);
-
-
 
 function              void copy_active_processes(Context *context, View *view);
 function              void paste_processes(Context *context, View *view);
-
 
 function              void handle_label_editing(Context *context, View *view, Process_List ps);
 
@@ -198,16 +189,10 @@ function              void handle_paste(Context *context, View *view, Process *e
 
 
 
-struct Process_Ref {
-  Process *process;
-  struct Process_Ref *next;
-};
 
 
 
-
-
-typedef struct {
+typedef struct Half_Circle_Points {
   Vector2 first_point;
   Vector2 second_point;
   Vector2 first_control;
@@ -366,17 +351,14 @@ typedef struct Process_Loc {
 
 
 struct Context {
-  WhatIsThis what_is_this; // TODO: use this instead?
+  WhatIsThis what_is_this;
   Arena *render_arena;
-  /* Arena *permanent_arena; */
   Arena *ui_arena;
-  /* Arena *per_frame_arena; */
 
   Keybind *keybinds;
   U32 keybind_count;
 
   U32 flags;
-  /* U64 proc_gen_id; */
 
   Process_List free_processes;
   String_Chunk_List free_strings;

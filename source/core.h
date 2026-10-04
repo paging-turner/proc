@@ -701,7 +701,7 @@ error:;
 
 
 
-function void clear_active_process_list(WhatIsThis *wit, Process_List *list) {
+function void clear_active_process_list(Process_List *list) {
   if (list && list->first) {
     for (Process *p = list->first; p != 0;) {
       Process *next = p->next_active;
@@ -717,8 +717,8 @@ function void clear_active_process_list(WhatIsThis *wit, Process_List *list) {
 
 
 
-function void clear_active_processes(WhatIsThis *wit, Process_List *active_processes) {
-  clear_active_process_list(wit, active_processes);
+function void clear_active_processes(Process_List *active_processes) {
+  clear_active_process_list(active_processes);
 }
 
 
@@ -787,16 +787,10 @@ function void remove_process_from_process_list(
 
 
 
-function Piece_Table *copy_piece_table(Piece_Table *table) {
-  Assert(!"TODO");
-  return 0;
-}
-
 
 
 
 function String_Chunk *create_string_chunk(
-  WhatIsThis *wit,
   Arena *permanent_arena,
   String_Chunk_List *free_strings
   ) {
@@ -817,15 +811,6 @@ function String_Chunk *create_string_chunk(
   return c;
 }
 
-
-function void free_string_chunk(
-  WhatIsThis *wit,
-  String_Chunk_List *free_strings,
-  String_Chunk *chunk
-  ) {
-  SLLQueuePush(free_strings->first, free_strings->last, chunk);
-  chunk->next = 0;
-}
 
 
 
@@ -1454,7 +1439,7 @@ function void debug_print_piece_table_range(WhatIsThis *wit, Piece_Table *table)
 
 
 
-function void debug_check_piece_table(Context *context, Piece_Table *table) {
+function void debug_check_piece_table(Piece_Table *table) {
   if (table) {
     U64 text_size_from_rows = 0;
     List_For(Piece_Table_Row *, row, table->first_row) {

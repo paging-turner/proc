@@ -300,25 +300,6 @@ Steady_Function Steady_Trie_Value_Type *steady_trie(get_default_value)(void) {
 
 
 
-Steady_Function Steady_Trie(Stack_Node) *steady_trie(create_stack_node)(
-  Arena *arena,
-  Steady_Trie(Stack_Node) *free_stack
-  ) {
-  Steady_Trie(Stack_Node) *node = 0;
-  // TODO: Implement and use
-
-  return node;
-}
-
-
-Steady_Function void steady_trie(delete_stack_node)(
-  Arena *arena,
-  Steady_Trie(Stack_Node) *free_stack,
-  Steady_Trie(Stack_Node) *node
-  ) {
-  // TODO: Implement and use
-}
-
 
 
 

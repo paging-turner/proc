@@ -217,7 +217,8 @@ function void copy_active_processes(Context *context, View *view) {
 
     // copy label
     if (c->label) {
-      c->label = copy_piece_table(c->label);
+      // TODO: ........
+      /* c->label = copy_piece_table(c->label); */
     }
   }
 
@@ -351,7 +352,7 @@ function String_Chunk_List string_chunk_list_from_string8(Context *context, Stri
       break;
     }
 
-    String_Chunk *chunk = create_string_chunk(&context->what_is_this, context->what_is_this.permanent_arena, &context->free_strings);
+    String_Chunk *chunk = create_string_chunk(context->what_is_this.permanent_arena, &context->free_strings);
     SLLQueuePush(list.first, list.last, chunk);
 
     U64 amount_to_write = Min(remaining_size, String_Chunk_Size);
@@ -365,7 +366,7 @@ function String_Chunk_List string_chunk_list_from_string8(Context *context, Stri
 
   // add null-termination chunk if the last byte is not 0
   if (list.last && list.last->str_array[String_Chunk_Size-1] != 0) {
-    String_Chunk *chunk = create_string_chunk(&context->what_is_this, context->what_is_this.permanent_arena, &context->free_strings);
+    String_Chunk *chunk = create_string_chunk(context->what_is_this.permanent_arena, &context->free_strings);
     SLLQueuePush(list.first, list.last, chunk);
   }
 
@@ -525,7 +526,7 @@ function void handle_label_editing(Context *context, View *view, Process_List ps
         else if (key == KEY_RIGHT && edit_a.label_cursor < edit_a.label->text_size) {
           edit_a.label_cursor += 1;
         }
-        debug_check_piece_table(context, edit_a.label);
+        debug_check_piece_table(edit_a.label);
 
         // update active proc
         if (should_update_process && editing_occured) {

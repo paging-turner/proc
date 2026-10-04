@@ -389,7 +389,7 @@ function void keybind_handle(Keybind_Environment *env, Keybind *keybind) {
 
 
 function void exit_add_wire_mode(Context *context, View *view) {
-  clear_active_processes(&context->what_is_this, &view->and_whats_this.active_processes);
+  clear_active_processes(&view->and_whats_this.active_processes);
   Unset_Flag(context->flags, Context_Flag_NewWire);
 }
 
@@ -755,7 +755,7 @@ Define_Keybind_And_Action(
             Set_Flag(wire->flags, drag_flag);
             context->ui_state.active_position = context->ui_state.mouse_position;
             if (!is_active_wire) {
-              clear_active_processes(&context->what_is_this, &view->and_whats_this.active_processes);
+              clear_active_processes(&view->and_whats_this.active_processes);
               SLLQueuePush_NZ(view->and_whats_this.active_processes.first, view->and_whats_this.active_processes.last, wire, next_active, 0);
             }
           }
@@ -764,7 +764,7 @@ Define_Keybind_And_Action(
           // begin new-wire
           Set_Flag(context->flags, Context_Flag_NewWire);
           if (!env->is_active) {
-            clear_active_processes(&context->what_is_this, &view->and_whats_this.active_processes);
+            clear_active_processes(&view->and_whats_this.active_processes);
             SLLQueuePush_NZ(view->and_whats_this.active_processes.first, view->and_whats_this.active_processes.last, env->p, next_active, 0);
           }
         } else if (selection.type == Process_Selection_Process) {
@@ -777,7 +777,7 @@ Define_Keybind_And_Action(
           } else {
             // select process
             if (!env->is_active) {
-              clear_active_processes(&context->what_is_this, &view->and_whats_this.active_processes);
+              clear_active_processes(&view->and_whats_this.active_processes);
               SLLQueuePush_NZ(view->and_whats_this.active_processes.first, view->and_whats_this.active_processes.last, env->p, next_active, 0);
             }
             Unset_Flag(context->flags, Context_Flag_NewWire);
@@ -933,7 +933,7 @@ Define_Keybind_And_Action(
         if (new_p) {
           Set_Flag(new_p->flags, Process_Flag_TextEdit);
           new_p->position = GetScreenToWorld2D(context->ui_state.mouse_position, view->camera);
-          clear_active_processes(&context->what_is_this, &view->and_whats_this.active_processes);
+          clear_active_processes(&view->and_whats_this.active_processes);
           SLLQueuePush_NZ(view->and_whats_this.active_processes.first, view->and_whats_this.active_processes.last, new_p, next_active, 0);
         }
       }
@@ -970,7 +970,7 @@ Define_Keybind_And_Action(
       }
       gather_processes_from_trie(&context->what_is_this);
 
-      clear_active_process_list(&context->what_is_this, &view->and_whats_this.active_processes);
+      clear_active_process_list(&view->and_whats_this.active_processes);
     }
   }
 

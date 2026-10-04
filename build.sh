@@ -69,8 +69,11 @@ Executable_File="$Source_File_Name.o"
 Graphics_Frameworks="-framework CoreVideo -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL"
 Graphics_Lib="../libraries/raylib-5.5_macos/lib/libraylib.a"
 
-Settings="-std=c99 -Wall -Wextra -Wstrict-prototypes -Wold-style-definition -Wno-comment"
+Settings="-std=c99 -Wall -Wextra"
 # Toggle settings
+Settings="$Settings -Wold-style-definition"
+Settings="$Settings -Wstrict-prototypes"
+Settings="$Settings -Wno-comment"
 Settings="$Settings -Wno-unused-function"
 Settings="$Settings -Wno-unused-parameter"
 # Settings="$Settings -Wmissing-prototypes -Wmissing-declarations"
