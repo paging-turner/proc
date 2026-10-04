@@ -28,7 +28,7 @@
 
 ///////////////////////////////
 // CPU type
-#define Macho_Cpu_Type_Xlist\
+#define Macho_Cpu_Type_Xlist(X)\
   /* Value       Name,         Description                                */\
   X( 0x00000001, VAX,          "VAX"                                       )\
   X( 0x00000002, ROMP,         "ROMP"                                      )\
@@ -50,16 +50,17 @@
 // TODO: If the file is for the 64-bit version of the instruction set architecture, the CPU type value has the 0x01000000 bit set.
 //       This means we may need to check both verions of the enum values when using them??
 typedef enum {
+  MachoCpuType__Null,
 #define X(value, name, _desc)\
   MachoCpuType_##name = value,
-  Macho_Cpu_Type_Xlist
+  Macho_Cpu_Type_Xlist(X)
 #undef X
 } MachoCpuType;
 
 
 ///////////////////////////////
 // CPU subtype ARM
-#define Macho_Cpu_Subtype_Arm_Xlist\
+#define Macho_Cpu_Subtype_Arm_Xlist(X)\
   /* Value       Name           Description                                  */\
   X( 0x00000000, arm,           "All ARM processors."                         )\
   X( 0x00000001, arm_a500_arch, "Optimized for ARM-A500 ARCH or newer."       )\
@@ -81,15 +82,15 @@ typedef enum {
 
 typedef enum {
 #define X(value, name, _desc)\
-  MachoCpuSubtype_##name = value,
-  Macho_Cpu_Subtype_Xlist
+  MachoCpuSubtypeArm_##name = value,
+  Macho_Cpu_Subtype_Arm_Xlist(X)
 #undef X
-} MachoCpuSubtype;
+} MachoCpuSubtypeArm;
 
 
 ///////////////////////////////
 // CPU subtype x86
-#define Macho_Cpu_Subtype_X86_Xlist\
+#define Macho_Cpu_Subtype_X86_Xlist(X)\
   /* Value       Name             CPU version                            */\
   X( 0x00000003, all,             "All x86 processors."                   )\
   X( 0x00000004, 486,             "Optimized for 486 or newer."           )\
@@ -109,7 +110,7 @@ typedef enum {
 typedef enum {
 #define X(value, name, _desc)\
   MachoCpuSubtypeX86_##name = value,
-  Macho_Cpu_Subtype_X86_Xlist
+  Macho_Cpu_Subtype_X86_Xlist(X)
 #undef X
 } MachoCpuSubtypeX86;
 
@@ -183,7 +184,7 @@ typedef enum {
 
 #define Macho_LC_REQ_DYLD 0x80000000
 
-#define Macho_Load_Command_Xlist\
+#define Macho_Load_Command_Xlist(X)\
   X( LC_SEGMENT                  ,  0x1) /* segment of this file to be mapped */\
   X( LC_SYMTAB                   ,  0x2) /* link-edit stab symbol table info */\
   X( LC_SYMSEG                   ,  0x3) /* link-edit gdb symbol table info (obsolete) */\
@@ -243,7 +244,7 @@ typedef enum {
 typedef enum {
 #define X(name, value, ...)\
   Macho_##name,
-  Macho_Load_Command_Xlist
+  Macho_Load_Command_Xlist(X)
 #undef X
 } Macho_Load_Command;
 
@@ -252,7 +253,7 @@ typedef enum {
 // TODO: Add column names and/or help connect columns with members in `nlist_64`.
 // TODO: Create enums for column-types like "address", "linenumber", and "nesting level".
 // NOTE: NO_SECT == 0
-#define Macho_Symbol_Table_Desc_Xlist\
+#define Macho_Symbol_Table_Desc_Xlist(X)\
   /* Ident.     Lit.   n_strx   n_type  n_sect      n_desc          n_value    comment            */\
   X( N_GSYM   , 0x20,  name,    0,      NO_SECT,          type,             0, "global symbol               ")\
   X( N_FNAME  , 0x22,  name,    0,      NO_SECT,             0,             0, "procedure name (f77 kludge) ")\
@@ -290,9 +291,9 @@ typedef enum {
 
 
 typedef enum {
-#define X(name, ...)\
-  Macho_##name,
-  Macho_Symbol_Table_Desc_Xlist
+#define X(name, l, ...)\
+  Macho_##name = (l),
+  Macho_Symbol_Table_Desc_Xlist(X)
 #undef X
   Macho_Symbol_Table_Desc__Count
 } Macho_Symbol_Table_Desc;
@@ -300,14 +301,104 @@ typedef enum {
 
 
 
+#define Macho_Filetype_Desc_Xlist(X)\
+  X( 0x1, MH_OBJECT, "relocatable object file")\
+  X( 0x2, MH_EXECUTE, "demand paged executable file")\
+  X( 0x3, MH_FVMLIB, "fixed VM shared library file")\
+  X( 0x4, MH_CORE, "core file")\
+  X( 0x5, MH_PRELOAD, "preloaded executable file")\
+  X( 0x6, MH_DYLIB, "dynamically bound shared library")\
+  X( 0x7, MH_DYLINKER, "dynamic link editor")\
+  X( 0x8, MH_BUNDLE, "dynamically bound bundle file")\
+  X( 0x9, MH_DYLIB_STUB, "shared library stub for static linking only, no section contents")\
+  X( 0xa, MH_DSYM, "companion file with only debug sections")\
+  X( 0xb, MH_KEXT_BUNDLE, "x86_64 kexts")\
+  X( 0xc, MH_FILESET, "a file composed of other Mach-Os to be run in the same userspace sharing a single linkedit.")\
+  X( 0xd, MH_GPU_EXECUTE, "gpu program")\
+  X( 0xe, MH_GPU_DYLIB, "gpu support functions")
+
+#define Macho_Flags_Desc_Xlist(X)\
+  X(        0x1, MH_NOUNDEFS, "the object file has no undefined references")\
+  X(        0x2, MH_INCRLINK, "the object file is the output of an incremental link against a base file and can't be link edited again")\
+  X(        0x4, MH_DYLDLINK, "the object file is input for the dynamic linker and can't be staticly link edited again")\
+  X(        0x8, MH_BINDATLOAD, "the object file's undefined references are bound by the dynamic linker when loaded.")\
+  X(       0x10, MH_PREBOUND, "the file has its dynamic undefined references prebound.")\
+  X(       0x20, MH_SPLIT_SEGS, "the file has its read-only and read-write segments split")\
+  X(       0x40, MH_LAZY_INIT, "the shared library init routine is to be run lazily via catching memory faults to its writeable segments (obsolete)")\
+  X(       0x80, MH_TWOLEVEL, "the image is using two-level name space bindings")\
+  X(      0x100, MH_FORCE_FLAT, "the executable is forcing all images to use flat name space bindings")\
+  X(      0x200, MH_NOMULTIDEFS, "this umbrella guarantees no multiple defintions of symbols in its sub-images so the two-level namespace hints can always be used.")\
+  X(      0x400, MH_NOFIXPREBINDING, "do not have dyld notify the prebinding agent about this executable")\
+  X(      0x800, MH_PREBINDABLE, "the binary is not prebound but can have its prebinding redone. only used when MH_PREBOUND is not set.")\
+  X(     0x1000, MH_ALLMODSBOUND, "indicates that this binary binds to all two-level namespace modules of its dependent libraries. only used when MH_PREBINDABLE and MH_TWOLEVEL are both set.")\
+  X(     0x2000, MH_SUBSECTIONS_VIA_SYMBOLS, "safe to divide up the sections into sub-sections via symbols for dead code stripping")\
+  X(     0x4000, MH_CANONICAL, "the binary has been canonicalized via the unprebind operation")\
+  X(     0x8000, MH_WEAK_DEFINES, "the final linked image contains external weak symbols")\
+  X(    0x10000, MH_BINDS_TO_WEAK, "the final linked image uses weak symbols")\
+  X(    0x20000, MH_ALLOW_STACK_EXECUTION, "When this bit is set, all stacks in the task will be given stack execution privilege. Only used in MH_EXECUTE filetypes.")\
+  X(    0x40000, MH_ROOT_SAFE, "When this bit is set, the binary declares it is safe for use in processes with uid zero")\
+  X(    0x80000, MH_SETUID_SAFE, "When this bit is set, the binary declares it is safe for use in processes when issetugid() is true")\
+  X(   0x100000, MH_NO_REEXPORTED_DYLIBS, "When this bit is set on a dylib, the static linker does not need to examine dependent dylibs to see if any are re-exported")\
+  X(   0x200000, MH_PIE, "When this bit is set, the OS will load the main executable at a random address. Only used in MH_EXECUTE filetypes.")\
+  X(   0x400000, MH_DEAD_STRIPPABLE_DYLIB, "Only for use on dylibs. When linking against a dylib that has this bit set, the static linker will automatically not create a LC_LOAD_DYLIB load command to the dylib if no symbols are being referenced from the dylib.")\
+  X(   0x800000, MH_HAS_TLV_DESCRIPTORS, "Contains a section of type S_THREAD_LOCAL_VARIABLES")\
+  X(  0x1000000, MH_NO_HEAP_EXECUTION, "When this bit is set, the OS will run the main executable with a non-executable heap even on platforms (e.g. i386) that don't require it. Only used in MH_EXECUTE filetypes.")\
+  X( 0x02000000, MH_APP_EXTENSION_SAFE, "The code was linked for use in an application extension.")\
+  X( 0x04000000, MH_NLIST_OUTOFSYNC_WITH_DYLDINFO, "The external symbols listed in the nlist symbol table do not include all the symbols listed in the dyld info.")\
+  X( 0x08000000, MH_SIM_SUPPORT, "Allow LC_MIN_VERSION_MACOS and LC_BUILD_VERSION load commands with the platforms macOS, macCatalyst, iOSSimulator, tvOSSimulator and watchOSSimulator.")\
+  X( 0x10000000, MH_IMPLICIT_PAGEZERO, "main executable has no __PAGEZERO segment. Instead, loader (xnu) will load program high and block out all memory below it.")\
+  X( 0x80000000, MH_DYLIB_IN_CACHE, "Only for use on dylibs. When this bit is set, the dylib is part of the dyld shared cache, rather than loose in the filesystem.")
+
+typedef enum Macho_Flag_Index {
+#define X(v, n, d, ...)\
+  Macho_Flag_Index_##n,
+  Macho_Flags_Desc_Xlist(X)
+#undef X
+  Macho_Flag_Index__Count,
+} Macho_Flag_Index;
+
+typedef enum Macho_Filetype {
+#define X(v, n, d, ...)\
+  Macho_Filetype_##n = (v),
+  Macho_Filetype_Desc_Xlist(X)
+#undef X
+} Macho_Filetype;
 
 
 
 
 
 
+static U32 macho_flag_lookup[Macho_Flag_Index__Count] = {
+#define X(v, n, d, ...)\
+  [Macho_Flag_Index_##n] = (v),
+  Macho_Flags_Desc_Xlist(X)
+#undef X
+};
 
+static char *macho_flag_name_lookup[Macho_Flag_Index__Count] = {
+#define X(v, n, d, ...)\
+  [Macho_Flag_Index_##n] = #n,
+  Macho_Flags_Desc_Xlist(X)
+#undef X
+};
 
+static void macho_debug_dump_flag_string_from_flags(U32 flags) {
+  B32 has_printed_a_flag = 0;
+  for (U32 i = 0; i < Macho_Flag_Index__Count; ++i) {
+    U32 test_flag_value = macho_flag_lookup[i];
+    if (flags & test_flag_value) {
+      char *flag_name = macho_flag_name_lookup[i];
+      if (flag_name) {
+        if (has_printed_a_flag) {
+          printf(" | ");
+        }
+        has_printed_a_flag = 1;
+        printf("%s", flag_name);
+      }
+    }
+  }
+}
 
 
 
@@ -317,7 +408,7 @@ typedef enum {
 static void macho_debug_dump_load_command_values(void) {
 #define X(name, _value)\
   printf("%s %d\n", #name, name);
-  Macho_Load_Command_Xlist;
+  Macho_Load_Command_Xlist(X)
 #undef X
 }
 
@@ -327,7 +418,7 @@ static char *macho_get_load_command_name(struct load_command *command) {
   {
 #define X(name, _value)\
     case name: return #name;
-    Macho_Load_Command_Xlist;
+    Macho_Load_Command_Xlist(X);
 #undef X
   }
 
@@ -341,7 +432,7 @@ static B32 macho_load_command_has_valid_type(struct load_command *command) {
   switch(command->cmd) {
 #define X(name, _value)\
     case name: { has_valid_type = 1; } break;
-    Macho_Load_Command_Xlist;
+    Macho_Load_Command_Xlist(X);
 #undef X
   }
 
@@ -349,16 +440,87 @@ static B32 macho_load_command_has_valid_type(struct load_command *command) {
 }
 
 
+static MachoCpuType macho_debug_get_cputype_from_raw_cputype(cpu_type_t raw_cputype) {
+   MachoCpuType cpu_type = raw_cputype & (~CPU_ARCH_MASK);
+   return cpu_type;
+}
+
+static String8 macho_debug_get_cputype_string(cpu_type_t raw_cpu_type) {
+  MachoCpuType cpu_type = macho_debug_get_cputype_from_raw_cputype(raw_cpu_type);
+  switch(cpu_type) {
+#define X(v, n, d, ...)\
+    case MachoCpuType_##n: return str8_lit(#n);
+    Macho_Cpu_Type_Xlist(X)
+#undef X
+    default: return str8_lit("<Unknown Cpu Type>");
+  }
+}
+
+static U32 macho_debug_get_cpusubtype_from_raw_cpusubtype(
+  cpu_type_t raw_cpu_type,
+  cpu_subtype_t raw_cpu_subtype
+  ) {
+  U32 cpu_subtype = cpu_subtype = raw_cpu_subtype & (~CPU_SUBTYPE_MASK);
+  return cpu_subtype;
+}
+
+static String8 macho_debug_get_cpusubtype_string(
+  cpu_type_t raw_cpu_type,
+  cpu_subtype_t raw_cpu_subtype
+  ) {
+  String8 result = (String8){0};
+  MachoCpuType cpu_type = macho_debug_get_cputype_from_raw_cputype(raw_cpu_type);
+  U32 cpu_subtype = macho_debug_get_cpusubtype_from_raw_cpusubtype(raw_cpu_type, raw_cpu_subtype);
+
+  if (cpu_type == CPU_TYPE_X86) {
+    switch(cpu_subtype) {
+#define X(v, n, d, ...)\
+      case MachoCpuSubtypeX86_##n: return str8_lit(#n);
+      Macho_Cpu_Subtype_X86_Xlist(X)
+#undef X
+    default: return str8_lit("<Unknown Cpu Subtype>");
+    }
+  }
+  else if (cpu_type == CPU_TYPE_ARM) {
+    switch(cpu_subtype) {
+#define X(v, n, d, ...)\
+      case MachoCpuSubtypeArm_##n: return str8_lit(#n);
+      Macho_Cpu_Subtype_Arm_Xlist(X)
+#undef X
+    default: return str8_lit("<Unknown Cpu Subtype>");
+    }
+  }
+
+  return result;
+}
+
+static String8 macho_debug_get_filetype_string(U32 filetype) {
+  switch(filetype) {
+#define X(v, n, d, ...)\
+    case n: return str8_lit(#n);
+    Macho_Filetype_Desc_Xlist(X)
+#undef X
+  default: return str8_lit("<Unknown filetype>");
+  }
+}
+
 static void macho_debug_log_header(struct mach_header_64 *header) {
   printf("Image Header\n");
   printf("============\n");
-  printf("      magic %x\n", header->magic);
-  printf("    cputype %x\n", header->cputype);
-  printf(" cpusubtype %x\n", header->cpusubtype);
-  printf("   filetype %x\n", header->filetype);
-  printf("      ncmds %x\n", header->ncmds);
-  printf(" sizeofcmds %x\n", header->sizeofcmds);
-  printf("      flags %x\n", header->flags);
+  printf("      magic 0x%x\n", header->magic);
+  String8 cputype_string = macho_debug_get_cputype_string(header->cputype);
+  printf("    cputype %s\n", cputype_string.str);
+  String8 cpu_subtype_string = macho_debug_get_cpusubtype_string(header->cputype, header->cpusubtype);
+  printf(" cpusubtype %s\n", cpu_subtype_string.str);
+  String8 filetype_string = macho_debug_get_filetype_string(header->filetype);
+  printf("   filetype %s\n", filetype_string.str);
+  printf("      ncmds %u\n", header->ncmds);
+  printf(" sizeofcmds %u\n", header->sizeofcmds);
+  {
+    printf("      flags 0x%x  ", header->flags);
+    macho_debug_dump_flag_string_from_flags(header->flags);
+    printf("\n");
+  }
   printf("   reserved %x\n", header->reserved);
 
   printf("\n\n");
@@ -416,7 +578,7 @@ static String8 macho_get_symbol_description(struct nlist_64 symbol) {
   switch(symbol.n_desc) {
 #define X(name, ...)\
     case name: return str8_lit(#name);
-    Macho_Symbol_Table_Desc_Xlist;
+    Macho_Symbol_Table_Desc_Xlist(X);
 #undef X
   default: return str8_lit("0");
   }
