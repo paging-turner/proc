@@ -302,52 +302,52 @@ typedef enum {
 
 
 #define Macho_Filetype_Desc_Xlist(X)\
-  X( 0x1, MH_OBJECT, "relocatable object file")\
-  X( 0x2, MH_EXECUTE, "demand paged executable file")\
-  X( 0x3, MH_FVMLIB, "fixed VM shared library file")\
-  X( 0x4, MH_CORE, "core file")\
-  X( 0x5, MH_PRELOAD, "preloaded executable file")\
-  X( 0x6, MH_DYLIB, "dynamically bound shared library")\
-  X( 0x7, MH_DYLINKER, "dynamic link editor")\
-  X( 0x8, MH_BUNDLE, "dynamically bound bundle file")\
-  X( 0x9, MH_DYLIB_STUB, "shared library stub for static linking only, no section contents")\
-  X( 0xa, MH_DSYM, "companion file with only debug sections")\
-  X( 0xb, MH_KEXT_BUNDLE, "x86_64 kexts")\
-  X( 0xc, MH_FILESET, "a file composed of other Mach-Os to be run in the same userspace sharing a single linkedit.")\
-  X( 0xd, MH_GPU_EXECUTE, "gpu program")\
-  X( 0xe, MH_GPU_DYLIB, "gpu support functions")
+  X( 0x1, MH_OBJECT      , "relocatable object file")\
+  X( 0x2, MH_EXECUTE     , "demand paged executable file")\
+  X( 0x3, MH_FVMLIB      , "fixed VM shared library file")\
+  X( 0x4, MH_CORE        , "core file")\
+  X( 0x5, MH_PRELOAD     , "preloaded executable file")\
+  X( 0x6, MH_DYLIB       , "dynamically bound shared library")\
+  X( 0x7, MH_DYLINKER    , "dynamic link editor")\
+  X( 0x8, MH_BUNDLE      , "dynamically bound bundle file")\
+  X( 0x9, MH_DYLIB_STUB  , "shared library stub for static linking only, no section contents")\
+  X( 0xa, MH_DSYM        , "companion file with only debug sections")\
+  X( 0xb, MH_KEXT_BUNDLE , "x86_64 kexts")\
+  X( 0xc, MH_FILESET     , "a file composed of other Mach-Os to be run in the same userspace sharing a single linkedit.")\
+  X( 0xd, MH_GPU_EXECUTE , "gpu program")\
+  X( 0xe, MH_GPU_DYLIB   , "gpu support functions")
 
 #define Macho_Flags_Desc_Xlist(X)\
-  X(        0x1, MH_NOUNDEFS, "the object file has no undefined references")\
-  X(        0x2, MH_INCRLINK, "the object file is the output of an incremental link against a base file and can't be link edited again")\
-  X(        0x4, MH_DYLDLINK, "the object file is input for the dynamic linker and can't be staticly link edited again")\
-  X(        0x8, MH_BINDATLOAD, "the object file's undefined references are bound by the dynamic linker when loaded.")\
-  X(       0x10, MH_PREBOUND, "the file has its dynamic undefined references prebound.")\
-  X(       0x20, MH_SPLIT_SEGS, "the file has its read-only and read-write segments split")\
-  X(       0x40, MH_LAZY_INIT, "the shared library init routine is to be run lazily via catching memory faults to its writeable segments (obsolete)")\
-  X(       0x80, MH_TWOLEVEL, "the image is using two-level name space bindings")\
-  X(      0x100, MH_FORCE_FLAT, "the executable is forcing all images to use flat name space bindings")\
-  X(      0x200, MH_NOMULTIDEFS, "this umbrella guarantees no multiple defintions of symbols in its sub-images so the two-level namespace hints can always be used.")\
-  X(      0x400, MH_NOFIXPREBINDING, "do not have dyld notify the prebinding agent about this executable")\
-  X(      0x800, MH_PREBINDABLE, "the binary is not prebound but can have its prebinding redone. only used when MH_PREBOUND is not set.")\
-  X(     0x1000, MH_ALLMODSBOUND, "indicates that this binary binds to all two-level namespace modules of its dependent libraries. only used when MH_PREBINDABLE and MH_TWOLEVEL are both set.")\
-  X(     0x2000, MH_SUBSECTIONS_VIA_SYMBOLS, "safe to divide up the sections into sub-sections via symbols for dead code stripping")\
-  X(     0x4000, MH_CANONICAL, "the binary has been canonicalized via the unprebind operation")\
-  X(     0x8000, MH_WEAK_DEFINES, "the final linked image contains external weak symbols")\
-  X(    0x10000, MH_BINDS_TO_WEAK, "the final linked image uses weak symbols")\
-  X(    0x20000, MH_ALLOW_STACK_EXECUTION, "When this bit is set, all stacks in the task will be given stack execution privilege. Only used in MH_EXECUTE filetypes.")\
-  X(    0x40000, MH_ROOT_SAFE, "When this bit is set, the binary declares it is safe for use in processes with uid zero")\
-  X(    0x80000, MH_SETUID_SAFE, "When this bit is set, the binary declares it is safe for use in processes when issetugid() is true")\
-  X(   0x100000, MH_NO_REEXPORTED_DYLIBS, "When this bit is set on a dylib, the static linker does not need to examine dependent dylibs to see if any are re-exported")\
-  X(   0x200000, MH_PIE, "When this bit is set, the OS will load the main executable at a random address. Only used in MH_EXECUTE filetypes.")\
-  X(   0x400000, MH_DEAD_STRIPPABLE_DYLIB, "Only for use on dylibs. When linking against a dylib that has this bit set, the static linker will automatically not create a LC_LOAD_DYLIB load command to the dylib if no symbols are being referenced from the dylib.")\
-  X(   0x800000, MH_HAS_TLV_DESCRIPTORS, "Contains a section of type S_THREAD_LOCAL_VARIABLES")\
-  X(  0x1000000, MH_NO_HEAP_EXECUTION, "When this bit is set, the OS will run the main executable with a non-executable heap even on platforms (e.g. i386) that don't require it. Only used in MH_EXECUTE filetypes.")\
-  X( 0x02000000, MH_APP_EXTENSION_SAFE, "The code was linked for use in an application extension.")\
-  X( 0x04000000, MH_NLIST_OUTOFSYNC_WITH_DYLDINFO, "The external symbols listed in the nlist symbol table do not include all the symbols listed in the dyld info.")\
-  X( 0x08000000, MH_SIM_SUPPORT, "Allow LC_MIN_VERSION_MACOS and LC_BUILD_VERSION load commands with the platforms macOS, macCatalyst, iOSSimulator, tvOSSimulator and watchOSSimulator.")\
-  X( 0x10000000, MH_IMPLICIT_PAGEZERO, "main executable has no __PAGEZERO segment. Instead, loader (xnu) will load program high and block out all memory below it.")\
-  X( 0x80000000, MH_DYLIB_IN_CACHE, "Only for use on dylibs. When this bit is set, the dylib is part of the dyld shared cache, rather than loose in the filesystem.")
+  X(        0x1, MH_NOUNDEFS                      , "the object file has no undefined references")\
+  X(        0x2, MH_INCRLINK                      , "the object file is the output of an incremental link against a base file and can't be link edited again")\
+  X(        0x4, MH_DYLDLINK                      , "the object file is input for the dynamic linker and can't be staticly link edited again")\
+  X(        0x8, MH_BINDATLOAD                    , "the object file's undefined references are bound by the dynamic linker when loaded.")\
+  X(       0x10, MH_PREBOUND                      , "the file has its dynamic undefined references prebound.")\
+  X(       0x20, MH_SPLIT_SEGS                    , "the file has its read-only and read-write segments split")\
+  X(       0x40, MH_LAZY_INIT                     , "the shared library init routine is to be run lazily via catching memory faults to its writeable segments (obsolete)")\
+  X(       0x80, MH_TWOLEVEL                      , "the image is using two-level name space bindings")\
+  X(      0x100, MH_FORCE_FLAT                    , "the executable is forcing all images to use flat name space bindings")\
+  X(      0x200, MH_NOMULTIDEFS                   , "this umbrella guarantees no multiple defintions of symbols in its sub-images so the two-level namespace hints can always be used.")\
+  X(      0x400, MH_NOFIXPREBINDING               , "do not have dyld notify the prebinding agent about this executable")\
+  X(      0x800, MH_PREBINDABLE                   , "the binary is not prebound but can have its prebinding redone. only used when MH_PREBOUND is not set.")\
+  X(     0x1000, MH_ALLMODSBOUND                  , "indicates that this binary binds to all two-level namespace modules of its dependent libraries. only used when MH_PREBINDABLE and MH_TWOLEVEL are both set.")\
+  X(     0x2000, MH_SUBSECTIONS_VIA_SYMBOLS       , "safe to divide up the sections into sub-sections via symbols for dead code stripping")\
+  X(     0x4000, MH_CANONICAL                     , "the binary has been canonicalized via the unprebind operation")\
+  X(     0x8000, MH_WEAK_DEFINES                  , "the final linked image contains external weak symbols")\
+  X(    0x10000, MH_BINDS_TO_WEAK                 , "the final linked image uses weak symbols")\
+  X(    0x20000, MH_ALLOW_STACK_EXECUTION         , "When this bit is set, all stacks in the task will be given stack execution privilege. Only used in MH_EXECUTE filetypes.")\
+  X(    0x40000, MH_ROOT_SAFE                     , "When this bit is set, the binary declares it is safe for use in processes with uid zero")\
+  X(    0x80000, MH_SETUID_SAFE                   , "When this bit is set, the binary declares it is safe for use in processes when issetugid() is true")\
+  X(   0x100000, MH_NO_REEXPORTED_DYLIBS          , "When this bit is set on a dylib, the static linker does not need to examine dependent dylibs to see if any are re-exported")\
+  X(   0x200000, MH_PIE                           , "When this bit is set, the OS will load the main executable at a random address. Only used in MH_EXECUTE filetypes.")\
+  X(   0x400000, MH_DEAD_STRIPPABLE_DYLIB         , "Only for use on dylibs. When linking against a dylib that has this bit set, the static linker will automatically not create a LC_LOAD_DYLIB load command to the dylib if no symbols are being referenced from the dylib.")\
+  X(   0x800000, MH_HAS_TLV_DESCRIPTORS           , "Contains a section of type S_THREAD_LOCAL_VARIABLES")\
+  X(  0x1000000, MH_NO_HEAP_EXECUTION             , "When this bit is set, the OS will run the main executable with a non-executable heap even on platforms (e.g. i386) that don't require it. Only used in MH_EXECUTE filetypes.")\
+  X( 0x02000000, MH_APP_EXTENSION_SAFE            , "The code was linked for use in an application extension.")\
+  X( 0x04000000, MH_NLIST_OUTOFSYNC_WITH_DYLDINFO , "The external symbols listed in the nlist symbol table do not include all the symbols listed in the dyld info.")\
+  X( 0x08000000, MH_SIM_SUPPORT                   , "Allow LC_MIN_VERSION_MACOS and LC_BUILD_VERSION load commands with the platforms macOS, macCatalyst, iOSSimulator, tvOSSimulator and watchOSSimulator.")\
+  X( 0x10000000, MH_IMPLICIT_PAGEZERO             , "main executable has no __PAGEZERO segment. Instead, loader (xnu) will load program high and block out all memory below it.")\
+  X( 0x80000000, MH_DYLIB_IN_CACHE                , "Only for use on dylibs. When this bit is set, the dylib is part of the dyld shared cache, rather than loose in the filesystem.")
 
 typedef enum Macho_Flag_Index {
 #define X(v, n, d, ...)\
