@@ -119,6 +119,8 @@ typedef enum Process_Connection_Flag {
 } Process_Connection_Flag;
 
 
+
+
 struct Process {
   //////////////
   // Members that need to be saved when serializing.
@@ -178,6 +180,9 @@ struct Process {
 
   U64 cold_id;
 };
+
+
+
 typedef struct Process_Edit {
   Proc_Trie_Edit_Kind kind;
   Process *process;
@@ -218,18 +223,17 @@ typedef struct Connection_Result {
 
 
 
-typedef struct AndWhatsThis {
+typedef struct Proc_History {
   Process_Do_Undo do_undo;
   U64 process_count;
   Process_List processes;
   Process_List active_processes;
-} AndWhatsThis;
+} Proc_History;
 
 
 
 
-typedef struct WhatIsThis {
-  Arena *arena;
+typedef struct Proc_Core {
   Arena *permanent_arena;
   Arena *per_frame_arena;
   U64 gen_id;
@@ -237,8 +241,8 @@ typedef struct WhatIsThis {
   Piece_Table_Memory piece_table_memory;
 
   // per-view
-  AndWhatsThis and_whats_this;
-} WhatIsThis;
+  Proc_History history;
+} Proc_Core;
 
 
 
@@ -286,7 +290,7 @@ function Process_Edit *process_edit_list_contains_process(
 
 
 function B32 add_process_to_process_edit_list(
-  WhatIsThis *wit,
+  Proc_Core *core,
   Process *p,
   Proc_Trie_Edit_Kind edit_kind,
   Process new_process
@@ -295,8 +299,8 @@ function B32 add_process_to_process_edit_list(
   Process_Edit *found_proc_edit = 0;
 
   // ensure that do-undo matches the do-undo of the passed-in process
-  if (wit && wit->per_frame_arena) {
-    for (Process_Edit *proc_edit = wit->and_whats_this.do_undo.edit_list.first;
+  if (core && core->per_frame_arena) {
+    for (Process_Edit *proc_edit = core->history.do_undo.edit_list.first;
          proc_edit != 0;
          proc_edit = proc_edit->next) {
       if (proc_edit->process == p) {
@@ -306,8 +310,8 @@ function B32 add_process_to_process_edit_list(
     }
 
     if (found_proc_edit == 0) {
-      found_proc_edit = arena_push(wit->per_frame_arena, sizeof(Process_Edit));
-      SLLQueuePush(wit->and_whats_this.do_undo.edit_list.first, wit->and_whats_this.do_undo.edit_list.last, found_proc_edit);
+      found_proc_edit = arena_push(core->per_frame_arena, sizeof(Process_Edit));
+      SLLQueuePush(core->history.do_undo.edit_list.first, core->history.do_undo.edit_list.last, found_proc_edit);
     }
 
     // TODO: Overwrite if we are deleting, if we are updating again... then we need to consider that an error or figure out a better way to merge updates.
@@ -328,12 +332,12 @@ function B32 add_process_to_process_edit_list(
 
 
 function void update_edited_wire_pointers(
-  WhatIsThis *wit,
+  Proc_Core *core,
   Process_Edit *proc_edit,
   B32 inserting
   ) {
   // update the pointers of the wire if the connected processes have been updated
-  for (Process_Edit *test_edit = wit->and_whats_this.do_undo.edit_list.first;
+  for (Process_Edit *test_edit = core->history.do_undo.edit_list.first;
        test_edit != 0;
        test_edit = test_edit->next) {
     if (!Get_Flag(test_edit->process->flags, Process_Flag_Wire)) {
@@ -361,13 +365,13 @@ function void update_edited_wire_pointers(
 
 
 
-function Process *push_permanent_process(WhatIsThis *wit) {
+function Process *push_permanent_process(Proc_Core *core) {
   Process *p = 0;
 
-  if (wit && wit->permanent_arena) {
-    p = push_struct(wit->permanent_arena, Process);
+  if (core && core->permanent_arena) {
+    p = push_struct(core->permanent_arena, Process);
     if (p) {
-      p->gen_id = wit->gen_id++;
+      p->gen_id = core->gen_id++;
     }
   }
 
@@ -375,11 +379,11 @@ function Process *push_permanent_process(WhatIsThis *wit) {
 }
 
 
-function Process *create_process(WhatIsThis *wit) {
-  Process *p = push_permanent_process(wit);
+function Process *create_process(Proc_Core *core) {
+  Process *p = push_permanent_process(core);
 
   if (p) {
-    add_process_to_process_edit_list(wit, p, Proc_Trie_Edit_Insert, (Process){0});
+    add_process_to_process_edit_list(core, p, Proc_Trie_Edit_Insert, (Process){0});
   }
 
   return p;
@@ -422,17 +426,17 @@ function Editable_Process get_editable_process(
 
 
 function void apply_process_edits_by_kind(
-  WhatIsThis *wit,
+  Proc_Core *core,
   B32 handle_wires
   ) {
   Assert(handle_wires == 0 || handle_wires == 1);
-  if (wit == 0) goto error;
+  if (core == 0) goto error;
   /* Process_Do_Undo *do_undo = &view->do_undo; */
   /* Arena *do_undo_arena = do_undo->arena; */
   /* if (do_undo_arena == 0) goto error; */
 
   // TODO: @Speed
-  for (Process_Edit *proc_edit = wit->and_whats_this.do_undo.edit_list.first;
+  for (Process_Edit *proc_edit = core->history.do_undo.edit_list.first;
        proc_edit != 0;
        proc_edit = proc_edit->next) {
     B32 is_wire = Get_Flag(proc_edit->process->flags, Process_Flag_Wire) ? 1 : 0;
@@ -444,12 +448,12 @@ function void apply_process_edits_by_kind(
         Assert(proc_edit->process);
 
         if (is_wire) {
-          update_edited_wire_pointers(wit, proc_edit, 1);
+          update_edited_wire_pointers(core, proc_edit, 1);
         }
 
 #if Use_Gen_Id_For_Trie_Key
 # if Proc_Trie_Use_Key_Value_Pair
-        proc_trie_set(wit->permanent_arena, wit->and_whats_this.do_undo.trie, proc_edit->process->gen_id, proc_edit->process);
+        proc_trie_set(core->permanent_arena, core->history.do_undo.trie, proc_edit->process->gen_id, proc_edit->process);
 # else
         Assert(!"This should not happen.....");
 # endif
@@ -457,34 +461,34 @@ function void apply_process_edits_by_kind(
 # if Proc_Trie_Use_Key_Value_Pair
         Assert(!"This should not happen.....");
 # else
-        proc_trie_insert(wit->permanent_arena, do_undo->trie, IntFromPtr(proc_edit->process));
+        proc_trie_insert(core->permanent_arena, do_undo->trie, IntFromPtr(proc_edit->process));
 # endif
 #endif
       } break;
       case Proc_Trie_Edit_Delete: {
 #if Use_Gen_Id_For_Trie_Key
-        proc_trie_delete(wit->permanent_arena, wit->and_whats_this.do_undo.trie, proc_edit->process->gen_id);
+        proc_trie_delete(core->permanent_arena, core->history.do_undo.trie, proc_edit->process->gen_id);
 #else
-        proc_trie_delete(wit->permanent_arena, do_undo->trie, IntFromPtr(proc_edit->process));
+        proc_trie_delete(core->permanent_arena, do_undo->trie, IntFromPtr(proc_edit->process));
 #endif
       } break;
       case Proc_Trie_Edit_Update: {
-        Process *new_p = push_permanent_process(wit);
+        Process *new_p = push_permanent_process(core);
         if (new_p) {
           proc_edit->new_process_ptr = new_p;
 
           if (is_wire) {
-            update_edited_wire_pointers(wit, proc_edit, 0);
+            update_edited_wire_pointers(core, proc_edit, 0);
           }
           else {
             // update any non-edited wires connected to proc being updated
-            for (Process *w = wit->and_whats_this.processes.first; w != 0; w = w->next) {
+            for (Process *w = core->history.processes.first; w != 0; w = w->next) {
               if (Get_Flag(w->flags, Process_Flag_Wire)) {
                 B32 wire_in_edit_list = 0;
                 // TODO: We should be able to call the new `get_editable_process` here, right?
                 Process new_wire_lit = *w;
                 // find current new-wire lit if it exists, and overwrite `new_wire_lit`
-                for (Process_Edit *proc_edit = wit->and_whats_this.do_undo.edit_list.first;
+                for (Process_Edit *proc_edit = core->history.do_undo.edit_list.first;
                      proc_edit != 0;
                      proc_edit = proc_edit->next) {
                   if (proc_edit->process == w) {
@@ -506,7 +510,7 @@ function void apply_process_edits_by_kind(
 
                 if (!wire_in_edit_list && (in_match || out_match)) {
                   // TODO: Use `get_editable_process` for new_wire_lit
-                  add_process_to_process_edit_list(wit, w, Proc_Trie_Edit_Update, new_wire_lit);
+                  add_process_to_process_edit_list(core, w, Proc_Trie_Edit_Update, new_wire_lit);
                 }
               }
             }
@@ -519,14 +523,14 @@ function void apply_process_edits_by_kind(
           // copy proc label
           if (new_p->label) {
             B32 error = 0;
-            Piece_Table *new_piece_table = push_struct(wit->permanent_arena, Piece_Table);
+            Piece_Table *new_piece_table = push_struct(core->permanent_arena, Piece_Table);
             if (new_piece_table) {
               new_piece_table->text_size = new_p->label->text_size;
               new_piece_table->insertion_chunk = new_p->label->insertion_chunk;
               for (Piece_Table_Row *row = new_p->label->first_row;
                    row != 0;
                    row = row->next) {
-                Piece_Table_Row *new_row = push_struct(wit->permanent_arena, Piece_Table_Row);
+                Piece_Table_Row *new_row = push_struct(core->permanent_arena, Piece_Table_Row);
                 if (new_row) {
                   *new_row = *row;
                   DLLPushBack(new_piece_table->first_row, new_piece_table->last_row, new_row);
@@ -549,18 +553,18 @@ function void apply_process_edits_by_kind(
           }
 
 #if Use_Gen_Id_For_Trie_Key
-          proc_trie_delete(wit->permanent_arena, wit->and_whats_this.do_undo.trie, proc_edit->process->gen_id);
+          proc_trie_delete(core->permanent_arena, core->history.do_undo.trie, proc_edit->process->gen_id);
 # if Proc_Trie_Use_Key_Value_Pair
-          proc_trie_set(wit->permanent_arena, wit->and_whats_this.do_undo.trie, new_p->gen_id, new_p);
+          proc_trie_set(core->permanent_arena, core->history.do_undo.trie, new_p->gen_id, new_p);
 # else
           Assert(!"This should not happen");
 # endif
 #else
-          proc_trie_delete(wit->permanent_arena, do_undo->trie, IntFromPtr(proc_edit->process));
+          proc_trie_delete(core->permanent_arena, do_undo->trie, IntFromPtr(proc_edit->process));
 # if Proc_Trie_Use_Key_Value_Pair
           Assert(!"This should not happen");
 # else
-          proc_trie_insert(wit->permanent_arena, do_undo->trie, IntFromPtr(new_p));
+          proc_trie_insert(core->permanent_arena, do_undo->trie, IntFromPtr(new_p));
 # endif
 #endif
         }
@@ -595,38 +599,38 @@ function void clear_process_list(Process_List *list, Process_List *free_list) {
 
 
 
-function void gather_processes_from_trie(WhatIsThis *wit) {
-  if (wit == 0) goto error;
-  Proc_Trie_Trie *trie = wit->and_whats_this.do_undo.trie;
+function void gather_processes_from_trie(Proc_Core *core) {
+  if (core == 0) goto error;
+  Proc_Trie_Trie *trie = core->history.do_undo.trie;
   if (trie == 0) goto error;
 
   { // apply process edits
-    apply_process_edits_by_kind(wit, 0);
-    apply_process_edits_by_kind(wit, 1);
+    apply_process_edits_by_kind(core, 0);
+    apply_process_edits_by_kind(core, 1);
   }
 
   // transfer active, edited procs
   Process_List new_active_procs = (Process_List){0};
-  for (Process_Edit *proc_edit = wit->and_whats_this.do_undo.edit_list.first;
+  for (Process_Edit *proc_edit = core->history.do_undo.edit_list.first;
        proc_edit != 0;
        proc_edit = proc_edit->next) {
-    for (Process *a = wit->and_whats_this.active_processes.first; a != 0; a = a->next_active) {
+    for (Process *a = core->history.active_processes.first; a != 0; a = a->next_active) {
       if (proc_edit->process == a && proc_edit->new_process_ptr) {
         SLLQueuePush_NZ(new_active_procs.first, new_active_procs.last, proc_edit->new_process_ptr, next_active, 0);
       }
     }
   }
 
-  wit->and_whats_this.active_processes = new_active_procs;
+  core->history.active_processes = new_active_procs;
 
-  wit->and_whats_this.do_undo.edit_list = (Process_Edit_List){0};
+  core->history.do_undo.edit_list = (Process_Edit_List){0};
   proc_trie_commit(trie);
 
   { // what is this block?
-    Arena *arena = wit->per_frame_arena;
-    clear_process_list(&wit->and_whats_this.processes, &wit->free_processes);
+    Arena *arena = core->per_frame_arena;
+    clear_process_list(&core->history.processes, &core->free_processes);
 
-    wit->and_whats_this.process_count = 0;
+    core->history.process_count = 0;
     for (Proc_Trie_Iterator *iter = proc_trie_iter_init(arena, trie->current_root->node);
          proc_trie_iter_test(iter);
          proc_trie_iter_next(iter)) {
@@ -636,8 +640,8 @@ function void gather_processes_from_trie(WhatIsThis *wit) {
       Process *p = (Process *)iter->key;
 #endif
       if (p) {
-        SLLQueuePush(wit->and_whats_this.processes.first, wit->and_whats_this.processes.last, p);
-        wit->and_whats_this.process_count += 1;
+        SLLQueuePush(core->history.processes.first, core->history.processes.last, p);
+        core->history.process_count += 1;
       }
     }
 
@@ -646,13 +650,13 @@ function void gather_processes_from_trie(WhatIsThis *wit) {
       Process_List *ds_proc_list = &view->processes;
       clear_process_list(context, ds_proc_list);
 
-      for (Proc_Trie_Iterator *iter = proc_trie_iter_root_init(context->per_frame_arena, wit->and_whats_this.do_undo.trie);
+      for (Proc_Trie_Iterator *iter = proc_trie_iter_root_init(context->per_frame_arena, core->history.do_undo.trie);
            proc_trie_iter_root_test(iter);
            proc_trie_iter_root_next(iter)) {
         Process *p = create_detached_process(context);
         p->position.x = (F32)iter->stack->indent * 60.0f;
         p->position.y = (F32)iter->stack->depth * 60.0f;
-        if (iter->stack->root == wit->and_whats_this.do_undo.trie->current_root) {
+        if (iter->stack->root == core->history.do_undo.trie->current_root) {
           Set_Flag(p->flags, Process_Flag_IsActive);
         }
         p->ref = iter->stack->root;
@@ -723,20 +727,20 @@ function void clear_active_processes(Process_List *active_processes) {
 
 
 
-function Process *create_detached_process(WhatIsThis *wit) {
-  Process *p = wit->free_processes.first;
+function Process *create_detached_process(Proc_Core *core) {
+  Process *p = core->free_processes.first;
 
   if (p) {
-    SLLQueuePop(wit->free_processes.first, wit->free_processes.last);
+    SLLQueuePop(core->free_processes.first, core->free_processes.last);
     // TODO: do we need to update the gen-id here??
   } else {
-    p = push_permanent_process(wit);
+    p = push_permanent_process(core);
   }
 
   if (p) {
     *p = (Process){0};
     Set_Flag(p->flags, Process_Flag_IsDetached);
-    p->gen_id = wit->gen_id++;
+    p->gen_id = core->gen_id++;
   } else {
     p = The_Null_Process();
   }
@@ -746,18 +750,18 @@ function Process *create_detached_process(WhatIsThis *wit) {
 
 
 
-function Process *create_processes(WhatIsThis *wit) {
-  Process *ps = push_array(wit->permanent_arena, Process, wit->and_whats_this.process_count);
+function Process *create_processes(Proc_Core *core) {
+  Process *ps = push_array(core->permanent_arena, Process, core->history.process_count);
 
   if (ps) {
-    for (U32 i = 0; i < wit->and_whats_this.process_count; ++i) {
+    for (U32 i = 0; i < core->history.process_count; ++i) {
       Process *p = ps + i;
-      p->gen_id = wit->gen_id++;
-      add_process_to_process_edit_list(wit, p, Proc_Trie_Edit_Insert, (Process){0});
+      p->gen_id = core->gen_id++;
+      add_process_to_process_edit_list(core, p, Proc_Trie_Edit_Insert, (Process){0});
     }
 
     // TODO: if we end up allowing dynamic creation of procs for ui, we need to switch with kind of do-undo to pass to the gather func........
-    gather_processes_from_trie(wit);
+    gather_processes_from_trie(core);
   }
 
   return ps;
@@ -816,19 +820,19 @@ function String_Chunk *create_string_chunk(
 
 
 function void add_wire_connection(
-  WhatIsThis *wit,
+  Proc_Core *core,
   Process *wire,
   Process *process,
   Process_Connection conn,
   U32 which_conn
   ) {
-  if (wit && wire && process) {
+  if (core && wire && process) {
     { // what is this block?
       {
         B32 wire_moved_to_same_process = wire->conn[conn] == process;
         B32 wire_is_to_the_left_of_itself = which_conn > wire->which_conn[conn];
 
-        Editable_Process new_wire = get_editable_process(wit->and_whats_this.do_undo.edit_list, wire);
+        Editable_Process new_wire = get_editable_process(core->history.do_undo.edit_list, wire);
         new_wire.process.conn[conn] = process;
         if (wire_moved_to_same_process && wire_is_to_the_left_of_itself) {
           new_wire.process.which_conn[conn] = which_conn - 1;
@@ -836,22 +840,22 @@ function void add_wire_connection(
         else {
           new_wire.process.which_conn[conn] = which_conn;
         }
-        add_process_to_process_edit_list(wit, wire, Proc_Trie_Edit_Update, new_wire.process);
+        add_process_to_process_edit_list(core, wire, Proc_Trie_Edit_Update, new_wire.process);
       }
 
       { // decrement currently connected process' conn-count
-        Editable_Process new_process = get_editable_process(wit->and_whats_this.do_undo.edit_list, wire->conn[conn]);
+        Editable_Process new_process = get_editable_process(core->history.do_undo.edit_list, wire->conn[conn]);
         new_process.process.conn_count[conn] -= 1;
-        add_process_to_process_edit_list(wit, wire->conn[conn], Proc_Trie_Edit_Update, new_process.process);
+        add_process_to_process_edit_list(core, wire->conn[conn], Proc_Trie_Edit_Update, new_process.process);
       }
 
       { // increment newly connected process' conn-count
-        Editable_Process new_process = get_editable_process(wit->and_whats_this.do_undo.edit_list, process);
+        Editable_Process new_process = get_editable_process(core->history.do_undo.edit_list, process);
         new_process.process.conn_count[conn] += 1;
-        add_process_to_process_edit_list(wit, process, Proc_Trie_Edit_Update, new_process.process);
+        add_process_to_process_edit_list(core, process, Proc_Trie_Edit_Update, new_process.process);
       }
 
-      for (Process *test_wire = wit->and_whats_this.processes.first;
+      for (Process *test_wire = core->history.processes.first;
            test_wire != 0;
            test_wire = test_wire->next) {
         if (Get_Flag(test_wire->flags, Process_Flag_Wire)) {
@@ -865,17 +869,17 @@ function void add_wire_connection(
             // decrement which_conn
             if (test_wire_connected_to_old_process &&
                 test_wire_to_the_right_of_old_process) {
-              Editable_Process new_test_wire = get_editable_process(wit->and_whats_this.do_undo.edit_list, test_wire);
+              Editable_Process new_test_wire = get_editable_process(core->history.do_undo.edit_list, test_wire);
               new_test_wire.process.which_conn[conn] -= 1;
-              add_process_to_process_edit_list(wit, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
+              add_process_to_process_edit_list(core, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
             }
 
             // increment which_conn
             if (test_wire_connected_to_new_process &&
                 test_wire_to_the_right_of_new_process) {
-              Editable_Process new_test_wire = get_editable_process(wit->and_whats_this.do_undo.edit_list, test_wire);
+              Editable_Process new_test_wire = get_editable_process(core->history.do_undo.edit_list, test_wire);
               new_test_wire.process.which_conn[conn] += 1;
-              add_process_to_process_edit_list(wit, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
+              add_process_to_process_edit_list(core, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
             }
           }
         }
@@ -887,7 +891,7 @@ function void add_wire_connection(
 
 
 function void handle_deleted_wire(
-  WhatIsThis *wit,
+  Proc_Core *core,
   Process *wire,
   Process_Connection_Flag conn_flags
   ) {
@@ -900,14 +904,14 @@ function void handle_deleted_wire(
     B32 remove_in = Get_Flag(conn_flags, Process_Connection_Flag_In);
     B32 remove_out = Get_Flag(conn_flags, Process_Connection_Flag_Out);
 
-    for (Process *test_wire = wit->and_whats_this.processes.first;
+    for (Process *test_wire = core->history.processes.first;
          test_wire != 0;
          test_wire = test_wire->next) {
       B32 should_replace = 0;
       B32 is_wire = Get_Flag(test_wire->flags, Process_Flag_Wire);
 
       if (is_wire && test_wire != wire) {
-        Editable_Process new_test_wire = get_editable_process(wit->and_whats_this.do_undo.edit_list, test_wire);
+        Editable_Process new_test_wire = get_editable_process(core->history.do_undo.edit_list, test_wire);
 
         // adjust in-connections that come after deleted wire
         if (remove_in && test_wire->in == wire->in) {
@@ -928,7 +932,7 @@ function void handle_deleted_wire(
         }
 
         if (should_replace) {
-          add_process_to_process_edit_list(wit, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
+          add_process_to_process_edit_list(core, test_wire, Proc_Trie_Edit_Update, new_test_wire.process);
         }
       }
     }
@@ -939,18 +943,18 @@ function void handle_deleted_wire(
     // decrement process' in-count
     if (remove_in && (in_matched || only_in_conn)) {
       if (wire->in) {
-        Editable_Process new_in = get_editable_process(wit->and_whats_this.do_undo.edit_list, wire->in);
+        Editable_Process new_in = get_editable_process(core->history.do_undo.edit_list, wire->in);
         new_in.process.in_count -= 1;
-        add_process_to_process_edit_list(wit, wire->in, Proc_Trie_Edit_Update, new_in.process);
+        add_process_to_process_edit_list(core, wire->in, Proc_Trie_Edit_Update, new_in.process);
       }
     }
 
     // decrement process' out-count
     if (remove_out && (out_matched || only_out_conn)) {
       if (wire->out) {
-        Editable_Process new_out = get_editable_process(wit->and_whats_this.do_undo.edit_list, wire->out);
+        Editable_Process new_out = get_editable_process(core->history.do_undo.edit_list, wire->out);
         new_out.process.out_count -= 1;
-        add_process_to_process_edit_list(wit, wire->out, Proc_Trie_Edit_Update, new_out.process);
+        add_process_to_process_edit_list(core, wire->out, Proc_Trie_Edit_Update, new_out.process);
       }
     }
   }
@@ -962,8 +966,8 @@ function void handle_deleted_wire(
 
 
 
-function void delete_process(WhatIsThis *wit, Process *p, U32 which_conn_flags) {
-  B32 p_overwritten = add_process_to_process_edit_list(wit, p, Proc_Trie_Edit_Delete, (Process){0});
+function void delete_process(Proc_Core *core, Process *p, U32 which_conn_flags) {
+  B32 p_overwritten = add_process_to_process_edit_list(core, p, Proc_Trie_Edit_Delete, (Process){0});
 
   // if deleting a wire, adjust connected processes
   if (Get_Flag(p->flags, Process_Flag_Wire)) {
@@ -971,20 +975,20 @@ function void delete_process(WhatIsThis *wit, Process *p, U32 which_conn_flags) 
       ? which_conn_flags
       : (Process_Connection_Flag_In | Process_Connection_Flag_Out);
     if (p_overwritten) {
-      handle_deleted_wire(wit, p, which_conn_flags_resolved); // TODO: inline this function since it's only used in `delete_process`
+      handle_deleted_wire(core, p, which_conn_flags_resolved); // TODO: inline this function since it's only used in `delete_process`
     }
   }
   else {
     // check for wires connected to the deleted process, and delete those also
-    for (Process *wire = wit->and_whats_this.processes.first; wire != 0;) {
+    for (Process *wire = core->history.processes.first; wire != 0;) {
       B32 in_match = wire->in == p;
       B32 out_match = wire->out == p;
       B32 should_delete = 0;
 
       if (in_match || out_match) {
-        B32 wire_overwritten = add_process_to_process_edit_list(wit, wire, Proc_Trie_Edit_Delete, (Process){0});
+        B32 wire_overwritten = add_process_to_process_edit_list(core, wire, Proc_Trie_Edit_Delete, (Process){0});
         if (wire_overwritten) {
-          handle_deleted_wire(wit, wire, (Process_Connection_Flag_In|Process_Connection_Flag_Out));
+          handle_deleted_wire(core, wire, (Process_Connection_Flag_In|Process_Connection_Flag_Out));
         }
       }
 
@@ -996,14 +1000,14 @@ function void delete_process(WhatIsThis *wit, Process *p, U32 which_conn_flags) 
 
 
 function Process *connect_detached_processes(
-  WhatIsThis *wit,
+  Proc_Core *core,
   Process *out,
   Process *in
   ) {
   Process *new_wire = 0;
 
   if (out && in) {
-    new_wire = create_detached_process(wit);
+    new_wire = create_detached_process(core);
 
     if (new_wire) {
       Set_Flag(new_wire->flags, Process_Flag_Wire);
@@ -1025,28 +1029,28 @@ function Process *connect_detached_processes(
 
 
 function Connection_Result connect_processes_no_gather(
-  WhatIsThis *wit,
+  Proc_Core *core,
   Process *out,
   Process *in
   ) {
   Connection_Result result = (Connection_Result){0};
 
   if (out && in) {
-    result.new_wire = create_process(wit);
+    result.new_wire = create_process(core);
 
     if (result.new_wire) {
-      Process_Edit *out_edit_proc = process_edit_list_contains_process(wit->and_whats_this.do_undo.edit_list, out);
-      Process_Edit *in_edit_proc = process_edit_list_contains_process(wit->and_whats_this.do_undo.edit_list, in);
+      Process_Edit *out_edit_proc = process_edit_list_contains_process(core->history.do_undo.edit_list, out);
+      Process_Edit *in_edit_proc = process_edit_list_contains_process(core->history.do_undo.edit_list, in);
 
       if (out_edit_proc) {
         result.new_wire->which_out = out_edit_proc->new_process.out_count;
         out_edit_proc->new_process.out_count += 1;
       }
       else {
-        Editable_Process new_out = get_editable_process(wit->and_whats_this.do_undo.edit_list, out);
+        Editable_Process new_out = get_editable_process(core->history.do_undo.edit_list, out);
         result.new_wire->which_out = new_out.process.out_count;
         new_out.process.out_count += 1;
-        add_process_to_process_edit_list(wit, out, Proc_Trie_Edit_Update, new_out.process);
+        add_process_to_process_edit_list(core, out, Proc_Trie_Edit_Update, new_out.process);
       }
 
       if (in_edit_proc) {
@@ -1054,10 +1058,10 @@ function Connection_Result connect_processes_no_gather(
         in_edit_proc->new_process.in_count += 1;
       }
       else {
-        Editable_Process new_in = get_editable_process(wit->and_whats_this.do_undo.edit_list, in);
+        Editable_Process new_in = get_editable_process(core->history.do_undo.edit_list, in);
         result.new_wire->which_in = new_in.process.in_count;
         new_in.process.in_count += 1;
-        add_process_to_process_edit_list(wit, in, Proc_Trie_Edit_Update, new_in.process);
+        add_process_to_process_edit_list(core, in, Proc_Trie_Edit_Update, new_in.process);
       }
 
       result.out = out;
@@ -1074,13 +1078,13 @@ function Connection_Result connect_processes_no_gather(
 
 
 function Connection_Result connect_processes(
-  WhatIsThis *wit,
+  Proc_Core *core,
   Process *out,
   Process *in
   ) {
-  Connection_Result result = connect_processes_no_gather(wit, out, in);
+  Connection_Result result = connect_processes_no_gather(core, out, in);
 
-  gather_processes_from_trie(wit);
+  gather_processes_from_trie(core);
 
   return result;
 }
@@ -1092,16 +1096,16 @@ function Connection_Result connect_processes(
 /////////////////////////////////////////
 // Piece Table BEGIN ////////////////////
 /////////////////////////////////////////
-function Piece_Table_Row *piece_table_create_row(WhatIsThis *wit) {
+function Piece_Table_Row *piece_table_create_row(Proc_Core *core) {
   Piece_Table_Row *row = 0;
 
-  if (wit->piece_table_memory.free_rows) {
-    row = wit->piece_table_memory.free_rows;
-    SLLStackPop(wit->piece_table_memory.free_rows);
+  if (core->piece_table_memory.free_rows) {
+    row = core->piece_table_memory.free_rows;
+    SLLStackPop(core->piece_table_memory.free_rows);
     *row = (Piece_Table_Row){0};
   }
   else {
-    row = push_struct(wit->permanent_arena, Piece_Table_Row);
+    row = push_struct(core->permanent_arena, Piece_Table_Row);
   }
 
   return row;
@@ -1109,17 +1113,17 @@ function Piece_Table_Row *piece_table_create_row(WhatIsThis *wit) {
 
 
 
-function Piece_Table_Chunk *piece_table_create_chunk(WhatIsThis *wit) {
+function Piece_Table_Chunk *piece_table_create_chunk(Proc_Core *core) {
   Piece_Table_Chunk *chunk = 0;
 
-  if (wit && wit->permanent_arena) {
-    if (wit->piece_table_memory.free_chunks) {
-      chunk = wit->piece_table_memory.free_chunks;
-      SLLStackPop(wit->piece_table_memory.free_chunks);
+  if (core && core->permanent_arena) {
+    if (core->piece_table_memory.free_chunks) {
+      chunk = core->piece_table_memory.free_chunks;
+      SLLStackPop(core->piece_table_memory.free_chunks);
       *chunk = (Piece_Table_Chunk){0};
     }
     else {
-      chunk = push_struct(wit->permanent_arena, Piece_Table_Chunk);
+      chunk = push_struct(core->permanent_arena, Piece_Table_Chunk);
     }
   }
 
@@ -1129,13 +1133,13 @@ function Piece_Table_Chunk *piece_table_create_chunk(WhatIsThis *wit) {
 
 
 function B32 piece_table_ensure_insertion_chunk_exists(
-  WhatIsThis *wit,
+  Proc_Core *core,
   Piece_Table *table
   ) {
   B32 error = 0;
 
   if (table->insertion_chunk == 0) {
-    table->insertion_chunk = piece_table_create_chunk(wit);
+    table->insertion_chunk = piece_table_create_chunk(core);
     if (table->insertion_chunk == 0) {
       error = 1;
     }
@@ -1147,7 +1151,7 @@ function B32 piece_table_ensure_insertion_chunk_exists(
 
 
 function void piece_table_insert_text_after_row(
-  WhatIsThis *wit,
+  Proc_Core *core,
   Piece_Table *table,
   Piece_Table_Row *row,
   String8 text_to_insert
@@ -1158,7 +1162,7 @@ function void piece_table_insert_text_after_row(
   while (amount_of_text_copied < text_to_insert.size) {
     // Create a new insertion-chunk if we need one.
     if (table->insertion_chunk->offset == Piece_Table_Chunk_Size) {
-      table->insertion_chunk = piece_table_create_chunk(wit);
+      table->insertion_chunk = piece_table_create_chunk(core);
       if (table->insertion_chunk == 0) {
         printf("[ Error ] Creating Piece_Table_Chunk while inserting text after a row.\n");
         break;
@@ -1189,7 +1193,7 @@ function void piece_table_insert_text_after_row(
     }
     else {
       // insert the row
-      Piece_Table_Row *new_row = piece_table_create_row(wit);
+      Piece_Table_Row *new_row = piece_table_create_row(core);
       if (new_row) {
         new_row->chunk = table->insertion_chunk;
         new_row->offset = table->insertion_chunk->offset;
@@ -1218,14 +1222,14 @@ function void piece_table_insert_text_after_row(
 
 
 function void piece_table_insert(
-  WhatIsThis *wit,
+  Proc_Core *core,
   Piece_Table *table,
   U64 text_offset,
   String8 text_to_insert
   ) {
   U64 current_text_offset = 0;
 
-  if (piece_table_ensure_insertion_chunk_exists(wit, table)) {
+  if (piece_table_ensure_insertion_chunk_exists(core, table)) {
     printf("[ Error ] Ensuring piece-table has an insertion-chunk while inserting.\n");
     return;
   }
@@ -1238,7 +1242,7 @@ function void piece_table_insert(
 
       if (text_offset == 0 || current_text_offset == text_offset) {
         // insert text between rows
-        piece_table_insert_text_after_row(wit, table, row_before, text_to_insert);
+        piece_table_insert_text_after_row(core, table, row_before, text_to_insert);
         break;
       }
       else if (current_text_offset > text_offset) {
@@ -1248,7 +1252,7 @@ function void piece_table_insert(
         row->size = first_part_size;
         if (last_part_size) {
           // split row and insert text
-          Piece_Table_Row *new_row = piece_table_create_row(wit);
+          Piece_Table_Row *new_row = piece_table_create_row(core);
           if (new_row) {
             // insert last part of current row as new row
             new_row->chunk = row->chunk;
@@ -1262,21 +1266,21 @@ function void piece_table_insert(
           }
         }
         // insert text
-        piece_table_insert_text_after_row(wit, table, row_before, text_to_insert);
+        piece_table_insert_text_after_row(core, table, row_before, text_to_insert);
         break;
       }
     }
   }
   else {
     // table is empty, so just insert the text
-    piece_table_insert_text_after_row(wit, table, 0, text_to_insert);
+    piece_table_insert_text_after_row(core, table, 0, text_to_insert);
   }
 }
 
 
 
 function void piece_table_delete(
-  WhatIsThis *wit,
+  Proc_Core *core,
   Piece_Table *table,
   U64 text_offset,
   U64 size
@@ -1285,7 +1289,7 @@ function void piece_table_delete(
   U64 current_text_offset = 0;
   U64 begin_text_offset = text_offset >= size ? text_offset - size : 0;
 
-  if (piece_table_ensure_insertion_chunk_exists(wit, table)) {
+  if (piece_table_ensure_insertion_chunk_exists(core, table)) {
     printf("[ Error ] Ensuring piece-table has an insertion-chunk while inserting.\n");
     return;
   }
@@ -1315,11 +1319,11 @@ function void piece_table_delete(
         if (row->size == 0) {
           // row is empty, so remove it
           DLLRemove(table->first_row, table->last_row, row);
-          SLLStackPush(wit->piece_table_memory.free_rows, row);
+          SLLStackPush(core->piece_table_memory.free_rows, row);
         }
         else {
           if (amount_to_the_right_of_text_offset > 0) {
-            Piece_Table_Row *new_row = piece_table_create_row(wit);
+            Piece_Table_Row *new_row = piece_table_create_row(core);
             if (new_row) {
               new_row->chunk = row->chunk;
               new_row->offset = row->offset + row->size + size;
@@ -1338,7 +1342,7 @@ function void piece_table_delete(
         if (row->size == amount_to_the_left_of_text_offset) {
           // row is empty, so remove it
           DLLRemove(table->first_row, table->last_row, row);
-          SLLStackPush(wit->piece_table_memory.free_rows, row);
+          SLLStackPush(core->piece_table_memory.free_rows, row);
         }
         else {
           row->size -= amount_to_the_left_of_text_offset;
@@ -1370,7 +1374,7 @@ function void piece_table_delete(
       Assert(table->text_size >= row->size);
       table->text_size -= row->size;
       DLLRemove(table->first_row, table->last_row, row);
-      SLLStackPush(wit->piece_table_memory.free_rows, row);
+      SLLStackPush(core->piece_table_memory.free_rows, row);
       if (current_text_offset == text_offset) {
         break;
       }
@@ -1432,8 +1436,8 @@ function void debug_print_piece_table(Piece_Table *table) {
 
 
 
-function void debug_print_piece_table_range(WhatIsThis *wit, Piece_Table *table) {
-  String8 string = piece_table_get_string(wit->per_frame_arena, table);
+function void debug_print_piece_table_range(Proc_Core *core, Piece_Table *table) {
+  String8 string = piece_table_get_string(core->per_frame_arena, table);
   printf("%s\n", string.str);
 }
 

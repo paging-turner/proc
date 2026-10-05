@@ -324,12 +324,14 @@ typedef enum View_Flag {
   View_Flag_Clip = 1 << 3, // TODO: does this clip conflict with Process' clip flag?
 } View_Flag;
 
+
+
 struct View {
   View_Kind_Flag kind_flags;
   U32 flags;
   Rectangle screen_region;
   Camera2D camera;
-  AndWhatsThis and_whats_this;
+  Proc_History history;
   Process *root_process;
   Color color;
 
@@ -338,6 +340,7 @@ struct View {
   View *first;
   View *last;
 };
+
 
 
 typedef struct Process_Loc {
@@ -351,7 +354,7 @@ typedef struct Process_Loc {
 
 
 struct Context {
-  WhatIsThis what_is_this;
+  Proc_Core core;
   Arena *render_arena;
   Arena *ui_arena;
 
@@ -398,7 +401,7 @@ typedef struct View_Stack {
 
 
 function View_Stack *view_iter_init(Context *context) {
-  View_Stack *stack = push_struct(context->what_is_this.per_frame_arena, View_Stack);
+  View_Stack *stack = push_struct(context->core.per_frame_arena, View_Stack);
   if (stack) {
     stack->view = context->root_view;
   }
@@ -411,7 +414,7 @@ function void view_iter_next(Context *context, View_Stack **stack) {
     if (!(*stack)->visited && (*stack)->view->first && (*stack)->view->last) {
       (*stack)->visited = 1;
       // view has children, so descend
-      View_Stack *new_stack = push_struct(context->what_is_this.per_frame_arena, View_Stack);
+      View_Stack *new_stack = push_struct(context->core.per_frame_arena, View_Stack);
       if (new_stack) {
         new_stack->view = (*stack)->view ? (*stack)->view->first : 0;
         SLLStackPush((*stack), new_stack);
