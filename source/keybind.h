@@ -399,6 +399,129 @@ function void exit_add_wire_mode(Context *context, View *view) {
 
 
 
+// NOTE; Kahn's algorithm
+function void create_keybind_array(Context *context) {
+  Arena *arena = context->core.permanent_arena;
+
+  Keybind *keybind_set_first = 0;
+  Keybind *keybind_set_last = 0;
+
+  Keybind *keybind_final_first = 0;
+  Keybind *keybind_final_last = 0;
+
+  U32 order_count = SymbolCount(Keybind_Order_Sym);
+
+  // add keybinds with no preceding keybind
+  for (U32 k = 0; k < SymbolCount(Keybind_Sym); ++k) {
+    Keybind *keybind = SymbolMetadataFromID(Keybind_Sym, k+1);
+
+    if (keybind->handle) {
+      B32 has_preceding_keybind = 0;
+
+      for (U32 o = 0; o < order_count; ++o) {
+        Keybind_Order *order = SymbolMetadataFromID(Keybind_Order_Sym, o+1);
+        if (Keybind_Order_Is_Valid(order)) {
+          if (Keybind_Is_After(keybind, order)) {
+            has_preceding_keybind = 1;
+            break;
+          }
+        }
+      }
+
+      if (!has_preceding_keybind) {
+        SLLQueuePush(keybind_set_first, keybind_set_last, keybind);
+      }
+    }
+  }
+
+  // remove invalid orders
+  for (U32 o = 0; o < order_count; ++o) {
+    Keybind_Order *order = SymbolMetadataFromID(Keybind_Order_Sym, o+1);
+    if (!Keybind_Order_Is_Valid(order)) {
+      order->removed = 1;
+    }
+  }
+
+  // sort keybinds
+  for (;;) {
+    Keybind *stack_keybind = keybind_set_first;
+    SLLStackPop(keybind_set_first);
+
+    if (stack_keybind) {
+      SLLQueuePush(keybind_final_first, keybind_final_last, stack_keybind);
+      context->keybind_count += 1;
+
+      for (U32 o = 0; o < order_count; ++o) {
+        Keybind_Order *order = SymbolMetadataFromID(Keybind_Order_Sym, o+1);
+        Keybind *other_keybind = (order->keybind_a == stack_keybind) ? order->keybind_b : order->keybind_a;
+
+        if (Keybind_Order_Is_Valid(order)) {
+          if (!order->removed) {
+            // other keybind comes after current keybind
+            if (Keybind_Is_Before(stack_keybind, order) &&
+                Keybind_Is_After(other_keybind, order)) {
+              order->removed = 1;
+              B32 has_no_preceding_keybinds = 1;
+
+              for (U32 test_o = 0; test_o < order_count; ++test_o) {
+                Keybind_Order *test_order = SymbolMetadataFromID(Keybind_Order_Sym, test_o+1);
+                if (!test_order->removed) {
+                  if (Keybind_Is_After(other_keybind, test_order)) {
+                    has_no_preceding_keybinds = 0;
+                    break;
+                  }
+                }
+              }
+
+              if (has_no_preceding_keybinds) {
+                SLLQueuePush(keybind_set_first, keybind_set_last, other_keybind);
+              }
+            }
+          }
+        }
+      }
+    }
+    else {
+      break;
+    }
+  }
+
+  if (context->keybind_count) {
+    context->keybinds = push_array(arena, Keybind, context->keybind_count);
+
+    if (context->keybinds) {
+      U32 index = 0;
+      for (Keybind *keybind = keybind_final_first; keybind != 0; keybind = keybind->next) {
+        if (index < context->keybind_count) {
+          context->keybinds[index] = *keybind;
+          index += 1;
+        }
+        else {
+          printf("[ Error ] Keybind count mismatch.\n");
+          break;
+        }
+      }
+    }
+    else {
+      printf("[ Error ] While pushing keybind array.\n");
+    }
+  }
+
+  // check if there are un-removed edges
+  for (U32 o = 0; o < order_count; ++o) {
+    Keybind_Order *order = SymbolMetadataFromID(Keybind_Order_Sym, o+1);
+    if (Keybind_Order_Is_Valid(order)) {
+      if (!order->removed) {
+        B32 is_before_kind = order->kind == Keybind_Order_Before;
+        Keybind *before_keybind = is_before_kind ? order->keybind_a : order->keybind_b;
+        Keybind *after_keybind = is_before_kind ? order->keybind_b : order->keybind_a;
+        printf("[ Warning ] Cycles exist in keybinds! The order '%s'->'%s' is not satisfied.\n", before_keybind->name.str, after_keybind->name.str);
+      }
+    }
+  }
+}
+
+
 
 
 

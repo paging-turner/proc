@@ -151,9 +151,7 @@ typedef U8 Steady_Trie(Slot_Type);
 # define Steady_Trie_Debug_Print(...)  printf(__VA_ARGS__)
 #else
 # define Steady_Trie_Debug_Print(...)
-
-
-#endif // END Steady_Trie_Root_Is_*_Significant_Byte
+#endif
 
 
 ////////////////////////////

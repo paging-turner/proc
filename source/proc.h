@@ -5,6 +5,11 @@ typedef struct Piece_Table_Memory {
   Piece_Table_Chunk *free_chunks;
 } Piece_Table_Memory;
 
+typedef struct Process Process;
+typedef struct Context Context;
+typedef struct View View;
+
+
 
 
 
@@ -78,11 +83,6 @@ typedef struct {
 
 
 
-
-typedef struct Process Process;
-typedef struct Context Context;
-typedef struct View View;
-
 typedef enum Ref_Kind {
   Ref_Kind__Null,
   Ref_Kind_ProcTrie,
@@ -126,9 +126,9 @@ typedef enum {
 } Process_Flag;
 
 
-
-
 #include "../source/core.h" // TODO: move this
+
+
 
 
 
@@ -275,7 +275,7 @@ typedef struct {
 
   Ui_State_Flag flags;
   Ui_State_Modifier_Flag modifier_flags;
-  U32 kb_action;
+  U32 kb_action; // TODO: doesn't this conflict with Ui_State_Flag_action_occured ???
 
   Vector2 mouse_position;
   Vector2 active_position;

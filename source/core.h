@@ -431,9 +431,6 @@ function void apply_process_edits_by_kind(
   ) {
   Assert(handle_wires == 0 || handle_wires == 1);
   if (core == 0) goto error;
-  /* Process_Do_Undo *do_undo = &view->do_undo; */
-  /* Arena *do_undo_arena = do_undo->arena; */
-  /* if (do_undo_arena == 0) goto error; */
 
   // TODO: @Speed
   for (Process_Edit *proc_edit = core->history.do_undo.edit_list.first;
