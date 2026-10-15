@@ -26,6 +26,16 @@
 #define Macho_Magic_Number_64  0xfeedfacf
 
 
+
+
+typedef struct Macho_Section_Buffer {
+  String8 *sections;
+  U64 count;
+} Macho_Section_Buffer;
+
+
+
+
 ///////////////////////////////
 // CPU type
 #define Macho_Cpu_Type_Xlist(X)\
@@ -249,11 +259,38 @@ typedef enum {
 } Macho_Load_Command;
 
 
+typedef enum Macho_Symbol_Flag {
+  Macho_Symbol_Flag_DebugEntry      = (1<<0),
+  Macho_Symbol_Flag_PrivateExternal = (1<<1),
+  Macho_Symbol_Flag_External        = (1<<2),
+} Macho_Symbol_Flag;
+
+typedef struct Macho_Symbol {
+  Macho_Symbol_Flag flags;
+  U32 stab;
+  U32 pext;
+  U32 type;
+  U32 ext;
+} Macho_Symbol;
+
+
+
+#define Macho_Symbol_Table_Desc_Xlist(X)\
+  /* Ident.    Lit.  Comment   */\
+  X(N_UNDF  , 0x0  , "undefined, n_sect == NO_SECT")\
+  X(N_ABS   , 0x2  , "absolute, n_sect == NO_SECT")\
+  X(N_SECT  , 0xe  , "defined in section number n_sect")\
+  X(N_PBUD  , 0xc  , "prebound undefined (defined in a dylib)")\
+  X(N_INDR  , 0xa  , "indirect")
+
+
+
+
 // TODO: We should be able to use the right columns to determine the symbol-description.
 // TODO: Add column names and/or help connect columns with members in `nlist_64`.
 // TODO: Create enums for column-types like "address", "linenumber", and "nesting level".
 // NOTE: NO_SECT == 0
-#define Macho_Symbol_Table_Desc_Xlist(X)\
+#define Macho_Debug_Symbol_Table_Desc_Xlist(X)\
   /* Ident.     Lit.   n_strx   n_type  n_sect      n_desc          n_value    comment            */\
   X( N_GSYM   , 0x20,  name,    0,      NO_SECT,          type,             0, "global symbol               ")\
   X( N_FNAME  , 0x22,  name,    0,      NO_SECT,             0,             0, "procedure name (f77 kludge) ")\
@@ -293,10 +330,10 @@ typedef enum {
 typedef enum {
 #define X(name, l, ...)\
   Macho_##name = (l),
-  Macho_Symbol_Table_Desc_Xlist(X)
+  Macho_Debug_Symbol_Table_Desc_Xlist(X)
 #undef X
-  Macho_Symbol_Table_Desc__Count
-} Macho_Symbol_Table_Desc;
+  Macho_Debug_Symbol_Table_Desc__Count
+} Macho_Debug_Symbol_Table_Desc;
 
 
 
@@ -369,6 +406,34 @@ typedef enum Macho_Filetype {
 
 
 
+
+static void macho_dump_n_desc_flags(struct nlist_64 s) {
+  B32 printed = 0;
+  printf("{");
+  if (N_NO_DEAD_STRIP & s.n_desc) printf("N_NO_DEAD_STRIP ");
+  if (N_DESC_DISCARDED & s.n_desc) printf("N_DESC_DISCARDED ");
+  if (N_WEAK_REF & s.n_desc) printf("N_WEAK_REF ");
+  if (N_WEAK_DEF & s.n_desc) printf("N_WEAK_DEF ");
+  if (N_REF_TO_WEAK & s.n_desc) printf("N_REF_TO_WEAK ");
+  if (N_ARM_THUMB_DEF & s.n_desc) printf("N_ARM_THUMB_DEF ");
+  if (N_SYMBOL_RESOLVER & s.n_desc) printf("N_SYMBOL_RESOLVER ");
+  if (N_ALT_ENTRY & s.n_desc) printf("N_ALT_ENTRY ");
+  if (N_COLD_FUNC & s.n_desc) printf("N_COLD_FUNC ");
+  printf("}");
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 static U32 macho_flag_lookup[Macho_Flag_Index__Count] = {
 #define X(v, n, d, ...)\
   [Macho_Flag_Index_##n] = (v),
@@ -405,12 +470,41 @@ static void macho_debug_dump_flag_string_from_flags(U32 flags) {
 
 
 
-static void macho_debug_dump_load_command_values(void) {
-#define X(name, _value)\
-  printf("%s %d\n", #name, name);
-  Macho_Load_Command_Xlist(X)
-#undef X
+// NOTE: Hacker's Delight figure 5-11
+static U32 bit_number_of_leading_zeros(U32 x) {
+  U32 n = 32;
+
+  if (x != 0) {
+    n = 1;
+    if ((x >> 16) == 0) { n = n + 16; x = x << 16; }
+    if ((x >> 24) == 0) { n = n +  8; x = x <<  8; }
+    if ((x >> 28) == 0) { n = n +  4; x = x <<  4; }
+    if ((x >> 30) == 0) { n = n +  2; x = x <<  2; }
+    n = n - (x >> 31);
+  }
+
+  return n;
 }
+
+
+// NOTE: Hacker's Delight figure 5-26
+static U32 bit_number_of_trailing_zeros(U32 x) {
+  static U8 table[32] = {
+     0, 1, 2,24, 3,19, 6,25,  22, 4,20,10,16, 7,12,26,
+    31,23,18, 5,21, 9,15,11,  30,17, 8,14,29,13,28,27
+  };
+
+  if (x == 0) return 32;
+  x = (x & -x)*0x04d7651f;
+  return table[x >> 27];
+}
+
+
+
+
+
+
+
 
 
 static char *macho_get_load_command_name(struct load_command *command) {
@@ -426,18 +520,10 @@ static char *macho_get_load_command_name(struct load_command *command) {
 }
 
 
-static B32 macho_load_command_has_valid_type(struct load_command *command) {
-  B32 has_valid_type = 0;
 
-  switch(command->cmd) {
-#define X(name, _value)\
-    case name: { has_valid_type = 1; } break;
-    Macho_Load_Command_Xlist(X);
-#undef X
-  }
 
-  return has_valid_type;
-}
+
+
 
 
 static MachoCpuType macho_debug_get_cputype_from_raw_cputype(cpu_type_t raw_cputype) {
@@ -503,6 +589,7 @@ static String8 macho_debug_get_filetype_string(U32 filetype) {
   default: return str8_lit("<Unknown filetype>");
   }
 }
+
 
 static void macho_debug_log_header(struct mach_header_64 *header) {
   printf("Image Header\n");
@@ -574,85 +661,93 @@ static void macho_print_source_version(U64 version) {
 
 
 
-static String8 macho_get_symbol_description(struct nlist_64 symbol) {
+static String8 macho_get_debug_symbol_description(struct nlist_64 symbol) {
   switch(symbol.n_desc) {
 #define X(name, ...)\
     case name: return str8_lit(#name);
-    Macho_Symbol_Table_Desc_Xlist(X);
+    Macho_Debug_Symbol_Table_Desc_Xlist(X);
 #undef X
   default: return str8_lit("0");
   }
 }
 
 
-// TODO: I originally though that these symbols were the ones I wanted, but it seems we may need LC_DYSYMTAB instead?
-//       Reconsider how we name these things once we untangle what means what.
-static char *macho_get_symbol_type_name(struct nlist_64 symbol) {
-  U32 raw_type = symbol.n_type;
-  B32 is_debug_entry      = (N_STAB & raw_type) != 0;
-  B32 is_private_external = (N_PEXT & raw_type) != 0;
-  B32 is_external         = (N_EXT  & raw_type) != 0;
-  U32 type = raw_type & N_TYPE;
 
-  printf("  %s%s%s  ", is_debug_entry?"d":" ", is_private_external?"p":" ", is_external?"e":" ");
+#define Get_Masked_Value(m, v)\
+  (((U32)(m) & (v)) >> bit_number_of_trailing_zeros((U32)(m)))
 
-  // these are symbol->n_value ?
-  /* case NO_SECT: return "NO_SECT"; */
-  /* case MAX_SECT: return "MAX_SECT"; */
+static Macho_Symbol macho_get_symbol_data(U8 raw_n_type) {
+  Macho_Symbol symbol = (Macho_Symbol){0};
 
-  /* if (symbol.n_un.n_strx == 0) { */
-  /*   return "<Unknown>"; */
-  /* } */
-  switch(type) {
-  case N_UNDF: return "N_UNDF";
-  case N_ABS: return "N_ABS";
-  case N_SECT: return "N_SECT";
-  case N_PBUD: return "N_PBUD";
-  case N_INDR: return "N_INDR";
-  default: return "<Unknown>";
-  }
-#if 0
-  switch(raw_type) {
-  case N_GSYM: return "N_GSYM";
-  case N_FNAME: return "N_FNAME";
-  case N_FUN: return "N_FUN";
-  case N_STSYM: return "N_STSYM";
-  case N_LCSYM: return "N_LCSYM";
-  case N_BNSYM: return "N_BNSYM";
-  case N_AST: return "N_AST";
-  case N_OPT: return "N_OPT";
-  case N_RSYM: return "N_RSYM";
-  case N_SLINE: return "N_SLINE";
-  case N_ENSYM: return "N_ENSYM";
-  case N_SSYM: return "N_SSYM";
-  case N_SO: return "N_SO";
-  case N_OSO: return "N_OSO";
-  case N_LIB: return "N_LIB";
-  case N_LSYM: return "N_LSYM";
-  case N_BINCL: return "N_BINCL";
-  case N_SOL: return "N_SOL";
-  case N_PARAMS: return "N_PARAMS";
-  case N_VERSION: return "N_VERSION";
-  case N_OLEVEL: return "N_OLEVEL";
-  case N_PSYM: return "N_PSYM";
-  case N_EINCL: return "N_EINCL";
-  case N_ENTRY: return "N_ENTRY";
-  case N_LBRAC: return "N_LBRAC";
-  case N_EXCL: return "N_EXCL";
-  case N_RBRAC: return "N_RBRAC";
-  case N_BCOMM: return "N_BCOMM";
-  case N_ECOMM: return "N_ECOMM";
-  case N_ECOML: return "N_ECOML";
-  case N_LENG: return "N_LENG";
-  case N_UNDF: return "N_UNDF";
-  case N_ABS: return "N_ABS";
-  case N_SECT: return "N_SECT";
-  case N_PBUD: return "N_PBUD";
-  case N_INDR: return "N_INDR";
-  default: return "<Unknown>";
-  }
-#endif
+  symbol.stab = Get_Masked_Value(N_STAB, raw_n_type);
+  symbol.pext = Get_Masked_Value(N_PEXT, raw_n_type);
+  symbol.type = Get_Masked_Value(N_TYPE, raw_n_type);
+  symbol.ext  = Get_Masked_Value(N_EXT , raw_n_type);
+
+  return symbol;
 }
+
+
+static char global_symbol_type_name_buffer[64] = {0};
+
+static char *macho_get_symbol_type_name(U8 raw_n_type) {
+  U32 masked_value = N_TYPE & raw_n_type;
+  switch(masked_value) {
+#define X(n, v, ...)\
+    case n: return #n;
+    Macho_Symbol_Table_Desc_Xlist(X)
+#undef X
+    default: {
+      sprintf(global_symbol_type_name_buffer, "(%x)??", masked_value);
+      return global_symbol_type_name_buffer;
+    } break;
+  }
+}
+
+
+
+
+
+
+static char *macho_get_debug_symbol_type_name(struct nlist_64 debug_symbol) {
+    switch(debug_symbol.n_type) {
+    case N_GSYM: return "N_GSYM";
+    case N_FNAME: return "N_FNAME";
+    case N_FUN: return "N_FUN";
+    case N_STSYM: return "N_STSYM";
+    case N_LCSYM: return "N_LCSYM";
+    case N_BNSYM: return "N_BNSYM";
+    case N_AST: return "N_AST";
+    case N_OPT: return "N_OPT";
+    case N_RSYM: return "N_RSYM";
+    case N_SLINE: return "N_SLINE";
+    case N_ENSYM: return "N_ENSYM";
+    case N_SSYM: return "N_SSYM";
+    case N_SO: return "N_SO";
+    case N_OSO: return "N_OSO";
+    case N_LIB: return "N_LIB";
+    case N_LSYM: return "N_LSYM";
+    case N_BINCL: return "N_BINCL";
+    case N_SOL: return "N_SOL";
+    case N_PARAMS: return "N_PARAMS";
+    case N_VERSION: return "N_VERSION";
+    case N_OLEVEL: return "N_OLEVEL";
+    case N_PSYM: return "N_PSYM";
+    case N_EINCL: return "N_EINCL";
+    case N_ENTRY: return "N_ENTRY";
+    case N_LBRAC: return "N_LBRAC";
+    case N_EXCL: return "N_EXCL";
+    case N_RBRAC: return "N_RBRAC";
+    case N_BCOMM: return "N_BCOMM";
+    case N_ECOMM: return "N_ECOMM";
+    case N_ECOML: return "N_ECOML";
+    case N_LENG: return "N_LENG";
+    default: return "??????";
+    }
+
+  return "<NotStab>";
+}
+
 
 
 static B32 macho_symbol_table_entry_is_zero(struct nlist_64 symbol) {
@@ -663,31 +758,186 @@ static B32 macho_symbol_table_entry_is_zero(struct nlist_64 symbol) {
           symbol.n_value == 0);
 }
 
-static B32 macho_symbol_table_entry_has_only_value(struct nlist_64 symbol) {
-  return (symbol.n_un.n_strx == 0 &&
-          symbol.n_type == 0 &&
-          symbol.n_sect == 0 &&
-          symbol.n_desc == 0);
+
+
+static char *macho_get_n_desc_reference_type_name(struct nlist_64 s) {
+  U16 ref_type = Get_Masked_Value(REFERENCE_TYPE, s.n_desc);
+  switch(ref_type) {
+  case REFERENCE_FLAG_UNDEFINED_NON_LAZY: return "UNDEFINED_NON_LAZY";
+  case REFERENCE_FLAG_UNDEFINED_LAZY: return "UNDEFINED_LAZY";
+  case REFERENCE_FLAG_DEFINED: return "DEFINED";
+  case REFERENCE_FLAG_PRIVATE_DEFINED: return "PRIVATE_DEFINED";
+  case REFERENCE_FLAG_PRIVATE_UNDEFINED_NON_LAZY: return "PRIVATE_UNDEFINED_NON_LAZY";
+  case REFERENCE_FLAG_PRIVATE_UNDEFINED_LAZY: return "PRIVATE_UNDEFINED_LAZY";
+  default: return 0;
+  }
 }
 
-static void macho_print_symbol_table(String8 object_file, struct symtab_command *table) {
+
+
+
+static String8 *macho_get_section_string_from_buffer_index(
+  Macho_Section_Buffer buffer,
+  U32 i
+  ) {
+  String8 *section_string = 0;
+
+  if (i >= 0 && i < buffer.count) {
+    section_string = buffer.sections + i;
+  }
+
+  return section_string;
+}
+
+
+
+
+
+static B32 macho_seems_like_an_n_sect_symbol(
+  String8 object_file,
+  Macho_Section_Buffer section_buffer,
+  struct nlist_64 s
+  ) {
+  // n_type should be N_SECT
+  if ((s.n_type & N_TYPE) != N_SECT) {
+    return 0;
+  }
+  else {
+    B32 we_are_here = 1;
+  }
+
+  // n_sect should be in range
+  if (s.n_sect < 0 || s.n_sect >= section_buffer.count) {
+    return 0;
+  }
+
+  // n_desc should be 0
+  if (0 && s.n_desc != 0) {
+    return 0;
+  }
+
+#if 0
+  // n_value should be somewhat in pointer range
+  if (((U8 *)s.n_value < object_file.str) ||
+      ((U8 *)s.n_value >= (object_file.str + object_file.size))) {
+    return 0;
+  }
+#endif
+
+  // n_strx should be in range of the section
+  /* if (TODO)  */{
+    String8 *section_string = macho_get_section_string_from_buffer_index(section_buffer, s.n_sect);
+    if (section_string == 0 || s.n_un.n_strx < 0 || s.n_un.n_strx >= section_string->size) {
+      return 0;
+    }
+  }
+
+  return 1;
+}
+
+
+
+
+
+static void macho_print_symbol_table(
+  String8 object_file,
+  struct mach_header_64 *header,
+  Macho_Section_Buffer buffer,
+  struct symtab_command *table
+  ) {
   struct nlist_64 *symbol_table = (struct nlist_64 *)(object_file.str + table->symoff);
+  U8 *start_of_string_table = object_file.str + table->stroff;
+  /* printf("start of string table %p \"%s\"\n", start_of_string_table, start_of_string_table); */
+  /* printf("start of string table %p   '", start_of_string_table); */
+  /* for (U32 i = 0; i < 100; ++i) { */
+  /*   printf("%c", start_of_string_table[i]); */
+  /* } */
+  /* printf("'\n"); */
+  /* Assert(0); */
 
   for (U32 i = 0; i < table->nsyms; ++i) {
     struct nlist_64 *symbol = symbol_table + i;
-    if (!macho_symbol_table_entry_is_zero(*symbol)) {
-      if (macho_symbol_table_entry_has_only_value(*symbol)) {
-        /* printf("\"%s\" ", object_file.str + (table->stroff + symbol->n_value)); */
-      }
+    B32 is_undefined = symbol->n_type == 0; // TODO: is this really what makes the symbol undefined?
+#if 1
+    Macho_Symbol macho_symbol = macho_get_symbol_data(symbol->n_type);
 
-      printf("n_strx 0x%08x  ", symbol_table->n_un.n_strx);
-      printf("n_type 0x%02x  ", symbol->n_type);
-      printf("n_sect 0x%02x  ", symbol->n_sect);
-      printf("n_desc 0x%04x  ", symbol->n_desc);
-      printf("n_value 0x%016llx\n", symbol->n_value);
+    if(0){ // TODO: delete this
+      if (macho_symbol.stab)continue;
+      if (is_undefined)continue;
+      if (macho_symbol.type != (N_SECT>>1))continue;
+      if (symbol->n_sect != 5)continue;
+      if (macho_seems_like_an_n_sect_symbol(object_file, buffer, *symbol)) {
+        if (symbol->n_un.n_strx < table->strsize) {
+          U8 *symbol_string = start_of_string_table + symbol->n_un.n_strx;
+          /* printf("symbol? (%d)   \"%s\"\n", symbol->n_sect, (U8 *)symbol->n_value + symbol->n_un.n_strx); */
+          /* printf("symbol? sect=%d   %s\n", symbol->n_sect, symbol_string); */
+          // TODO: try to print the string
+          /* continue; */
+        }
+      }
+      else {
+        continue;
+      }
     }
+
+    /* if (!(REFERENCE_TYPE & symbol->n_desc))continue; */
+    printf("stab %3x  ", macho_symbol.stab);
+    printf("pext %1x  ", macho_symbol.pext);
+
+    if (symbol->n_un.n_strx == 0) {
+      printf("\"\"");
+    }
+    else {
+      if (macho_symbol.stab) {
+        char *debug_type_name = macho_get_debug_symbol_type_name(*symbol);
+        printf("type %10s  ", debug_type_name);
+      }
+      else {
+        char *type_name = macho_get_symbol_type_name(symbol->n_type);
+        /* printf("type %10x  ", macho_symbol.type); */
+        printf("type %10s  ", type_name);
+      }
+    }
+    printf(" ext %1x  ", macho_symbol.ext );
+
+    printf("n_type 0x%08x  ", symbol->n_type);
+    printf("n_strx 0x%08x  ", symbol->n_un.n_strx);
+    printf("n_sect %02d  ", symbol->n_sect);
+
+    printf("n_desc 0x%04x", symbol->n_desc);
+    if (0) {
+      char *type_name = macho_get_n_desc_reference_type_name(*symbol);
+      if (type_name) {
+        printf("(%s)", type_name);
+      }
+      if (Get_Masked_Value(N_NO_DEAD_STRIP, symbol->n_desc)) {
+        printf("[no_dead_strip__or__discarded]");
+      }
+      macho_dump_n_desc_flags(*symbol);
+      printf("  ");
+    }
+
+    if (symbol->n_sect >= 0 && symbol->n_sect < buffer.count) {
+      String8 *section_string = macho_get_section_string_from_buffer_index(buffer, symbol->n_sect);
+      if (symbol->n_un.n_strx < section_string->size) {
+        /* printf(" \"%s\"  ", section_string->str + symbol->n_un.n_strx); */
+      }
+    }
+    printf("  ");
+    printf("n_value 0x%016llx\n", symbol->n_value);
+#else
+    printf("n_strx 0x%08x  ", symbol->n_un.n_strx);
+    /* printf("n_type 0x%02x  ", symbol->n_type); */
+    printf("n_type 0x%04x  ", macho_symbol.type);
+    printf("n_sect 0x%02x  ", symbol->n_sect);
+    printf("n_desc 0x%04x  ", symbol->n_desc);
+    printf("n_value 0x%016llx\n", symbol->n_value);
+#endif
   }
 }
+
+
+
 
 static void
 macho_print_dynamic_symbol_table(String8 object_file, struct dysymtab_command *table) {
@@ -695,18 +945,81 @@ macho_print_dynamic_symbol_table(String8 object_file, struct dysymtab_command *t
 
 
 
-static void macho_dump_object_file(String8 object_file) {
+
+static Macho_Section_Buffer macho_create_section_buffer(
+  Arena *arena,
+  String8 object_file,
+  struct mach_header_64 header
+  ) {
+  Macho_Section_Buffer buffer = (Macho_Section_Buffer){0};
+  U64 section_count = 1; // NOTE: Section indexes start at 1
+  U64 command_offset = sizeof(struct mach_header_64);
+
+  // get total section count
+  for (U32 i = 0; i < header.ncmds; ++i) {
+    struct load_command *command = (struct load_command *)(object_file.str + command_offset);
+
+    if (command->cmd == LC_SEGMENT_64) {
+      struct segment_command_64 *segment = (struct segment_command_64 *)command;
+      section_count += segment->nsects;
+    }
+
+    command_offset += command->cmdsize;
+  }
+
+  // fill out section pointers
+  if (section_count) {
+    U32 section_index = 1;
+    buffer.sections = push_array(arena, String8, section_count);
+    if (buffer.sections) {
+      buffer.count = section_count;
+      command_offset = sizeof(struct mach_header_64);
+      for (U32 i = 0; i < header.ncmds; ++i) {
+        struct load_command *command = (struct load_command *)(object_file.str + command_offset);
+        if (command->cmd == LC_SEGMENT_64) {
+          struct segment_command_64 *segment = (struct segment_command_64 *)command;
+          for (U32 i = 0; i < segment->nsects; ++i) {
+            struct section_64 *section = ((struct section_64 *)(segment + 1)) + i;
+            Assert(section_index >= 0 && section_index < section_count);
+            buffer.sections[section_index].str = object_file.str + section->offset;
+            buffer.sections[section_index].size = section->size;
+            section_index += 1;
+          }
+        }
+        command_offset += command->cmdsize;
+      }
+    }
+  }
+
+  /* Assert(0); */
+  return buffer;
+}
+
+
+
+static void macho_dump_object_file(Arena *arena, String8 object_file) {
   if (object_file.str) {
     struct mach_header_64 *header = (struct mach_header_64 *)object_file.str;
     U64 command_offset = sizeof(struct mach_header_64);
-
+    Macho_Section_Buffer section_buffer = macho_create_section_buffer(arena, object_file, *header);
+    for (U32 i = 0; i < section_buffer.count; ++i) {
+      String8 *section = section_buffer.sections + i;
+      printf("section[%3d]    ", i);
+      {
+        for (U64 j = 0; j < Min(100, section->size); ++j) {
+          char c = section->str[j];
+          B32 is_printable = c >= 32 && c < 127;
+          printf("%c", is_printable ? c : '-');
+        }
+      }
+      printf("\n");
+    }
     macho_debug_log_header(header);
 
     // TODO: Check to make sure the size fits in the header's load_command_size
     // Loop through load-commands
     for (U32 count = 0; count < header->ncmds; ++count) {
       struct load_command *command = (struct load_command *)(object_file.str + command_offset);
-      Assert(macho_load_command_has_valid_type(command));
 
       // dump 64-bit segment
       if (command->cmd == LC_SEGMENT_64) {
@@ -715,7 +1028,7 @@ static void macho_dump_object_file(String8 object_file) {
 
         for (U32 i = 0; i < segment->nsects; ++i) {
           struct section_64 *section = ((struct section_64 *)(segment + 1)) + i;
-          printf("  section %p '%s'  size=%llu", (void *)section->addr, section->sectname, section->size);
+          printf("  section %p '%s'  size=%llu   foff=%u", (void *)section->addr, section->sectname, section->size, section->offset);
           printf("  align=%u\n", section->align);
         }
 
@@ -727,7 +1040,7 @@ static void macho_dump_object_file(String8 object_file) {
         struct symtab_command *table = (struct symtab_command *)command;
         printf("LC_SYMTAB at symoff=0x%x  nsyms=0x%x\n", table->symoff, table->nsyms);
         printf("             stroff=0x%x strsize=0x%x\n", table->stroff, table->strsize);
-        macho_print_symbol_table(object_file, table);
+        macho_print_symbol_table(object_file, header, section_buffer, table);
 
       } else if (command->cmd == LC_DYSYMTAB) {
         struct dysymtab_command *table = (struct dysymtab_command *)command;
@@ -818,6 +1131,7 @@ static void macho_dump_object_file(String8 object_file) {
 
       command_offset += command->cmdsize;
     }
+    printf("\nObject file size %llu\n", object_file.size);
   }
 }
 
@@ -843,7 +1157,6 @@ macho_get_section(String8 object_file, String8 segment_name, String8 section_nam
     // Loop through load-commands
     for (U32 count = 0; count < header->ncmds; ++count) {
       struct load_command *command = (struct load_command *)(object_file.str + command_offset);
-      Assert(macho_load_command_has_valid_type(command));
 
       // 64-bit segment
       if (command->cmd == LC_SEGMENT_64) {

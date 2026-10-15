@@ -606,3 +606,8 @@ function B32 arena_has_space_for(Arena *arena, U64 size) {
 
   return has_space;
 }
+
+
+
+
+

@@ -1577,6 +1577,13 @@ int main(void) {
       /* context.temp_arena      = arena_alloc_reserve(Megabytes(10), 0); */
       context.core.per_frame_arena = arena_alloc_reserve(Megabytes(10), 0);
 
+      { // TODO: delete this
+        Arena *arena = context.core.per_frame_arena;
+        String8 base_string = os_file_read(arena, str8_lit("../build/base.o"));
+        macho_dump_object_file(arena, base_string);
+        return 0;
+      }
+
       context.ui_render_context.arena = context.render_arena;
       context.process_render_context.arena = context.render_arena;
       prc = &context.process_render_context;
